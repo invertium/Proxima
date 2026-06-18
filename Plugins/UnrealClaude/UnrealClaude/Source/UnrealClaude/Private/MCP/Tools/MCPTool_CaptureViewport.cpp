@@ -65,6 +65,14 @@ FMCPToolResult FMCPTool_CaptureViewport::Execute(const TSharedRef<FJsonObject>& 
 		return FMCPToolResult::Error(TEXT("Viewport has invalid size."));
 	}
 
+	// Editor viewports only redraw on demand (when focused / realtime is on). When the editor
+	// window is unfocused or non-realtime — common when driven headlessly over MCP — ReadPixels()
+	// returns a stale backbuffer (the previous frame / previous level). Force a fresh synchronous
+	// frame so the capture always reflects the current scene state.
+	// ReadPixels() below flushes the render thread internally, so the enqueued Draw() completes first.
+	Viewport->InvalidateDisplay();
+	Viewport->Draw();
+
 	TArray<FColor> Pixels;
 	if (!Viewport->ReadPixels(Pixels))
 	{
