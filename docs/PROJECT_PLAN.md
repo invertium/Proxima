@@ -33,7 +33,7 @@ Each milestone: smallest meaningful change, then PIE + screenshot + log, compare
 
 ## Phase 2 — World & ship foundation
 - [x] M1 Arena map + space backdrop (dir light, starfield/skybox, post-process). DONE 2026-06-18 — PIE [S] shows dark starfield space scene (not default grid). Verified in actual PIE.
-- M2 `ASpaceship` (C++) + placeholder mesh + 3rd-person follow cam. Done: [S] ship in 3rd-person vs space; [L] spawn logged.
+- [x] M2 `ASpaceship` (C++) + placeholder mesh + 3rd-person follow cam. DONE 2026-06-18 — [S] ship 3rd-person vs starfield (PIE, via ship follow cam); [L] `ASpaceship spawned: Spaceship_0 at X=0 Y=0 Z=0`. (Cone orientation + hull material deferred to M3/M13.)
 - M3 `UShipMovementComponent` (impulse throttle + turn), temp test input. Done: [L] speed/heading change on input; [S] before/after show movement. (feel→hand-test)
 
 ## Phase 3 — Stations UI scaffold (single-machine)

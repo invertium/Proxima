@@ -175,3 +175,22 @@ After editor restart (new pid loaded patched `.so`):
 - **Capture parse:** UnrealClaude `capture_viewport` response → image is the **`base64`** top-level key (1024x576 JPEG).
 
 **Next = M2:** `ASpaceship` (C++) + placeholder mesh + 3rd-person follow cam. Done-when: [S] ship in 3rd-person vs space; [L] spawn logged. (Remind user to git-commit M1: docs + Content/ + tools/.)
+
+M1 committed `440a4e6`.
+
+---
+
+## 2026-06-18 — ✅ M2 COMPLETE: ASpaceship pawn + follow cam (verified in PIE)
+
+**Code:** `Source/SpaceGame/Ships/Spaceship.{h,cpp}` — `APawn` with `ShipRoot` (unrotated USceneComponent, keeps actor +X forward decoupled from mesh), `ShipMesh` (engine Cone placeholder, scaled 1/1/2), `SpringArm` (len 900, pitch -12, no collision test, camera + rotation lag) + `FollowCamera`. `AutoPossessPlayer = Player0` so PIE views through the follow cam. `BeginPlay` logs spawn. `SpaceGame.Build.cs`: added `PublicIncludePaths.Add(ModuleDirectory)` so `"Ships/..."`-qualified includes work across the D8 layout.
+
+**Verified:** Built (Build.sh SpaceGameEditor) → **Succeeded**. New UCLASS needs editor reload → user restarted editor → class visible (`/Script/SpaceGame.Spaceship`). Placed `PlayerShip` in VSlice_Arena, saved. PIE → ship rendered 3rd-person vs starfield through its follow cam (auto-possess works); log `LogTemp: ASpaceship spawned: Spaceship_0 at X=0 Y=0 Z=0`. PIE stopped clean.
+
+**TOOLING — two important findings this session:**
+- **:3000 (UnrealClaude) DEAD this session — port bind race.** New editor tried to bind `127.0.0.1:3000` while the *old* editor was still shutting down and holding it → `LogHttpListener: Error: HttpListener unable to bind to 127.0.0.1:3000`; UnrealClaude does NOT retry. So `capture_viewport` is unavailable until a clean restart (old fully dead first). VibeUE :8088 won the race and is fine. **Mitigation for future restarts:** fully quit the editor and confirm `pgrep -x UnrealEditor` empty + `ss -ltn | grep 3000` empty BEFORE relaunching.
+- **Linux screenshot WITHOUT :3000 → `HighResShot`.** `unreal.SystemLibrary.execute_console_command(world, "HighResShot 1280x720")` writes a PNG to `Saved/Screenshots/LinuxEditor/HighresScreenshotNNNNN.png` (works in editor AND PIE; captures the active/PIE viewport). Async — can take up to ~15s to flush; poll for the file. This is now the **primary, :3000-independent screenshot path** for the dev loop. VibeUE `editor_control screenshot` is **Windows-only** (errors `CAPTURE_FAILED ... only supported on Windows`) — do NOT rely on it on Linux. Helper added: `tools/vibe_tool.py <tool> '<json>' [img_out]`.
+- VibeUE `editor_control` also exposes `start_pie`/`stop_pie`/`pie_status` (alternative to `LevelEditorSubsystem.editor_request_begin_play/end_play`, which is what M1/M2 used).
+
+**Known placeholders to revisit:** cone points up/teardrop (orientation = visual only; fix the constructor `SetRelativeRotation` to point +X when M3 adds movement & forward matters); hull renders default checker (no material — give it a basic emissive in M13 polish); follow-cam frames the ship low (feel → hand-test).
+
+**Next = M3:** `UShipMovementComponent` (impulse throttle + turn) + temp test input. Done-when: [L] speed/heading change on input; [S] before/after show movement. (Will rebuild C++ → fix cone orientation then. Remind user to commit M2: Source/ + docs + Content/ map update + tools/vibe_tool.py.)
