@@ -20,10 +20,42 @@ Each milestone needs a concrete "done when…" check confirmable via screenshot 
 ## Phase 0 — COMPLETE ✅ (env + engine + plugins + verified screenshot loop)
 - [ ] **MCP smoke test** — done when: connect to MCP, list tools, start PIE on empty level, capture 1 viewport screenshot, read it back, stop PIE — all succeed. Highest-risk step; gate before any game work.
 
-## Phase 1 — Game design & plan  [ ]
-- [ ] Answer 3 scoping questions (genre, scope, art style, target platform)
-- [ ] Finalize PROJECT_PLAN milestones + DECISIONS (BP/C++ split, folders, asset strategy)
-- [ ] User approves plan → exit planning mode
+## Phase 1 — Game design & plan  [~]
+- [x] Scoping answered: bridge sim (Artemis/EmptyEpsilon), vertical slice, Helm+Weapons+Engineering, single-machine first, stylized 3D 3rd-person + 2D consoles (see DECISIONS D5-D11)
+- [x] Milestones + DECISIONS written
+- [ ] **AWAITING USER APPROVAL of plan below** → then build
 
-## Phase 2+ — Build (defined after Phase 1 approval)
-- TBD. Will be broken into tiny, screenshot-verifiable milestones.
+---
+
+**Vertical-slice target loop:** Enemy ship detected on radar → Engineering routes power → Helm closes & orients → Weapons locks & fires beams → enemy destroyed; mismanaged power/shields → player takes damage / loses. One polished encounter.
+
+Each milestone: smallest meaningful change, then PIE + screenshot + log, compare to "done-when", append to PROGRESS. Motion/feel items flagged for user hand-testing. `[S]`=screenshot check, `[L]`=log/PIE assertion.
+
+## Phase 2 — World & ship foundation
+- [x] M1 Arena map + space backdrop (dir light, starfield/skybox, post-process). DONE 2026-06-18 — PIE [S] shows dark starfield space scene (not default grid). Verified in actual PIE.
+- M2 `ASpaceship` (C++) + placeholder mesh + 3rd-person follow cam. Done: [S] ship in 3rd-person vs space; [L] spawn logged.
+- M3 `UShipMovementComponent` (impulse throttle + turn), temp test input. Done: [L] speed/heading change on input; [S] before/after show movement. (feel→hand-test)
+
+## Phase 3 — Stations UI scaffold (single-machine)
+- M4 `StationManager` + station switcher (keys 1/2/3) + HUD shell. Done: [S] station-select bar; switching changes active console label.
+- M5 Tactical radar widget (2D): player centered, range rings, heading, world-actor blips. Done: [S] radar w/ player blip+ring; enemy present → enemy blip at correct relative pos.
+- M6 Helm console: throttle/turn wired to movement, speed/heading readouts, embeds radar. Done: [S] Helm console; [L]+[S] driving via console moves ship.
+- M7 Engineering console: `UShipPowerComponent` (Beams/Impulse/Maneuver/Shields), power sliders + bars; power scales a system stat. Done: [S] console; [L] slider change alters system stat (e.g. max speed) — assertion.
+- M8 Weapons console: target cycle/select from radar, target-info panel (range/hull/shield), beam fire btn + charge bar. Done: [S] selected enemy + target info; [L] fire logs beam event.
+
+## Phase 4 — Combat + enemy + loop
+- M9 `AEnemyShip` + simple AI (spawn, approach, fire intervals) + health components. Done: [S] before/after approach; [L] AI state + enemy firing.
+- M10 Weapons→damage: beams reduce shields→hull, recharge gated by Beams power; beam FX. Done: [L] enemy hull drops on fire; [S] beam FX; enemy 0 hull → despawn + explosion [S].
+- M11 Player damage + shields + lose: enemy beams damage player; shield power scales mitigation; 0 hull → defeat screen. Done: [L] player hull drops; [L] shield-power changes mitigation (assert); [S] defeat screen.
+- M12 Win condition + encounter flow: destroy enemy → victory screen. Done: full loop in one PIE session [S sequence]: engage→manage power→destroy→victory.
+
+## Phase 5 — Vertical-slice polish
+- M13 Visual polish: emissive hull, Niagara thrusters, beam/explosion FX, backdrop, HUD styling. Done: [S] side-by-side stylized vs primitive.
+- M14 Audio/feedback: SFX (beams/impulse/alarms), camera shake. Done: [L] triggers fire + assets assigned; feel→user hand-test.
+- M15 Hardening: tune, fix, repeatable loop, "how to play" note. Done: user plays through once successfully.
+
+## LATER (post-slice backlog, not yet detailed)
+- Networking: server + per-station clients, replicate ship/subsystem state.
+- Stations: Science (scan/database), Comms/Relay.
+- Systems: missiles, multi-facing shields, warp/jump, multiple enemies, scenarios/missions, GM tools.
+- Wire VibeUE API key + MCP (needed once we author Blueprints/UMG — i.e. M4).

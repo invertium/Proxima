@@ -31,6 +31,9 @@ Plugins/**/Intermediate/
 # Node bridge deps (reinstallable via npm install)
 Plugins/UnrealClaude/UnrealClaude/Resources/mcp-bridge/node_modules/
 
+# UnrealClaude auto-generated execute_script files (regenerated on demand)
+Content/UnrealClaude/Scripts/
+
 # Secrets — never commit API keys
 **/vibeue-proxy.json
 *.apikey
