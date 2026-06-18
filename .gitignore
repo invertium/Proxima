@@ -1,0 +1,37 @@
+# Unreal Engine generated/build artifacts
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+*.VC.db
+*.opensdf
+*.sdf
+*.suo
+*.xcodeproj/
+*.xcworkspace/
+
+# Project files (regenerated)
+.vs/
+.vscode/
+*.sln
+Makefile
+CMakeLists.txt
+.ignore
+compile_commands.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+
+# --- Plugin local state (keep plugin source, drop their build/runtime junk) ---
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# Node bridge deps (reinstallable via npm install)
+Plugins/UnrealClaude/UnrealClaude/Resources/mcp-bridge/node_modules/
+
+# Secrets — never commit API keys
+**/vibeue-proxy.json
+*.apikey
+.env
