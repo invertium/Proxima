@@ -37,7 +37,7 @@ Each milestone: smallest meaningful change, then PIE + screenshot + log, compare
 - [x] M3 `UShipMovementComponent` (impulse throttle + turn). DONE 2026-06-19 — [L] `SetThrottle(1)/SetTurn(1)` in PIE: speed 0→1800 uu/s, yaw advancing ~60°/s, ship arced from origin to ~3000 uu; [S] before/after show starfield pan + ship reorient (follow cam tracks). Cone reoriented nose-+X. (Input wiring → M6 Helm.)
 
 ## Phase 3 — Stations UI scaffold (single-machine)
-- M4 `StationManager` + station switcher (keys 1/2/3) + HUD shell. Done: [S] station-select bar; switching changes active console label.
+- [x] M4 `StationManager` + station switcher (keys 1/2/3) + HUD shell. DONE 2026-06-19 — C++ `ASpaceGameMode`+`ABridgePlayerController` (keys 1/2/3 → `SetStation`) + `UBridgeHUDWidget` shell, WBP_BridgeHUD reparented to it. [S] composited HUD over space in all 3 states (active tab cyan + big console label HELM/WEAPONS/ENGINEERING); [L] `[Bridge] Active station -> Helm/Weapons/Engineering`. (Key inject not scriptable on Linux → switch driven via `SetStation`, same path keys call; 1/2/3 hand-confirmable in focused PIE.)
 - M5 Tactical radar widget (2D): player centered, range rings, heading, world-actor blips. Done: [S] radar w/ player blip+ring; enemy present → enemy blip at correct relative pos.
 - M6 Helm console: throttle/turn wired to movement, speed/heading readouts, embeds radar. Done: [S] Helm console; [L]+[S] driving via console moves ship.
 - M7 Engineering console: `UShipPowerComponent` (Beams/Impulse/Maneuver/Shields), power sliders + bars; power scales a system stat. Done: [S] console; [L] slider change alters system stat (e.g. max speed) — assertion.

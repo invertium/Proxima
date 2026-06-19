@@ -210,3 +210,26 @@ M2 committed `ce2fad2`.
 **Possession note:** in VSlice_Arena (no PlayerStart) the placed ship's `AutoPossessPlayer=Player0` wins → follow cam is the view. In a map *with* a PlayerStart (e.g. the Untitled template) the GameMode spawns/possesses a `DefaultPawn` instead. (Real input → M6 Helm.)
 
 **Next = M4:** `StationManager` + station switcher (keys 1/2/3) + HUD shell. Done-when: [S] station-select bar; switching changes active console label. (Remind user to commit M3: Source/Components/ + Source/Ships/ + docs.)
+
+M3 committed `acd8480`.
+
+---
+
+## 2026-06-19 — ✅ M4 COMPLETE: station switcher + HUD shell (verified in PIE)
+
+**Code (Source/SpaceGame/Core/, D8):** `EStation{Helm,Weapons,Engineering}` (StationTypes.h); `ASpaceGameMode` (PlayerControllerClass=ABridgePlayerController, DefaultPawnClass=null so placed ship still auto-possesses); `ABridgePlayerController` (BeginPlay creates HUD + `AddToViewport`; legacy `InputComponent->BindKey(One/Two/Three)` → `SelectHelm/Weapons/Engineering` → `SetStation`; logs `[Bridge] Active station -> X`; resolves HUD class via `LoadClass("/Game/UI/Common/WBP_BridgeHUD.WBP_BridgeHUD_C")` at play-time so no extra restart); `UBridgeHUDWidget` (`meta=(BindWidget)` TextBlocks HelmTab/WeaponsTab/EngineeringTab/ActiveConsoleLabel; `SetActiveStation` tints active tab cyan + sets big label). Build.cs += UMG/Slate/SlateCore.
+
+**UMG:** `/Game/UI/Common/WBP_BridgeHUD` reparented to `UBridgeHUDWidget`, authored via `unreal.WidgetService`. GameMode override set on VSlice_Arena WorldSettings (`default_game_mode`) + map saved.
+
+**Verified:** PIE → PC=`BridgePlayerController` possessing `Spaceship_0`; `SetStation(Weapons/Engineering/Helm)` → log `[Bridge] Active station -> …` + `GetStation()` agrees [L]. Composited [S] (Helm/Weapons/Engineering): active tab cyan, big label tracks station — /tmp/m4_{helm,weapons,engineering}_live.png.
+
+**🔴 CRITICAL TOOLING — UMG/HUD screenshots on Linux need an OS capture.** Every in-engine capture path grabs the scene BEFORE the Slate/UMG layer or is Windows-only:
+- UnrealClaude `capture_viewport` (uc_capture.sh) → scene only, NO UMG/`stat` overlays.
+- `HighResShot` (console) → scene only, NO UMG.
+- VibeUE `ScreenshotService.capture_editor_window/active_window` and `editor_control screenshot` → return `success=False "only supported on Windows platform"`.
+- VibeUE `WidgetService.capture_preview` → renders the widget alone (white bg), AND runs `NativeConstruct` so it always shows the construct-default state (can't show a switched state) + returns empty path while PIE is running.
+- **WORKING PATH:** `spectacle -b -n -f -o out.png` (headless full-screen) → `tools/os_capture.sh`. Requires the **Unreal Editor window be the visible foreground window** (no window-activation CLI on this KDE/Wayland box — kdotool/wmctrl/xdotool absent; only qdbus6/gdbus). So: ask the user to foreground+maximize the editor once, run PIE in the active viewport, then drive state changes + `os_capture` repeatedly (no further user action while it stays focused). Use this for all UI milestones (M5 radar, M6–M8 consoles).
+
+**Other gotchas:** `WidgetService` doesn't create the WBP — use `unreal.WidgetBlueprintFactory` + `AssetTools.create_asset(..., WidgetBlueprint, factory)` with `parent_class` = the C++ widget. **`HorizontalBox` children rendered overlapping in preview → switched to CanvasPanel absolute positioning (Position/Size X-Y aliases) for deterministic layout.** Canvas point-anchored slots default to a fixed 100×30 box → must set `Size X/Y` or big text clips. `unreal.WidgetBlueprintLibrary` / `PlayerController.input_key` are NOT exposed in this Python (can't enumerate live widgets or inject keys from script).
+
+**Next = M5:** Tactical radar widget (2D): player-centered, range rings, heading, world-actor blips. Done-when: [S] radar w/ player blip+ring; enemy present → blip at correct relative pos. (Commit M4: Source/Core/ + Build.cs + Content/UI/ + Content/Maps/VSlice_Arena.umap + tools/os_capture.sh + docs.)
