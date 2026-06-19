@@ -34,7 +34,7 @@ Each milestone: smallest meaningful change, then PIE + screenshot + log, compare
 ## Phase 2 — World & ship foundation
 - [x] M1 Arena map + space backdrop (dir light, starfield/skybox, post-process). DONE 2026-06-18 — PIE [S] shows dark starfield space scene (not default grid). Verified in actual PIE.
 - [x] M2 `ASpaceship` (C++) + placeholder mesh + 3rd-person follow cam. DONE 2026-06-18 — [S] ship 3rd-person vs starfield (PIE, via ship follow cam); [L] `ASpaceship spawned: Spaceship_0 at X=0 Y=0 Z=0`. (Cone orientation + hull material deferred to M3/M13.)
-- M3 `UShipMovementComponent` (impulse throttle + turn), temp test input. Done: [L] speed/heading change on input; [S] before/after show movement. (feel→hand-test)
+- [x] M3 `UShipMovementComponent` (impulse throttle + turn). DONE 2026-06-19 — [L] `SetThrottle(1)/SetTurn(1)` in PIE: speed 0→1800 uu/s, yaw advancing ~60°/s, ship arced from origin to ~3000 uu; [S] before/after show starfield pan + ship reorient (follow cam tracks). Cone reoriented nose-+X. (Input wiring → M6 Helm.)
 
 ## Phase 3 — Stations UI scaffold (single-machine)
 - M4 `StationManager` + station switcher (keys 1/2/3) + HUD shell. Done: [S] station-select bar; switching changes active console label.

@@ -3,6 +3,7 @@
 #include "Ships/Spaceship.h"
 
 #include "Camera/CameraComponent.h"
+#include "Components/ShipMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "UObject/ConstructorHelpers.h"
@@ -20,8 +21,9 @@ ASpaceship::ASpaceship()
 	ShipMesh->SetupAttachment(ShipRoot);
 	ShipMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	ShipMesh->SetCollisionObjectType(ECC_Pawn);
-	ShipMesh->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f)); // +Z apex -> +X
-	ShipMesh->SetRelativeScale3D(FVector(1.f, 1.f, 2.f));     // elongate the nose
+	// Engine cone's apex is local +Z; pitch +90 swings it to the actor's +X (forward).
+	ShipMesh->SetRelativeRotation(FRotator(90.f, 0.f, 0.f));
+	ShipMesh->SetRelativeScale3D(FVector(1.f, 1.f, 2.f)); // elongate the nose (local +Z)
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(
 		TEXT("/Engine/BasicShapes/Cone.Cone"));
@@ -43,6 +45,9 @@ ASpaceship::ASpaceship()
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
+
+	// Impulse movement simulation (throttle/turn).
+	MovementComp = CreateDefaultSubobject<UShipMovementComponent>(TEXT("MovementComp"));
 
 	// Possess automatically so PIE shows the ship through its follow camera.
 	AutoPossessPlayer = EAutoReceiveInput::Player0;

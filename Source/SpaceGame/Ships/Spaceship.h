@@ -10,6 +10,7 @@ class USceneComponent;
 class UStaticMeshComponent;
 class USpringArmComponent;
 class UCameraComponent;
+class UShipMovementComponent;
 
 /**
  * ASpaceship — the player's ship. M2: visual hull + 3rd-person follow camera.
@@ -40,4 +41,8 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Ship|Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
+
+	/** Impulse movement sim (throttle/turn). Public so test harness / Helm can drive it. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
+	TObjectPtr<UShipMovementComponent> MovementComp;
 };

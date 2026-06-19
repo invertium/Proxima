@@ -194,3 +194,19 @@ M1 committed `440a4e6`.
 **Known placeholders to revisit:** cone points up/teardrop (orientation = visual only; fix the constructor `SetRelativeRotation` to point +X when M3 adds movement & forward matters); hull renders default checker (no material — give it a basic emissive in M13 polish); follow-cam frames the ship low (feel → hand-test).
 
 **Next = M3:** `UShipMovementComponent` (impulse throttle + turn) + temp test input. Done-when: [L] speed/heading change on input; [S] before/after show movement. (Will rebuild C++ → fix cone orientation then. Remind user to commit M2: Source/ + docs + Content/ map update + tools/vibe_tool.py.)
+
+M2 committed `ce2fad2`.
+
+---
+
+## 2026-06-19 — ✅ M3 COMPLETE: ship impulse movement (verified in PIE)
+
+**Code:** `Source/SpaceGame/Components/ShipMovementComponent.{h,cpp}` — `UActorComponent` (BlueprintSpawnable, ClassGroup SpaceGame). `SetThrottle(0..1)` eases `CurrentSpeed` toward `Throttle*MaxSpeed` via `FInterpConstantTo(Acceleration)`; `SetTurn(-1..1)` yaws the owner at `MaxTurnRate`; per-tick translate along owner `+X` (`AddActorWorldOffset`, bSweep). Tunables `MaxSpeed=1800`, `Acceleration=1200`, `MaxTurnRate=60` (Engineering power will scale these at M7). State is plain UPROPERTYs (replication-ready, D7); `SetThrottle/SetTurn` log. `ASpaceship` ctor now `CreateDefaultSubobject<UShipMovementComponent>("MovementComp")`; **cone reoriented `FRotator(90,0,0)` so apex points actor +X (forward)** — fixes the M2 deferred orientation note.
+
+**Verified:** Built `Build.sh SpaceGameEditor Linux Development` → **Succeeded**. Editor restarted → `/Script/SpaceGame.ShipMovementComponent` loaded; placed `Spaceship_0` auto-gained `MovementComp`. PIE → `mc.set_throttle(1.0); mc.set_turn(1.0)`. Log: `BEFORE loc=(0,0,0) yaw=0 speed=0` → `[ShipMovement] Throttle set to 1.00 (target speed 1800)` / `Turn set to 1.00` → samples: speed 1800, yaw stepping ~20°/sample (≈60°/s), ship on a curved arc out to ~3000 uu. **[L] speed + heading change confirmed.** **[S]** /tmp/m3_before.jpg vs m3_after.jpg: starfield panned/rotated + ship reorientation (follow cam tracks the moving ship → VSlice ship is auto-possessed). PIE stopped clean.
+
+**GOTCHA — fresh editor boots into a throwaway `Untitled_1` Open-World level, NOT your last map.** On launch the editor opened a *new* Open World template level (landscape + VolumetricCloud + WorldPartition HLODs, world path `/Temp/Untitled_1`) — looked like our arena content had vanished. **`LevelEditorSubsystem.load_level("/Game/Maps/VSlice_Arena")` SILENTLY NO-OP'd** (returned, printed, but editor world stayed `Untitled_1`) — likely refused because the temp level was dirty. **Fix: `unreal.EditorLoadingAndSavingUtils.load_map("/Game/Maps/VSlice_Arena")`** force-loads (discards the temp level) → editor world = `VSlice_Arena`, all 5 saved actors present (Sun/SkyLight/Starfield dome StaticMeshActor/GlobalPP/Spaceship_0). Nothing was lost; M1/M2 content is persisted. **At session start always `load_map` the working level before inspecting/PIE.**
+
+**Possession note:** in VSlice_Arena (no PlayerStart) the placed ship's `AutoPossessPlayer=Player0` wins → follow cam is the view. In a map *with* a PlayerStart (e.g. the Untitled template) the GameMode spawns/possesses a `DefaultPawn` instead. (Real input → M6 Helm.)
+
+**Next = M4:** `StationManager` + station switcher (keys 1/2/3) + HUD shell. Done-when: [S] station-select bar; switching changes active console label. (Remind user to commit M3: Source/Components/ + Source/Ships/ + docs.)
