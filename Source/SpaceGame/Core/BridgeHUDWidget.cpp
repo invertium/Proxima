@@ -19,10 +19,16 @@ void UBridgeHUDWidget::SetActiveStation(EStation Station)
 	ApplyTab(WeaponsTab, Station == EStation::Weapons);
 	ApplyTab(EngineeringTab, Station == EStation::Engineering);
 
-	// Helm console is visible only at the Helm station (other consoles arrive M7/M8).
+	// Each console is visible only while its station is active (Weapons arrives M8).
 	if (HelmConsole)
 	{
 		HelmConsole->SetVisibility(Station == EStation::Helm
+			? ESlateVisibility::SelfHitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (EngineeringConsole)
+	{
+		EngineeringConsole->SetVisibility(Station == EStation::Engineering
 			? ESlateVisibility::SelfHitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}

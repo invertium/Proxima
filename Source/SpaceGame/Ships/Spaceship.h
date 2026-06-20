@@ -11,6 +11,7 @@ class UStaticMeshComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class UShipMovementComponent;
+class UPowerComponent;
 
 /**
  * ASpaceship — the player's ship. M2: visual hull + 3rd-person follow camera.
@@ -28,6 +29,10 @@ public:
 	/** Impulse movement sim, for the Helm console / player controller to drive + read. */
 	UFUNCTION(BlueprintPure, Category = "Ship")
 	UShipMovementComponent* GetMovementComp() const { return MovementComp; }
+
+	/** Engineering power model, for the Engineering console / controller to read + reallocate. */
+	UFUNCTION(BlueprintPure, Category = "Ship")
+	UPowerComponent* GetPowerComp() const { return PowerComp; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -49,4 +54,8 @@ protected:
 	/** Impulse movement sim (throttle/turn). Public so test harness / Helm can drive it. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
 	TObjectPtr<UShipMovementComponent> MovementComp;
+
+	/** Engineering power model (D11): per-system power that scales subsystem stats. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
+	TObjectPtr<UPowerComponent> PowerComp;
 };

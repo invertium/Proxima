@@ -47,6 +47,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> HelmConsole;
 
+	/** Engineering console panel; shown only while the Engineering station is active. */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> EngineeringConsole;
+
 	/** Highlight colour for the active tab. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bridge|HUD")
 	FLinearColor ActiveColor = FLinearColor(0.15f, 0.85f, 1.0f, 1.0f); // cyan

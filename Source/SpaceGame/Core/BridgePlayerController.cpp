@@ -4,6 +4,7 @@
 
 #include "Core/BridgeHUDWidget.h"
 #include "Components/ShipMovementComponent.h"
+#include "Components/PowerComponent.h"
 #include "Ships/Spaceship.h"
 #include "Blueprint/UserWidget.h"
 #include "InputCoreTypes.h"
@@ -55,6 +56,13 @@ void ABridgePlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::A, IE_Released, this, &ABridgePlayerController::TurnStop);
 	InputComponent->BindKey(EKeys::D, IE_Pressed,  this, &ABridgePlayerController::TurnRight);
 	InputComponent->BindKey(EKeys::D, IE_Released, this, &ABridgePlayerController::TurnStop);
+
+	// Engineering: arrows select a system (Left/Right) + reallocate its power (Up/Down).
+	// Gated to the Engineering station, so they don't clash with Helm's WASD.
+	InputComponent->BindKey(EKeys::Left,  IE_Pressed, this, &ABridgePlayerController::EngSelectPrev);
+	InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &ABridgePlayerController::EngSelectNext);
+	InputComponent->BindKey(EKeys::Up,    IE_Pressed, this, &ABridgePlayerController::EngPowerUp);
+	InputComponent->BindKey(EKeys::Down,  IE_Pressed, this, &ABridgePlayerController::EngPowerDown);
 }
 
 UShipMovementComponent* ABridgePlayerController::GetShipMovement() const
@@ -100,6 +108,40 @@ void ABridgePlayerController::TurnRight()
 void ABridgePlayerController::TurnStop()
 {
 	if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetTurn(0.f); }
+}
+
+UPowerComponent* ABridgePlayerController::GetShipPower() const
+{
+	const ASpaceship* Ship = Cast<ASpaceship>(GetPawn());
+	return Ship ? Ship->GetPowerComp() : nullptr;
+}
+
+void ABridgePlayerController::EngSelectPrev()
+{
+	if (CurrentStation != EStation::Engineering) { return; }
+	const int32 Count = static_cast<int32>(EShipSystem::Count);
+	const int32 Idx = (static_cast<int32>(SelectedSystem) + Count - 1) % Count;
+	SelectedSystem = static_cast<EShipSystem>(Idx);
+}
+
+void ABridgePlayerController::EngSelectNext()
+{
+	if (CurrentStation != EStation::Engineering) { return; }
+	const int32 Count = static_cast<int32>(EShipSystem::Count);
+	const int32 Idx = (static_cast<int32>(SelectedSystem) + 1) % Count;
+	SelectedSystem = static_cast<EShipSystem>(Idx);
+}
+
+void ABridgePlayerController::EngPowerUp()
+{
+	if (CurrentStation != EStation::Engineering) { return; }
+	if (UPowerComponent* Power = GetShipPower()) { Power->AdjustSystemPower(SelectedSystem, PowerStep); }
+}
+
+void ABridgePlayerController::EngPowerDown()
+{
+	if (CurrentStation != EStation::Engineering) { return; }
+	if (UPowerComponent* Power = GetShipPower()) { Power->AdjustSystemPower(SelectedSystem, -PowerStep); }
 }
 
 void ABridgePlayerController::SetStation(EStation NewStation)

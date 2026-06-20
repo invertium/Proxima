@@ -3,6 +3,7 @@
 #include "Ships/Spaceship.h"
 
 #include "Camera/CameraComponent.h"
+#include "Components/PowerComponent.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -48,6 +49,9 @@ ASpaceship::ASpaceship()
 
 	// Impulse movement simulation (throttle/turn).
 	MovementComp = CreateDefaultSubobject<UShipMovementComponent>(TEXT("MovementComp"));
+
+	// Engineering power model (engine power scales MaxSpeed; weapons/shields at M8/M9).
+	PowerComp = CreateDefaultSubobject<UPowerComponent>(TEXT("PowerComp"));
 
 	// Possess automatically so PIE shows the ship through its follow camera.
 	AutoPossessPlayer = EAutoReceiveInput::Player0;

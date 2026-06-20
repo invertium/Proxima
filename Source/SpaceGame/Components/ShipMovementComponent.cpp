@@ -2,11 +2,30 @@
 
 #include "Components/ShipMovementComponent.h"
 
+#include "Components/PowerComponent.h"
 #include "GameFramework/Actor.h"
 
 UShipMovementComponent::UShipMovementComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+}
+
+float UShipMovementComponent::EnginePowerScale() const
+{
+	UShipMovementComponent* MutableThis = const_cast<UShipMovementComponent*>(this);
+	if (!MutableThis->CachedPower)
+	{
+		if (const AActor* Owner = GetOwner())
+		{
+			MutableThis->CachedPower = Owner->FindComponentByClass<UPowerComponent>();
+		}
+	}
+	return CachedPower ? CachedPower->GetSystemPower(EShipSystem::Engine) : 1.0f;
+}
+
+float UShipMovementComponent::GetEffectiveMaxSpeed() const
+{
+	return MaxSpeed * EnginePowerScale();
 }
 
 void UShipMovementComponent::SetThrottle(float InThrottle)
@@ -34,7 +53,8 @@ void UShipMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	}
 
 	// Impulse feel: throttle sets a target speed the ship eases toward.
-	const float TargetSpeed = ThrottleInput * MaxSpeed;
+	// Engine power (Engineering, M7) scales the achievable max speed.
+	const float TargetSpeed = ThrottleInput * GetEffectiveMaxSpeed();
 	CurrentSpeed = FMath::FInterpConstantTo(CurrentSpeed, TargetSpeed, DeltaTime, Acceleration);
 
 	// Yaw turn.

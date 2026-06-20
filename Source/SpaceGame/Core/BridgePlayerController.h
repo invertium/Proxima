@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "Core/StationTypes.h"
+#include "Components/PowerComponent.h"
 #include "BridgePlayerController.generated.h"
 
 class UBridgeHUDWidget;
@@ -26,6 +27,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Bridge")
 	EStation GetStation() const { return CurrentStation; }
+
+	/** The Engineering system the player is currently editing (for console highlight). */
+	UFUNCTION(BlueprintPure, Category = "Bridge")
+	EShipSystem GetSelectedSystem() const { return SelectedSystem; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -53,6 +58,15 @@ private:
 	/** Push the current throttle level onto the ship (clamped 0..1). */
 	void ApplyThrottle();
 
+	// --- Engineering input (active only while CurrentStation == Engineering) ---
+	void EngSelectPrev();
+	void EngSelectNext();
+	void EngPowerUp();
+	void EngPowerDown();
+
+	/** Resolve the possessed ship's power component, or null. */
+	class UPowerComponent* GetShipPower() const;
+
 	UPROPERTY()
 	TObjectPtr<UBridgeHUDWidget> HUDWidget;
 
@@ -63,4 +77,10 @@ private:
 
 	/** Per-press throttle step. */
 	static constexpr float ThrottleStep = 0.2f;
+
+	/** Engineering system currently being edited (Up/Down adjust it, Left/Right select). */
+	EShipSystem SelectedSystem = EShipSystem::Engine;
+
+	/** Per-press power step. */
+	static constexpr float PowerStep = 0.1f;
 };

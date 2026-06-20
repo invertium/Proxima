@@ -38,7 +38,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
 	float GetThrottle() const { return ThrottleInput; }
 
-	// --- Tunables (Engineering power will scale these at M7) ---
+	/** Max speed after Engineering power scaling (MaxSpeed * engine power; MaxSpeed if no power comp). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
+	float GetEffectiveMaxSpeed() const;
+
+	// --- Tunables (Engineering engine power scales MaxSpeed, M7) ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Movement")
 	float MaxSpeed = 1800.f; // uu/s at full throttle
 
@@ -58,4 +62,12 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Movement")
 	float CurrentSpeed = 0.f;
+
+private:
+	/** Lazily-resolved sibling power component (engine power scales MaxSpeed); may stay null. */
+	UPROPERTY(Transient)
+	TObjectPtr<class UPowerComponent> CachedPower;
+
+	/** Engine power multiplier from the power component, or 1.0 if there is none. */
+	float EnginePowerScale() const;
 };
