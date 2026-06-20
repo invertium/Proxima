@@ -5,6 +5,7 @@
 #include "Core/BridgeHUDWidget.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/PowerComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Ships/Spaceship.h"
 #include "Blueprint/UserWidget.h"
 #include "InputCoreTypes.h"
@@ -63,6 +64,11 @@ void ABridgePlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &ABridgePlayerController::EngSelectNext);
 	InputComponent->BindKey(EKeys::Up,    IE_Pressed, this, &ABridgePlayerController::EngPowerUp);
 	InputComponent->BindKey(EKeys::Down,  IE_Pressed, this, &ABridgePlayerController::EngPowerDown);
+
+	// Weapons: Right cycles target, Space fires the beam. Gated to the Weapons station
+	// (Right is shared with Engineering — each handler early-outs off-station).
+	InputComponent->BindKey(EKeys::Right,     IE_Pressed, this, &ABridgePlayerController::WeaponCycleTarget);
+	InputComponent->BindKey(EKeys::SpaceBar,  IE_Pressed, this, &ABridgePlayerController::WeaponFire);
 }
 
 UShipMovementComponent* ABridgePlayerController::GetShipMovement() const
@@ -142,6 +148,24 @@ void ABridgePlayerController::EngPowerDown()
 {
 	if (CurrentStation != EStation::Engineering) { return; }
 	if (UPowerComponent* Power = GetShipPower()) { Power->AdjustSystemPower(SelectedSystem, -PowerStep); }
+}
+
+UWeaponComponent* ABridgePlayerController::GetShipWeapon() const
+{
+	const ASpaceship* Ship = Cast<ASpaceship>(GetPawn());
+	return Ship ? Ship->GetWeaponComp() : nullptr;
+}
+
+void ABridgePlayerController::WeaponCycleTarget()
+{
+	if (CurrentStation != EStation::Weapons) { return; }
+	if (UWeaponComponent* Weapon = GetShipWeapon()) { Weapon->CycleTarget(); }
+}
+
+void ABridgePlayerController::WeaponFire()
+{
+	if (CurrentStation != EStation::Weapons) { return; }
+	if (UWeaponComponent* Weapon = GetShipWeapon()) { Weapon->FireBeam(); }
 }
 
 void ABridgePlayerController::SetStation(EStation NewStation)

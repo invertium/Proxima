@@ -32,6 +32,12 @@ void UBridgeHUDWidget::SetActiveStation(EStation Station)
 			? ESlateVisibility::SelfHitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
+	if (WeaponsConsole)
+	{
+		WeaponsConsole->SetVisibility(Station == EStation::Weapons
+			? ESlateVisibility::SelfHitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
 
 	if (ActiveConsoleLabel)
 	{

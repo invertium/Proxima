@@ -12,6 +12,7 @@ class USpringArmComponent;
 class UCameraComponent;
 class UShipMovementComponent;
 class UPowerComponent;
+class UWeaponComponent;
 
 /**
  * ASpaceship — the player's ship. M2: visual hull + 3rd-person follow camera.
@@ -33,6 +34,10 @@ public:
 	/** Engineering power model, for the Engineering console / controller to read + reallocate. */
 	UFUNCTION(BlueprintPure, Category = "Ship")
 	UPowerComponent* GetPowerComp() const { return PowerComp; }
+
+	/** Forward beam weapon, for the Weapons console / controller to target + fire. */
+	UFUNCTION(BlueprintPure, Category = "Ship")
+	UWeaponComponent* GetWeaponComp() const { return WeaponComp; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -58,4 +63,8 @@ protected:
 	/** Engineering power model (D11): per-system power that scales subsystem stats. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
 	TObjectPtr<UPowerComponent> PowerComp;
+
+	/** Forward beam weapon (recharge scaled by Weapons power). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
+	TObjectPtr<UWeaponComponent> WeaponComp;
 };

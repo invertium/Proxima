@@ -6,6 +6,7 @@
 #include "Components/PowerComponent.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/WeaponComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -52,6 +53,9 @@ ASpaceship::ASpaceship()
 
 	// Engineering power model (engine power scales MaxSpeed; weapons/shields at M8/M9).
 	PowerComp = CreateDefaultSubobject<UPowerComponent>(TEXT("PowerComp"));
+
+	// Forward beam weapon (recharge scaled by Weapons power, M8).
+	WeaponComp = CreateDefaultSubobject<UWeaponComponent>(TEXT("WeaponComp"));
 
 	// Possess automatically so PIE shows the ship through its follow camera.
 	AutoPossessPlayer = EAutoReceiveInput::Player0;

@@ -67,6 +67,13 @@ private:
 	/** Resolve the possessed ship's power component, or null. */
 	class UPowerComponent* GetShipPower() const;
 
+	// --- Weapons input (active only while CurrentStation == Weapons) ---
+	void WeaponCycleTarget();
+	void WeaponFire();
+
+	/** Resolve the possessed ship's weapon component, or null. */
+	class UWeaponComponent* GetShipWeapon() const;
+
 	UPROPERTY()
 	TObjectPtr<UBridgeHUDWidget> HUDWidget;
 

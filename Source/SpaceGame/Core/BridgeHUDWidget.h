@@ -51,6 +51,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> EngineeringConsole;
 
+	/** Weapons console panel; shown only while the Weapons station is active. */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> WeaponsConsole;
+
 	/** Highlight colour for the active tab. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bridge|HUD")
 	FLinearColor ActiveColor = FLinearColor(0.15f, 0.85f, 1.0f, 1.0f); // cyan
