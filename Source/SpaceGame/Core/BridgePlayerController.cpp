@@ -3,11 +3,14 @@
 #include "Core/BridgePlayerController.h"
 
 #include "Core/BridgeHUDWidget.h"
+#include "Core/EndScreenWidget.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/WeaponComponent.h"
+#include "Components/HealthComponent.h"
 #include "Ships/Spaceship.h"
 #include "Blueprint/UserWidget.h"
+#include "Kismet/GameplayStatics.h"
 #include "InputCoreTypes.h"
 
 void ABridgePlayerController::BeginPlay()
@@ -209,4 +212,58 @@ void ABridgePlayerController::SetStation(EStation NewStation)
 	{
 		HUDWidget->SetActiveStation(NewStation);
 	}
+}
+
+void ABridgePlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+
+	// Listen for the player ship's destruction so we can raise the defeat screen.
+	if (ASpaceship* Ship = Cast<ASpaceship>(InPawn))
+	{
+		if (UHealthComponent* Health = Ship->GetHealthComp())
+		{
+			Health->OnDeath.AddUniqueDynamic(this, &ABridgePlayerController::HandlePlayerDeath);
+		}
+	}
+}
+
+void ABridgePlayerController::HandlePlayerDeath(AActor* DeadActor)
+{
+	UE_LOG(LogTemp, Log, TEXT("[Bridge] PLAYER DEFEATED — ship destroyed"));
+	ShowEndScreen(
+		FText::FromString(TEXT("DEFEAT")),
+		FText::FromString(TEXT("Your ship was destroyed.")),
+		FLinearColor(1.0f, 0.25f, 0.2f, 1.0f)); // red
+}
+
+void ABridgePlayerController::ShowEndScreen(const FText& Title, const FText& Subtitle, FLinearColor TitleColor)
+{
+	if (EndScreen) { return; } // already shown — encounter is over
+
+	// Resolve the authored WBP at play time (no extra restart when the asset is created).
+	if (!EndScreenClass)
+	{
+		EndScreenClass = LoadClass<UEndScreenWidget>(
+			nullptr, TEXT("/Game/UI/Common/WBP_EndScreen.WBP_EndScreen_C"));
+	}
+
+	if (EndScreenClass)
+	{
+		EndScreen = CreateWidget<UEndScreenWidget>(this, EndScreenClass);
+		if (EndScreen)
+		{
+			EndScreen->SetOutcome(Title, Subtitle, TitleColor);
+			EndScreen->AddToViewport(100); // above the bridge HUD
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Bridge] EndScreenClass not set — no outcome overlay."));
+	}
+
+	// Freeze the encounter and hand input to the UI.
+	bShowMouseCursor = true;
+	SetInputMode(FInputModeUIOnly());
+	UGameplayStatics::SetGamePaused(this, true);
 }

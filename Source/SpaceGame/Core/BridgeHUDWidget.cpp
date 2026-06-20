@@ -4,6 +4,8 @@
 
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
+#include "Components/HealthComponent.h"
+#include "Ships/Spaceship.h"
 
 void UBridgeHUDWidget::NativeConstruct()
 {
@@ -11,6 +13,28 @@ void UBridgeHUDWidget::NativeConstruct()
 
 	// Default to Helm so the shell reads correctly before any input.
 	SetActiveStation(EStation::Helm);
+}
+
+void UBridgeHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	if (!HullText) { return; }
+
+	const ASpaceship* Ship = Cast<ASpaceship>(GetOwningPlayerPawn());
+	const UHealthComponent* Health = Ship ? Ship->GetHealthComp() : nullptr;
+	if (!Health) { return; }
+
+	const float MaxHull = FMath::Max(Health->GetMaxHull(), 1.f);
+	const float Pct = Health->GetHull() / MaxHull;
+	HullText->SetText(FText::FromString(
+		FString::Printf(TEXT("HULL  %3d%%"), FMath::RoundToInt(Pct * 100.f))));
+	// Green when healthy, amber under 50%, red under 25%.
+	const FLinearColor Color =
+		Pct > 0.5f  ? FLinearColor(0.4f, 0.95f, 0.55f, 1.0f) :
+		Pct > 0.25f ? FLinearColor(1.0f, 0.7f, 0.15f, 1.0f) :
+		              FLinearColor(1.0f, 0.25f, 0.2f, 1.0f);
+	HullText->SetColorAndOpacity(FSlateColor(Color));
 }
 
 void UBridgeHUDWidget::SetActiveStation(EStation Station)

@@ -29,6 +29,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 	// --- Bound from the WBP by matching widget name (meta = BindWidget) ---
 	UPROPERTY(meta = (BindWidget))
@@ -42,6 +43,10 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ActiveConsoleLabel;
+
+	/** Always-on player hull readout (top of the shell); turns red when low. */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> HullText;
 
 	/** Helm console panel; shown only while the Helm station is active (optional bind). */
 	UPROPERTY(meta = (BindWidgetOptional))

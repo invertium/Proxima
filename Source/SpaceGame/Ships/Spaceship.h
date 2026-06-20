@@ -13,6 +13,7 @@ class UCameraComponent;
 class UShipMovementComponent;
 class UPowerComponent;
 class UWeaponComponent;
+class UHealthComponent;
 
 /**
  * ASpaceship — the player's ship. M2: visual hull + 3rd-person follow camera.
@@ -38,6 +39,10 @@ public:
 	/** Forward beam weapon, for the Weapons console / controller to target + fire. */
 	UFUNCTION(BlueprintPure, Category = "Ship")
 	UWeaponComponent* GetWeaponComp() const { return WeaponComp; }
+
+	/** Hull + shield-power mitigation; enemy beams damage this, 0 hull = defeat. */
+	UFUNCTION(BlueprintPure, Category = "Ship")
+	UHealthComponent* GetHealthComp() const { return HealthComp; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -67,4 +72,8 @@ protected:
 	/** Forward beam weapon (recharge scaled by Weapons power). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
 	TObjectPtr<UWeaponComponent> WeaponComp;
+
+	/** Hull + shield-power mitigation (D11); 0 hull triggers the defeat screen. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
+	TObjectPtr<UHealthComponent> HealthComp;
 };

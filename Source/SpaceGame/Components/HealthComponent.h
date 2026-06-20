@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "HealthComponent.generated.h"
 
+class UPowerComponent;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthDeath, AActor*, DeadActor);
 
 /**
@@ -46,6 +48,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Health")
 	bool IsAlive() const { return Hull > 0.f; }
 
+	/** Current incoming-damage mitigation (0..MaxMitigation) from sibling shield power. */
+	UFUNCTION(BlueprintPure, Category = "Ship|Health")
+	float GetShieldMitigation() const;
+
 	/** Broadcast once when hull first reaches zero. */
 	UPROPERTY(BlueprintAssignable, Category = "Ship|Health")
 	FOnHealthDeath OnDeath;
@@ -57,6 +63,14 @@ public:
 	/** Starting + maximum shield pool (absorbed before hull). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Health")
 	float MaxShield = 50.f;
+
+	/** Mitigation gained per unit of sibling Shields power (D11). 1.0 power → this much. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Health")
+	float ShieldMitigationScale = 0.35f;
+
+	/** Hard cap on shield-power mitigation, so damage never reaches zero. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Health")
+	float MaxMitigation = 0.8f;
 
 protected:
 	virtual void BeginPlay() override;
@@ -71,4 +85,8 @@ protected:
 private:
 	/** Guards OnDeath against re-broadcast on overkill / repeated hits. */
 	bool bDeathBroadcast = false;
+
+	/** Lazily-resolved sibling power component (for shield-power mitigation); may stay null. */
+	UPROPERTY(Transient)
+	mutable TObjectPtr<UPowerComponent> CachedPower;
 };

@@ -100,11 +100,18 @@ void AEnemyShip::FireAtPlayer(const AActor* Target)
 	const FVector End = Target->GetActorLocation();
 	if (const UWorld* World = GetWorld())
 	{
-		// Hostile orange beam; player damage lands at M11, here it's the AI tell.
+		// Hostile orange beam + impact flare.
 		DrawDebugLine(World, Start, End, FColor(255, 140, 40), false, 0.4f, 0, 10.f);
+		DrawDebugSphere(World, End, 120.f, 10, FColor(255, 160, 60), false, 0.4f, 0, 4.f);
 	}
 	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s FIRE at %s (range %.0f uu)"),
 		*GetName(), *Target->GetName(), FVector::Dist(Start, End));
+
+	// Land damage on the player (shield power mitigates it; 0 hull → defeat).
+	if (UHealthComponent* Health = Target->FindComponentByClass<UHealthComponent>())
+	{
+		Health->ApplyDamage(EnemyBeamDamage);
+	}
 }
 
 void AEnemyShip::Tick(float DeltaSeconds)

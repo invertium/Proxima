@@ -83,6 +83,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
 	float FireInterval = 2.5f;
 
+	/** Raw damage per shot to the player (before the player's shield-power mitigation). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float EnemyBeamDamage = 8.f;
+
 private:
 	/** Bound to HealthComp->OnDeath: draw an explosion burst then despawn the ship. */
 	UFUNCTION()

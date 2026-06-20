@@ -9,6 +9,7 @@
 #include "BridgePlayerController.generated.h"
 
 class UBridgeHUDWidget;
+class UEndScreenWidget;
 
 /**
  * ABridgePlayerController — owns the bridge HUD and the active-station state, and
@@ -39,10 +40,15 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	virtual void OnPossess(APawn* InPawn) override;
 
 	/** Widget class for the HUD shell (set to WBP_BridgeHUD in the GameMode/BP defaults). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bridge")
 	TSubclassOf<UBridgeHUDWidget> HUDWidgetClass;
+
+	/** Outcome overlay class (defeat M11 / victory M12); resolves WBP_EndScreen at play time. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bridge")
+	TSubclassOf<UEndScreenWidget> EndScreenClass;
 
 private:
 	void SelectHelm()        { SetStation(EStation::Helm); }
@@ -78,8 +84,19 @@ private:
 	/** Resolve the possessed ship's weapon component, or null. */
 	class UWeaponComponent* GetShipWeapon() const;
 
+	// --- Defeat / end-of-encounter (M11) ---
+	/** Bound to the player ship's health OnDeath: bring up the defeat overlay. */
+	UFUNCTION()
+	void HandlePlayerDeath(AActor* DeadActor);
+
+	/** Build + show the outcome overlay, pause the sim, and hand input to the UI. */
+	void ShowEndScreen(const FText& Title, const FText& Subtitle, FLinearColor TitleColor);
+
 	UPROPERTY()
 	TObjectPtr<UBridgeHUDWidget> HUDWidget;
+
+	UPROPERTY()
+	TObjectPtr<UEndScreenWidget> EndScreen;
 
 	EStation CurrentStation = EStation::Helm;
 

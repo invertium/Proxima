@@ -3,6 +3,7 @@
 #include "Ships/Spaceship.h"
 
 #include "Camera/CameraComponent.h"
+#include "Components/HealthComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -56,6 +57,13 @@ ASpaceship::ASpaceship()
 
 	// Forward beam weapon (recharge scaled by Weapons power, M8).
 	WeaponComp = CreateDefaultSubobject<UWeaponComponent>(TEXT("WeaponComp"));
+
+	// Hull + shield-power mitigation (M11). The player's "shields" are the engineering
+	// Shields-power mitigation (D11), so the absorb pool is zero — damage hits hull,
+	// softened by shield power. Enemy beams drain this; 0 hull triggers the defeat screen.
+	HealthComp = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComp"));
+	HealthComp->MaxHull = 100.f;
+	HealthComp->MaxShield = 0.f;
 
 	// Possess automatically so PIE shows the ship through its follow camera.
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
