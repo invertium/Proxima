@@ -84,10 +84,17 @@ private:
 	/** Resolve the possessed ship's weapon component, or null. */
 	class UWeaponComponent* GetShipWeapon() const;
 
-	// --- Defeat / end-of-encounter (M11) ---
+	// --- End-of-encounter (M11 defeat / M12 victory) ---
 	/** Bound to the player ship's health OnDeath: bring up the defeat overlay. */
 	UFUNCTION()
 	void HandlePlayerDeath(AActor* DeadActor);
+
+	/** Bound to every hostile's health OnDeath: the last kill brings up victory. */
+	UFUNCTION()
+	void HandleEnemyDeath(AActor* DeadActor);
+
+	/** Subscribe to all placed hostiles' deaths (the win condition). */
+	void BindEnemyDeaths();
 
 	/** Build + show the outcome overlay, pause the sim, and hand input to the UI. */
 	void ShowEndScreen(const FText& Title, const FText& Subtitle, FLinearColor TitleColor);

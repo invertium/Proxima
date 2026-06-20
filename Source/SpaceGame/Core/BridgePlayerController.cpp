@@ -9,6 +9,7 @@
 #include "Components/WeaponComponent.h"
 #include "Components/HealthComponent.h"
 #include "Ships/Spaceship.h"
+#include "Ships/EnemyShip.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "InputCoreTypes.h"
@@ -50,6 +51,53 @@ void ABridgePlayerController::BeginPlay()
 	}
 
 	SetStation(CurrentStation);
+
+	// Watch the placed hostiles: destroying them all is the win condition (M12).
+	BindEnemyDeaths();
+}
+
+void ABridgePlayerController::BindEnemyDeaths()
+{
+	TArray<AActor*> Enemies;
+	UGameplayStatics::GetAllActorsOfClass(this, AEnemyShip::StaticClass(), Enemies);
+	for (AActor* A : Enemies)
+	{
+		if (const AEnemyShip* Enemy = Cast<AEnemyShip>(A))
+		{
+			if (UHealthComponent* Health = Enemy->GetHealthComp())
+			{
+				Health->OnDeath.AddUniqueDynamic(this, &ABridgePlayerController::HandleEnemyDeath);
+			}
+		}
+	}
+	UE_LOG(LogTemp, Log, TEXT("[Bridge] Tracking %d hostile(s) for win condition"), Enemies.Num());
+}
+
+void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
+{
+	// Count hostiles still alive (the just-killed one reads hull 0 → not alive).
+	TArray<AActor*> Enemies;
+	UGameplayStatics::GetAllActorsOfClass(this, AEnemyShip::StaticClass(), Enemies);
+	int32 Alive = 0;
+	for (AActor* A : Enemies)
+	{
+		const AEnemyShip* Enemy = Cast<AEnemyShip>(A);
+		const UHealthComponent* Health = Enemy ? Enemy->GetHealthComp() : nullptr;
+		if (Health && Health->IsAlive())
+		{
+			++Alive;
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Bridge] Hostile destroyed — %d remaining"), Alive);
+	if (Alive == 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Bridge] VICTORY — all hostiles destroyed"));
+		ShowEndScreen(
+			FText::FromString(TEXT("VICTORY")),
+			FText::FromString(TEXT("All hostiles destroyed.")),
+			FLinearColor(0.3f, 1.0f, 0.45f, 1.0f)); // green
+	}
 }
 
 void ABridgePlayerController::SetupInputComponent()
