@@ -4,6 +4,7 @@
 
 #include "Components/PowerComponent.h"
 #include "Components/RadarContactComponent.h"
+#include "Components/HealthComponent.h"
 #include "GameFramework/Actor.h"
 #include "DrawDebugHelpers.h"
 #include "UObject/UObjectIterator.h"
@@ -106,13 +107,20 @@ bool UWeaponComponent::FireBeam()
 		return false;
 	}
 
-	// Fire: empty the charge, log, and arm the beam visual. Damage lands at M9.
+	// Fire: empty the charge, arm the beam visual, and land damage on the target.
 	Charge = 0.f;
 	BeamStart = Owner->GetActorLocation();
 	BeamEnd = CurrentTarget->GetActorLocation();
 	BeamDrawTimer = BeamDrawTime;
+
 	UE_LOG(LogTemp, Log, TEXT("[Weapon] BEAM FIRED at %s (range %.0f uu)"),
 		*CurrentTarget->GetName(), GetTargetRange());
+
+	// Apply damage: shields absorb first, then hull (UHealthComponent handles death).
+	if (UHealthComponent* Health = CurrentTarget->FindComponentByClass<UHealthComponent>())
+	{
+		Health->ApplyDamage(BeamDamage);
+	}
 	return true;
 }
 
@@ -124,12 +132,14 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	// Recharge, scaled by Weapons power (0 power → never charges).
 	Charge = FMath::Clamp(Charge + BaseRechargeRate * WeaponPowerScale() * DeltaTime, 0.f, 1.f);
 
-	// Keep the fired beam drawn for BeamDrawTime (one-frame lifetime, redrawn each tick).
+	// Keep the fired beam drawn for BeamDrawTime (one-frame lifetime, redrawn each tick):
+	// a bright beam line plus an impact flare sphere at the hit point.
 	if (BeamDrawTimer > 0.f)
 	{
 		if (const UWorld* World = GetWorld())
 		{
-			DrawDebugLine(World, BeamStart, BeamEnd, FColor(80, 200, 255), false, -1.f, 0, 12.f);
+			DrawDebugLine(World, BeamStart, BeamEnd, FColor(80, 200, 255), false, -1.f, 0, 14.f);
+			DrawDebugSphere(World, BeamEnd, 140.f, 12, FColor(160, 230, 255), false, -1.f, 0, 5.f);
 		}
 		BeamDrawTimer -= DeltaTime;
 	}

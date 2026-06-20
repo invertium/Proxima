@@ -45,7 +45,29 @@ void AEnemyShip::BeginPlay()
 	Super::BeginPlay();
 
 	FireCooldown = FireInterval;
+
+	// Despawn + explode when the player's beam drains our hull to zero (M10).
+	if (HealthComp)
+	{
+		HealthComp->OnDeath.AddDynamic(this, &AEnemyShip::HandleDeath);
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s spawned at %s"), *GetName(), *GetActorLocation().ToString());
+}
+
+void AEnemyShip::HandleDeath(AActor* DeadActor)
+{
+	const FVector Loc = GetActorLocation();
+	if (const UWorld* World = GetWorld())
+	{
+		// Primitive-first explosion: concentric debris shells persist ~2s so the kill
+		// reads on screen even after the actor is gone (Niagara FX is polish, M13).
+		DrawDebugSphere(World, Loc, 300.f, 16, FColor(255, 200, 60), false, 2.0f, 0, 9.f);
+		DrawDebugSphere(World, Loc, 650.f, 16, FColor(255, 110, 25), false, 2.0f, 0, 6.f);
+		DrawDebugSphere(World, Loc, 1000.f, 12, FColor(140, 45, 12), false, 2.0f, 0, 3.f);
+	}
+	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s destroyed -> despawning"), *GetName());
+	Destroy();
 }
 
 AActor* AEnemyShip::GetPlayerTarget() const

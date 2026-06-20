@@ -57,6 +57,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
 	float BaseRechargeRate = 0.4f;
 
+	/** Damage dealt to the target's health on a hit (shields absorb first, then hull). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
+	float BeamDamage = 25.f;
+
 	/** Seconds the fired beam stays drawn. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
 	float BeamDrawTime = 0.35f;

@@ -84,6 +84,10 @@ protected:
 	float FireInterval = 2.5f;
 
 private:
+	/** Bound to HealthComp->OnDeath: draw an explosion burst then despawn the ship. */
+	UFUNCTION()
+	void HandleDeath(AActor* DeadActor);
+
 	/** Resolve the player's pawn (cached cheaply each call via GameplayStatics). */
 	AActor* GetPlayerTarget() const;
 
