@@ -7,6 +7,7 @@
 #include "WeaponComponent.generated.h"
 
 class UPowerComponent;
+class UMaterialInterface;
 
 /**
  * UWeaponComponent — a single forward beam weapon. Charges 0..1 over time at a rate
@@ -61,9 +62,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
 	float BeamDamage = 25.f;
 
-	/** Seconds the fired beam stays drawn. */
+	/** Seconds the fired beam FX stays visible. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
-	float BeamDrawTime = 0.35f;
+	float BeamDrawTime = 0.2f;
 
 protected:
 	// --- Authoritative runtime state (replication-ready, D7) ---
@@ -81,8 +82,7 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UPowerComponent> CachedPower;
 
-	/** Remaining seconds to keep drawing the last beam. */
-	float BeamDrawTimer = 0.f;
-	FVector BeamStart = FVector::ZeroVector;
-	FVector BeamEnd = FVector::ZeroVector;
+	/** Emissive material for the beam FX (cyan), loaded in the constructor. */
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> BeamMaterial;
 };

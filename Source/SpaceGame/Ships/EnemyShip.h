@@ -10,6 +10,7 @@ class USceneComponent;
 class UStaticMeshComponent;
 class URadarContactComponent;
 class UHealthComponent;
+class UMaterialInterface;
 
 /** Coarse AI phase, surfaced for logging + [L] verification. */
 UENUM(BlueprintType)
@@ -53,6 +54,20 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Enemy")
 	TObjectPtr<UStaticMeshComponent> ShipMesh;
 
+	/** Twin forward prongs (M13 cruiser silhouette). */
+	UPROPERTY(VisibleAnywhere, Category = "Enemy")
+	TObjectPtr<UStaticMeshComponent> ProngLeft;
+
+	UPROPERTY(VisibleAnywhere, Category = "Enemy")
+	TObjectPtr<UStaticMeshComponent> ProngRight;
+
+	/** Glowing red sensor "eye" at the bow + engine glow at the stern (emissive, M13). */
+	UPROPERTY(VisibleAnywhere, Category = "Enemy")
+	TObjectPtr<UStaticMeshComponent> SensorEye;
+
+	UPROPERTY(VisibleAnywhere, Category = "Enemy")
+	TObjectPtr<UStaticMeshComponent> EngineGlow;
+
 	/** Radar blip + makes this a valid player weapon target. */
 	UPROPERTY(VisibleAnywhere, Category = "Enemy")
 	TObjectPtr<URadarContactComponent> RadarContact;
@@ -86,6 +101,10 @@ protected:
 	/** Raw damage per shot to the player (before the player's shield-power mitigation). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
 	float EnemyBeamDamage = 8.f;
+
+	/** Emissive material for the enemy's beam + death explosion (M13 FX). */
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> FxMaterial;
 
 private:
 	/** Bound to HealthComp->OnDeath: draw an explosion burst then despawn the ship. */

@@ -5,13 +5,19 @@
 #include "Components/PowerComponent.h"
 #include "Components/RadarContactComponent.h"
 #include "Components/HealthComponent.h"
+#include "FX/BeamFx.h"
 #include "GameFramework/Actor.h"
-#include "DrawDebugHelpers.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 #include "UObject/UObjectIterator.h"
 
 UWeaponComponent::UWeaponComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Glow(
+		TEXT("/Game/Art/Materials/M_GlowCyan.M_GlowCyan"));
+	if (Glow.Succeeded()) { BeamMaterial = Glow.Object; }
 }
 
 float UWeaponComponent::WeaponPowerScale() const
@@ -107,11 +113,10 @@ bool UWeaponComponent::FireBeam()
 		return false;
 	}
 
-	// Fire: empty the charge, arm the beam visual, and land damage on the target.
+	// Fire: empty the charge, spawn the beam FX, and land damage on the target.
 	Charge = 0.f;
-	BeamStart = Owner->GetActorLocation();
-	BeamEnd = CurrentTarget->GetActorLocation();
-	BeamDrawTimer = BeamDrawTime;
+	ABeamFx::Spawn(GetWorld(), Owner->GetActorLocation(), CurrentTarget->GetActorLocation(),
+		BeamMaterial, 22.f, BeamDrawTime);
 
 	UE_LOG(LogTemp, Log, TEXT("[Weapon] BEAM FIRED at %s (range %.0f uu)"),
 		*CurrentTarget->GetName(), GetTargetRange());
@@ -131,16 +136,4 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	// Recharge, scaled by Weapons power (0 power → never charges).
 	Charge = FMath::Clamp(Charge + BaseRechargeRate * WeaponPowerScale() * DeltaTime, 0.f, 1.f);
-
-	// Keep the fired beam drawn for BeamDrawTime (one-frame lifetime, redrawn each tick):
-	// a bright beam line plus an impact flare sphere at the hit point.
-	if (BeamDrawTimer > 0.f)
-	{
-		if (const UWorld* World = GetWorld())
-		{
-			DrawDebugLine(World, BeamStart, BeamEnd, FColor(80, 200, 255), false, -1.f, 0, 14.f);
-			DrawDebugSphere(World, BeamEnd, 140.f, 12, FColor(160, 230, 255), false, -1.f, 0, 5.f);
-		}
-		BeamDrawTimer -= DeltaTime;
-	}
 }

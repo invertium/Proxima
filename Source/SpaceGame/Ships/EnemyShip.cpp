@@ -5,7 +5,9 @@
 #include "Components/HealthComponent.h"
 #include "Components/RadarContactComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "DrawDebugHelpers.h"
+#include "FX/BeamFx.h"
+#include "FX/ExplosionFx.h"
+#include "Materials/MaterialInterface.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -19,19 +21,59 @@ AEnemyShip::AEnemyShip()
 	ShipRoot = CreateDefaultSubobject<USceneComponent>(TEXT("ShipRoot"));
 	SetRootComponent(ShipRoot);
 
-	// Placeholder hull: a cube so it reads visually distinct from the player's cone.
+	// Shared shape + material lookups (M13 — composited cruiser with emissive hull).
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> HullMat(TEXT("/Game/Art/Materials/M_EnemyHull.M_EnemyHull"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> RedGlow(TEXT("/Game/Art/Materials/M_GlowRed.M_GlowRed"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> OrangeGlow(TEXT("/Game/Art/Materials/M_GlowOrange.M_GlowOrange"));
+
+	// Main hull: a wide blocky cruiser body.
 	ShipMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ShipMesh"));
 	ShipMesh->SetupAttachment(ShipRoot);
 	ShipMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	ShipMesh->SetCollisionObjectType(ECC_Pawn);
-	ShipMesh->SetRelativeScale3D(FVector(2.f, 2.f, 1.f));
+	ShipMesh->SetRelativeScale3D(FVector(2.4f, 1.3f, 0.7f));
+	if (CubeMesh.Succeeded()) { ShipMesh->SetStaticMesh(CubeMesh.Object); }
+	if (HullMat.Succeeded())  { ShipMesh->SetMaterial(0, HullMat.Object); }
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(
-		TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (CubeMesh.Succeeded())
+	// Twin forward prongs jutting toward the bow (+X).
+	auto MakeProng = [&](const TCHAR* Name, float Y) -> UStaticMeshComponent*
 	{
-		ShipMesh->SetStaticMesh(CubeMesh.Object);
-	}
+		UStaticMeshComponent* P = CreateDefaultSubobject<UStaticMeshComponent>(Name);
+		P->SetupAttachment(ShipRoot);
+		P->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		P->SetRelativeLocation(FVector(150.f, Y, 0.f));
+		P->SetRelativeScale3D(FVector(1.7f, 0.28f, 0.28f));
+		if (CubeMesh.Succeeded()) { P->SetStaticMesh(CubeMesh.Object); }
+		if (HullMat.Succeeded())  { P->SetMaterial(0, HullMat.Object); }
+		return P;
+	};
+	ProngLeft  = MakeProng(TEXT("ProngLeft"),  -55.f);
+	ProngRight = MakeProng(TEXT("ProngRight"),  55.f);
+
+	// Glowing red sensor eye at the bow.
+	SensorEye = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SensorEye"));
+	SensorEye->SetupAttachment(ShipRoot);
+	SensorEye->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SensorEye->SetRelativeLocation(FVector(120.f, 0.f, 18.f));
+	SensorEye->SetRelativeScale3D(FVector(0.45f, 0.45f, 0.45f));
+	if (SphereMesh.Succeeded()) { SensorEye->SetStaticMesh(SphereMesh.Object); }
+	if (RedGlow.Succeeded())    { SensorEye->SetMaterial(0, RedGlow.Object); }
+
+	// Engine glow at the stern (-X); cylinder axis along +X.
+	EngineGlow = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("EngineGlow"));
+	EngineGlow->SetupAttachment(ShipRoot);
+	EngineGlow->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	EngineGlow->SetRelativeLocation(FVector(-110.f, 0.f, 0.f));
+	EngineGlow->SetRelativeRotation(FRotator(90.f, 0.f, 0.f));
+	EngineGlow->SetRelativeScale3D(FVector(0.7f, 0.7f, 0.5f));
+	if (CylMesh.Succeeded())    { EngineGlow->SetStaticMesh(CylMesh.Object); }
+	if (OrangeGlow.Succeeded()) { EngineGlow->SetMaterial(0, OrangeGlow.Object); }
+
+	// Beam + explosion FX tint (M13).
+	if (OrangeGlow.Succeeded()) { FxMaterial = OrangeGlow.Object; }
 
 	// Radar blip (hostile red default) + makes this a valid player weapon target.
 	RadarContact = CreateDefaultSubobject<URadarContactComponent>(TEXT("RadarContact"));
@@ -58,14 +100,8 @@ void AEnemyShip::BeginPlay()
 void AEnemyShip::HandleDeath(AActor* DeadActor)
 {
 	const FVector Loc = GetActorLocation();
-	if (const UWorld* World = GetWorld())
-	{
-		// Primitive-first explosion: concentric debris shells persist ~2s so the kill
-		// reads on screen even after the actor is gone (Niagara FX is polish, M13).
-		DrawDebugSphere(World, Loc, 300.f, 16, FColor(255, 200, 60), false, 2.0f, 0, 9.f);
-		DrawDebugSphere(World, Loc, 650.f, 16, FColor(255, 110, 25), false, 2.0f, 0, 6.f);
-		DrawDebugSphere(World, Loc, 1000.f, 12, FColor(140, 45, 12), false, 2.0f, 0, 3.f);
-	}
+	// Emissive expanding flash where the ship dies (M13 FX), then despawn.
+	AExplosionFx::Spawn(GetWorld(), Loc, 900.f, FxMaterial, 0.65f);
 	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s destroyed -> despawning"), *GetName());
 	Destroy();
 }
@@ -98,12 +134,8 @@ void AEnemyShip::FireAtPlayer(const AActor* Target)
 	}
 	const FVector Start = GetActorLocation();
 	const FVector End = Target->GetActorLocation();
-	if (const UWorld* World = GetWorld())
-	{
-		// Hostile orange beam + impact flare.
-		DrawDebugLine(World, Start, End, FColor(255, 140, 40), false, 0.4f, 0, 10.f);
-		DrawDebugSphere(World, End, 120.f, 10, FColor(255, 160, 60), false, 0.4f, 0, 4.f);
-	}
+	// Hostile orange beam (M13 emissive-mesh FX).
+	ABeamFx::Spawn(GetWorld(), Start, End, FxMaterial, 16.f, 0.18f);
 	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s FIRE at %s (range %.0f uu)"),
 		*GetName(), *Target->GetName(), FVector::Dist(Start, End));
 

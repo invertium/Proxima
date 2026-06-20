@@ -51,9 +51,20 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Ship")
 	TObjectPtr<USceneComponent> ShipRoot;
 
-	/** Placeholder hull mesh (primitive-first, DECISIONS D9). */
+	/** Main hull (cone fuselage), emissive faction material (M13). */
 	UPROPERTY(VisibleAnywhere, Category = "Ship")
 	TObjectPtr<UStaticMeshComponent> ShipMesh;
+
+	/** Swept wings flanking the fuselage (M13 silhouette). */
+	UPROPERTY(VisibleAnywhere, Category = "Ship")
+	TObjectPtr<UStaticMeshComponent> WingLeft;
+
+	UPROPERTY(VisibleAnywhere, Category = "Ship")
+	TObjectPtr<UStaticMeshComponent> WingRight;
+
+	/** Glowing engine exhaust at the stern (emissive, M13). */
+	UPROPERTY(VisibleAnywhere, Category = "Ship")
+	TObjectPtr<UStaticMeshComponent> EngineGlow;
 
 	UPROPERTY(VisibleAnywhere, Category = "Ship|Camera")
 	TObjectPtr<USpringArmComponent> SpringArm;
