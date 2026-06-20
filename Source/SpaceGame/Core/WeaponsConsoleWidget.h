@@ -8,6 +8,7 @@
 
 class UTextBlock;
 class UProgressBar;
+class UButton;
 
 /**
  * UWeaponsConsoleWidget — the Weapons station console (DECISIONS D10/D11). Polls the
@@ -23,6 +24,7 @@ class SPACEGAME_API UWeaponsConsoleWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 protected:
@@ -31,6 +33,16 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> TargetStatusText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> ChargeText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UProgressBar> ChargeBar;
+
+	// Mouse/touch controls (optional so the console still runs key-only).
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> CycleTargetBtn;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> FireBtn;
+
+	UFUNCTION() void OnCycleTarget();
+	UFUNCTION() void OnFire();
+
+	/** Resolve the possessed ship's weapon component, or null. */
+	class UWeaponComponent* GetWeapon() const;
 
 	/** Charge bar colour when the beam is ready to fire. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapons")

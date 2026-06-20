@@ -6,7 +6,33 @@
 #include "Ships/Spaceship.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
+#include "Components/Button.h"
 #include "GameFramework/Pawn.h"
+
+UWeaponComponent* UWeaponsConsoleWidget::GetWeapon() const
+{
+	const ASpaceship* Ship = Cast<ASpaceship>(GetOwningPlayerPawn());
+	return Ship ? Ship->GetWeaponComp() : nullptr;
+}
+
+void UWeaponsConsoleWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+
+	// Wire the click controls to the same component calls the Right/Space keys use.
+	if (CycleTargetBtn) { CycleTargetBtn->OnClicked.AddDynamic(this, &UWeaponsConsoleWidget::OnCycleTarget); }
+	if (FireBtn)        { FireBtn->OnClicked.AddDynamic(this,        &UWeaponsConsoleWidget::OnFire); }
+}
+
+void UWeaponsConsoleWidget::OnCycleTarget()
+{
+	if (UWeaponComponent* Weapon = GetWeapon()) { Weapon->CycleTarget(); }
+}
+
+void UWeaponsConsoleWidget::OnFire()
+{
+	if (UWeaponComponent* Weapon = GetWeapon()) { Weapon->FireBeam(); }
+}
 
 void UWeaponsConsoleWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {

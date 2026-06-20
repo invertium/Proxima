@@ -7,7 +7,28 @@
 #include "Ships/Spaceship.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
+#include "Components/Button.h"
 #include "GameFramework/Pawn.h"
+
+void UEngineeringConsoleWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+
+	// Wire the +/- buttons. Bound here (not in the WBP graph) so all logic stays in C++.
+	if (EngineMinusBtn)  { EngineMinusBtn->OnClicked.AddDynamic(this,  &UEngineeringConsoleWidget::OnEngineMinus); }
+	if (EnginePlusBtn)   { EnginePlusBtn->OnClicked.AddDynamic(this,   &UEngineeringConsoleWidget::OnEnginePlus); }
+	if (WeaponsMinusBtn) { WeaponsMinusBtn->OnClicked.AddDynamic(this, &UEngineeringConsoleWidget::OnWeaponsMinus); }
+	if (WeaponsPlusBtn)  { WeaponsPlusBtn->OnClicked.AddDynamic(this,  &UEngineeringConsoleWidget::OnWeaponsPlus); }
+	if (ShieldsMinusBtn) { ShieldsMinusBtn->OnClicked.AddDynamic(this, &UEngineeringConsoleWidget::OnShieldsMinus); }
+	if (ShieldsPlusBtn)  { ShieldsPlusBtn->OnClicked.AddDynamic(this,  &UEngineeringConsoleWidget::OnShieldsPlus); }
+}
+
+void UEngineeringConsoleWidget::OnEngineMinus()  { if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(GetOwningPlayer())) { PC->EngAdjustSystem(EShipSystem::Engine,  false); } }
+void UEngineeringConsoleWidget::OnEnginePlus()   { if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(GetOwningPlayer())) { PC->EngAdjustSystem(EShipSystem::Engine,  true); } }
+void UEngineeringConsoleWidget::OnWeaponsMinus() { if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(GetOwningPlayer())) { PC->EngAdjustSystem(EShipSystem::Weapons, false); } }
+void UEngineeringConsoleWidget::OnWeaponsPlus()  { if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(GetOwningPlayer())) { PC->EngAdjustSystem(EShipSystem::Weapons, true); } }
+void UEngineeringConsoleWidget::OnShieldsMinus() { if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(GetOwningPlayer())) { PC->EngAdjustSystem(EShipSystem::Shields, false); } }
+void UEngineeringConsoleWidget::OnShieldsPlus()  { if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(GetOwningPlayer())) { PC->EngAdjustSystem(EShipSystem::Shields, true); } }
 
 void UEngineeringConsoleWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {

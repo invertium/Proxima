@@ -32,6 +32,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Bridge")
 	EShipSystem GetSelectedSystem() const { return SelectedSystem; }
 
+	/** Select a system and step its power (mouse/touch path for the Engineering +/- buttons). */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void EngAdjustSystem(EShipSystem System, bool bIncrease);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;

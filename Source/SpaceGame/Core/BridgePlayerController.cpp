@@ -14,8 +14,16 @@ void ABridgePlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Keys reach the controller while the full-screen HUD overlay is shown.
-	bShowMouseCursor = false;
+	// Bridge consoles are clickable (mouse/touch) as well as key-driven, so show the
+	// cursor and use Game-and-UI input: UMG buttons receive clicks while the gameplay
+	// key binds (Helm WASD, Engineering/Weapons arrows + Space) still reach the
+	// controller. The console buttons are authored non-focusable so they never steal
+	// keyboard focus from those binds.
+	bShowMouseCursor = true;
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InputMode);
 
 	// Fall back to the authored WBP if no class was assigned in defaults. Resolved
 	// at play time (not CDO) so creating the WBP doesn't require an editor restart.
@@ -142,6 +150,18 @@ void ABridgePlayerController::EngPowerUp()
 {
 	if (CurrentStation != EStation::Engineering) { return; }
 	if (UPowerComponent* Power = GetShipPower()) { Power->AdjustSystemPower(SelectedSystem, PowerStep); }
+}
+
+void ABridgePlayerController::EngAdjustSystem(EShipSystem System, bool bIncrease)
+{
+	// Mouse/touch entry point for the Engineering console's per-row +/- buttons:
+	// select the clicked row (so its highlight follows) and step its power. Shares
+	// PowerStep with the arrow keys so both input paths behave identically.
+	SelectedSystem = System;
+	if (UPowerComponent* Power = GetShipPower())
+	{
+		Power->AdjustSystemPower(System, bIncrease ? PowerStep : -PowerStep);
+	}
 }
 
 void ABridgePlayerController::EngPowerDown()

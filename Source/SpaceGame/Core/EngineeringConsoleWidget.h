@@ -8,6 +8,7 @@
 
 class UTextBlock;
 class UProgressBar;
+class UButton;
 
 /**
  * UEngineeringConsoleWidget — the Engineering station console (DECISIONS D10/D11).
@@ -23,6 +24,7 @@ class SPACEGAME_API UEngineeringConsoleWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 protected:
@@ -35,6 +37,22 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UProgressBar> EngineBar;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UProgressBar> WeaponsBar;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UProgressBar> ShieldsBar;
+
+	// Per-system −/+ buttons (mouse/touch). Optional so the console still runs key-only.
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> EngineMinusBtn;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> EnginePlusBtn;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> WeaponsMinusBtn;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> WeaponsPlusBtn;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> ShieldsMinusBtn;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> ShieldsPlusBtn;
+
+	// OnClicked handlers — each selects its row and steps that system's power.
+	UFUNCTION() void OnEngineMinus();
+	UFUNCTION() void OnEnginePlus();
+	UFUNCTION() void OnWeaponsMinus();
+	UFUNCTION() void OnWeaponsPlus();
+	UFUNCTION() void OnShieldsMinus();
+	UFUNCTION() void OnShieldsPlus();
 
 	/** Highlight colour for the selected system's label. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Engineering")
