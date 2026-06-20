@@ -25,6 +25,10 @@ class SPACEGAME_API ASpaceship : public APawn
 public:
 	ASpaceship();
 
+	/** Impulse movement sim, for the Helm console / player controller to drive + read. */
+	UFUNCTION(BlueprintPure, Category = "Ship")
+	UShipMovementComponent* GetMovementComp() const { return MovementComp; }
+
 protected:
 	virtual void BeginPlay() override;
 

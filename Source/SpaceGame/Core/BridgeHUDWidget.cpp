@@ -3,6 +3,7 @@
 #include "Core/BridgeHUDWidget.h"
 
 #include "Components/TextBlock.h"
+#include "Components/Widget.h"
 
 void UBridgeHUDWidget::NativeConstruct()
 {
@@ -17,6 +18,14 @@ void UBridgeHUDWidget::SetActiveStation(EStation Station)
 	ApplyTab(HelmTab, Station == EStation::Helm);
 	ApplyTab(WeaponsTab, Station == EStation::Weapons);
 	ApplyTab(EngineeringTab, Station == EStation::Engineering);
+
+	// Helm console is visible only at the Helm station (other consoles arrive M7/M8).
+	if (HelmConsole)
+	{
+		HelmConsole->SetVisibility(Station == EStation::Helm
+			? ESlateVisibility::SelfHitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
 
 	if (ActiveConsoleLabel)
 	{

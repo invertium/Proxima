@@ -3,6 +3,8 @@
 #include "Core/BridgePlayerController.h"
 
 #include "Core/BridgeHUDWidget.h"
+#include "Components/ShipMovementComponent.h"
+#include "Ships/Spaceship.h"
 #include "Blueprint/UserWidget.h"
 #include "InputCoreTypes.h"
 
@@ -45,10 +47,70 @@ void ABridgePlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::One,   IE_Pressed, this, &ABridgePlayerController::SelectHelm);
 	InputComponent->BindKey(EKeys::Two,   IE_Pressed, this, &ABridgePlayerController::SelectWeapons);
 	InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &ABridgePlayerController::SelectEngineering);
+
+	// Helm: W/S step throttle; A/D yaw the ship (held). Gated to the Helm station.
+	InputComponent->BindKey(EKeys::W, IE_Pressed,  this, &ABridgePlayerController::ThrottleUp);
+	InputComponent->BindKey(EKeys::S, IE_Pressed,  this, &ABridgePlayerController::ThrottleDown);
+	InputComponent->BindKey(EKeys::A, IE_Pressed,  this, &ABridgePlayerController::TurnLeft);
+	InputComponent->BindKey(EKeys::A, IE_Released, this, &ABridgePlayerController::TurnStop);
+	InputComponent->BindKey(EKeys::D, IE_Pressed,  this, &ABridgePlayerController::TurnRight);
+	InputComponent->BindKey(EKeys::D, IE_Released, this, &ABridgePlayerController::TurnStop);
+}
+
+UShipMovementComponent* ABridgePlayerController::GetShipMovement() const
+{
+	const ASpaceship* Ship = Cast<ASpaceship>(GetPawn());
+	return Ship ? Ship->GetMovementComp() : nullptr;
+}
+
+void ABridgePlayerController::ApplyThrottle()
+{
+	if (UShipMovementComponent* Move = GetShipMovement())
+	{
+		Move->SetThrottle(ThrottleLevel);
+	}
+}
+
+void ABridgePlayerController::ThrottleUp()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	ThrottleLevel = FMath::Clamp(ThrottleLevel + ThrottleStep, 0.f, 1.f);
+	ApplyThrottle();
+}
+
+void ABridgePlayerController::ThrottleDown()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	ThrottleLevel = FMath::Clamp(ThrottleLevel - ThrottleStep, 0.f, 1.f);
+	ApplyThrottle();
+}
+
+void ABridgePlayerController::TurnLeft()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetTurn(-1.f); }
+}
+
+void ABridgePlayerController::TurnRight()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetTurn(1.f); }
+}
+
+void ABridgePlayerController::TurnStop()
+{
+	if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetTurn(0.f); }
 }
 
 void ABridgePlayerController::SetStation(EStation NewStation)
 {
+	// Leaving Helm: stop active steering so the ship doesn't keep yawing unattended
+	// (throttle persists — the ship coasts at its set impulse).
+	if (CurrentStation == EStation::Helm && NewStation != EStation::Helm)
+	{
+		if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetTurn(0.f); }
+	}
+
 	CurrentStation = NewStation;
 
 	const TCHAR* Name =

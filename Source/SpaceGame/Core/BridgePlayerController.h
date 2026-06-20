@@ -40,8 +40,27 @@ private:
 	void SelectWeapons()     { SetStation(EStation::Weapons); }
 	void SelectEngineering() { SetStation(EStation::Engineering); }
 
+	// --- Helm input (active only while CurrentStation == Helm, DECISIONS D10) ---
+	void ThrottleUp();
+	void ThrottleDown();
+	void TurnLeft();
+	void TurnRight();
+	void TurnStop();
+
+	/** Resolve the possessed ship's movement component, or null. */
+	class UShipMovementComponent* GetShipMovement() const;
+
+	/** Push the current throttle level onto the ship (clamped 0..1). */
+	void ApplyThrottle();
+
 	UPROPERTY()
 	TObjectPtr<UBridgeHUDWidget> HUDWidget;
 
 	EStation CurrentStation = EStation::Helm;
+
+	/** Helm throttle level, stepped by W/S; persists when leaving Helm so the ship coasts. */
+	float ThrottleLevel = 0.f;
+
+	/** Per-press throttle step. */
+	static constexpr float ThrottleStep = 0.2f;
 };

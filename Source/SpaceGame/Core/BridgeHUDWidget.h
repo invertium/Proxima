@@ -8,6 +8,7 @@
 #include "BridgeHUDWidget.generated.h"
 
 class UTextBlock;
+class UWidget;
 
 /**
  * UBridgeHUDWidget — the bridge HUD shell. The WBP child (WBP_BridgeHUD) supplies
@@ -41,6 +42,10 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ActiveConsoleLabel;
+
+	/** Helm console panel; shown only while the Helm station is active (optional bind). */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> HelmConsole;
 
 	/** Highlight colour for the active tab. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bridge|HUD")
