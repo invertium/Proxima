@@ -68,9 +68,20 @@ void AEnemyShip::BeginPlay()
 
 void AEnemyShip::HandleDeath(AActor* DeadActor)
 {
+	UWorld* World = GetWorld();
 	const FVector Loc = GetActorLocation();
-	// Emissive expanding flash where the ship dies (M13 FX), then despawn.
-	AExplosionFx::Spawn(GetWorld(), Loc, 900.f, FxMaterial, 0.65f);
+
+	// Main blast (with the boom SFX), then a scatter of smaller silent flashes around it
+	// for a richer multi-burst death (M14). These are independent actors, so they outlive
+	// this ship being destroyed below.
+	AExplosionFx::Spawn(World, Loc, 900.f, FxMaterial, 0.65f);
+	for (int32 i = 0; i < 4; ++i)
+	{
+		const FVector Offset = FMath::VRand() * FMath::FRandRange(200.f, 650.f);
+		AExplosionFx::Spawn(World, Loc + Offset, FMath::FRandRange(240.f, 460.f),
+			FxMaterial, FMath::FRandRange(0.3f, 0.5f), false);
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s destroyed -> despawning"), *GetName());
 	Destroy();
 }

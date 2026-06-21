@@ -413,3 +413,9 @@ Tried giving the bridge HUD a sci-fi font (Orbitron, OFL). Imported the TTF, but
 ## 2026-06-21 — ✅ M14 (impact FX): beam-hit flashes (builds; PIE-deferred)
 
 Added a small `AExplosionFx` flash at the point each beam lands — cyan where the player's beam hits the enemy (`WeaponComponent::FireBeam`), orange where an enemy beam hits the player (`AEnemyShip::FireAtPlayer`). Reuses the existing expand/collapse flash at small radius (~220–260uu) + short life (~0.2s). `AExplosionFx::Activate`/`Spawn` gained a `bPlaySound` flag (default true) so these impact flashes stay silent — only the death explosion booms. Builds clean; visual confirmation deferred to a PIE pass (machine in use for gaming). (Commit: Source/FX/ExplosionFx.* + Source/Components/WeaponComponent.cpp + Source/Ships/EnemyShip.cpp + docs.)
+
+## 2026-06-21 — ✅ M14 (death FX): multi-burst enemy explosion (builds; PIE-deferred)
+
+`AEnemyShip::HandleDeath` now spawns the main boom (with SFX) plus four smaller silent flashes at random offsets (`FMath::VRand` × 200–650uu, radius 240–460, life 0.3–0.5s) for a richer, scattered death burst. Pure C++, reuses `AExplosionFx` (the new `bPlaySound=false` flag keeps the extra pops silent). Builds clean; visual check deferred to the same pending PIE pass.
+
+**Pending verification backlog (one PIE pass clears all):** camera-shake feel, the 4 combat SFX actually playing, beam-impact flashes, and this multi-burst death. All build clean and reuse proven systems; none seen/heard in PIE yet (machine in use for gaming).
