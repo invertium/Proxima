@@ -57,6 +57,9 @@ float UHealthComponent::ApplyDamage(float Amount)
 	UE_LOG(LogTemp, Log, TEXT("[Health] %s took %.1f dmg (-%.0f%% shield, %.1f effective) -> shield %.0f/%.0f hull %.0f/%.0f"),
 		Owner ? *Owner->GetName() : TEXT("?"), Amount, Mitigation * 100.f, Effective, Shield, MaxShield, Hull, MaxHull);
 
+	// Per-hit feedback hook (camera shake, hit FX). Effective>0 here by construction.
+	OnDamaged.Broadcast(Effective, Hull);
+
 	if (Hull <= 0.f && !bDeathBroadcast)
 	{
 		bDeathBroadcast = true;

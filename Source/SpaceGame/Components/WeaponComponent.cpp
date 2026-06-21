@@ -6,6 +6,7 @@
 #include "Components/RadarContactComponent.h"
 #include "Components/HealthComponent.h"
 #include "FX/BeamFx.h"
+#include "Ships/Spaceship.h"
 #include "GameFramework/Actor.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
@@ -117,6 +118,12 @@ bool UWeaponComponent::FireBeam()
 	Charge = 0.f;
 	ABeamFx::Spawn(GetWorld(), Owner->GetActorLocation(), CurrentTarget->GetActorLocation(),
 		BeamMaterial, 22.f, BeamDrawTime);
+
+	// Recoil kick on the firing ship's camera (M14 game-feel).
+	if (ASpaceship* Ship = Cast<ASpaceship>(GetOwner()))
+	{
+		Ship->AddCameraTrauma(FireTrauma);
+	}
 
 	UE_LOG(LogTemp, Log, TEXT("[Weapon] BEAM FIRED at %s (range %.0f uu)"),
 		*CurrentTarget->GetName(), GetTargetRange());

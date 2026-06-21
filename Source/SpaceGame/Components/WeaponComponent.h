@@ -66,6 +66,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
 	float BeamDrawTime = 0.2f;
 
+	/** Camera-shake trauma added to the firing ship on each shot (recoil kick, M14). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
+	float FireTrauma = 0.28f;
+
 protected:
 	// --- Authoritative runtime state (replication-ready, D7) ---
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Weapon")

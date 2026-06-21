@@ -9,6 +9,7 @@
 class UPowerComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthDeath, AActor*, DeadActor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthDamaged, float, EffectiveDamage, float, HullRemaining);
 
 /**
  * UHealthComponent — hull + regenerating-free shield pool for any combatant. Damage
@@ -55,6 +56,10 @@ public:
 	/** Broadcast once when hull first reaches zero. */
 	UPROPERTY(BlueprintAssignable, Category = "Ship|Health")
 	FOnHealthDeath OnDeath;
+
+	/** Broadcast on every damaging hit (effective damage dealt + hull remaining), for FX/feedback. */
+	UPROPERTY(BlueprintAssignable, Category = "Ship|Health")
+	FOnHealthDamaged OnDamaged;
 
 	/** Starting + maximum hull hit-points. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Health")

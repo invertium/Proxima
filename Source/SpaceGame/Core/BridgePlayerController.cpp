@@ -90,6 +90,19 @@ void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[Bridge] Hostile destroyed — %d remaining"), Alive);
+
+	// A nearby kill thumps the camera; the shake falls off with distance (M14 game-feel).
+	if (ASpaceship* Ship = Cast<ASpaceship>(GetPawn()))
+	{
+		float Trauma = 0.5f;
+		if (DeadActor)
+		{
+			const float Dist = FVector::Dist(DeadActor->GetActorLocation(), Ship->GetActorLocation());
+			Trauma *= FMath::GetMappedRangeValueClamped(FVector2D(2000.f, 12000.f), FVector2D(1.f, 0.f), Dist);
+		}
+		Ship->AddCameraTrauma(Trauma);
+	}
+
 	if (Alive == 0)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[Bridge] VICTORY — all hostiles destroyed"));

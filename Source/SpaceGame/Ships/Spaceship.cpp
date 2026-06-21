@@ -73,6 +73,49 @@ void ASpaceship::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Hits add camera trauma (M14 game-feel).
+	if (HealthComp)
+	{
+		HealthComp->OnDamaged.AddDynamic(this, &ASpaceship::HandleDamaged);
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("ASpaceship spawned: %s at %s"),
 		*GetName(), *GetActorLocation().ToString());
+}
+
+void ASpaceship::AddCameraTrauma(float Amount)
+{
+	CameraTrauma = FMath::Clamp(CameraTrauma + Amount, 0.f, 1.f);
+}
+
+void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)
+{
+	AddCameraTrauma(EffectiveDamage * HitTraumaPerDamage);
+}
+
+void ASpaceship::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (!FollowCamera)
+	{
+		return;
+	}
+
+	if (CameraTrauma > 0.f)
+	{
+		// Shake scales with trauma² for a punchy, fast-settling feel (Vlambeer "trauma").
+		const float Shake = CameraTrauma * CameraTrauma;
+		const FRotator Offset(
+			MaxShakePitch * Shake * FMath::FRandRange(-1.f, 1.f),
+			MaxShakeYaw   * Shake * FMath::FRandRange(-1.f, 1.f),
+			MaxShakeRoll  * Shake * FMath::FRandRange(-1.f, 1.f));
+		FollowCamera->SetRelativeRotation(Offset);
+		CameraTrauma = FMath::Max(0.f, CameraTrauma - TraumaDecayPerSec * DeltaSeconds);
+	}
+	else if (!FollowCamera->GetRelativeRotation().IsNearlyZero())
+	{
+		// Settle back to neutral once trauma is spent.
+		FollowCamera->SetRelativeRotation(FRotator::ZeroRotator);
+	}
 }

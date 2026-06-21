@@ -44,8 +44,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship")
 	UHealthComponent* GetHealthComp() const { return HealthComp; }
 
+	/** Add camera-shake "trauma" (0..1, clamped); decays each tick. Drives the follow-cam shake. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Feel")
+	void AddCameraTrauma(float Amount);
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
+
+	/** Bound to HealthComp->OnDamaged: convert a hit into camera trauma. */
+	UFUNCTION()
+	void HandleDamaged(float EffectiveDamage, float HullRemaining);
 
 	/** Unrotated root so camera/forward stay aligned with actor +X regardless of mesh orientation. */
 	UPROPERTY(VisibleAnywhere, Category = "Ship")
@@ -76,4 +85,28 @@ protected:
 	/** Hull + shield-power mitigation (D11); 0 hull triggers the defeat screen. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
 	TObjectPtr<UHealthComponent> HealthComp;
+
+	// --- Camera shake (trauma model, M14 game-feel) ---
+
+	/** How fast accumulated trauma bleeds off (per second). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Feel")
+	float TraumaDecayPerSec = 1.6f;
+
+	/** Peak shake angles (deg) at full trauma; actual shake scales with trauma². */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Feel")
+	float MaxShakePitch = 1.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Feel")
+	float MaxShakeYaw = 1.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Feel")
+	float MaxShakeRoll = 2.4f;
+
+	/** Trauma a player hit adds per unit of effective damage taken. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Feel")
+	float HitTraumaPerDamage = 0.04f;
+
+private:
+	/** Current shake energy 0..1; squared to drive the offset, decayed each tick. */
+	float CameraTrauma = 0.f;
 };
