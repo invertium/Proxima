@@ -6,6 +6,7 @@
 #include "Components/RadarContactComponent.h"
 #include "Components/HealthComponent.h"
 #include "FX/BeamFx.h"
+#include "FX/ExplosionFx.h"
 #include "Ships/Spaceship.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
@@ -143,6 +144,9 @@ bool UWeaponComponent::FireBeam()
 	{
 		Health->ApplyDamage(BeamDamage);
 	}
+
+	// Small cyan impact flash where the beam lands (no boom — bPlaySound off).
+	AExplosionFx::Spawn(GetWorld(), CurrentTarget->GetActorLocation(), 260.f, BeamMaterial, 0.22f, false);
 	return true;
 }
 

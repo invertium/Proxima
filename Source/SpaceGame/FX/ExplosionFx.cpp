@@ -28,7 +28,8 @@ AExplosionFx::AExplosionFx()
 	if (Boom.Succeeded()) { ExplosionSound = Boom.Object; }
 }
 
-void AExplosionFx::Activate(const FVector& Location, float PeakRadius, UMaterialInterface* Material, float Life)
+void AExplosionFx::Activate(const FVector& Location, float PeakRadius, UMaterialInterface* Material, float Life,
+	bool bPlaySound)
 {
 	PeakScale = PeakRadius / 50.f; // sphere radius is 50uu at scale 1
 	TotalLife = FMath::Max(Life, 0.01f);
@@ -40,14 +41,14 @@ void AExplosionFx::Activate(const FVector& Location, float PeakRadius, UMaterial
 	SetActorLocation(Location);
 	Mesh->SetWorldScale3D(FVector::ZeroVector);
 
-	if (ExplosionSound)
+	if (bPlaySound && ExplosionSound)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, Location);
 	}
 }
 
 AExplosionFx* AExplosionFx::Spawn(UWorld* World, const FVector& Location, float PeakRadius,
-	UMaterialInterface* Material, float Life)
+	UMaterialInterface* Material, float Life, bool bPlaySound)
 {
 	if (!World) { return nullptr; }
 	FActorSpawnParameters Params;
@@ -55,7 +56,7 @@ AExplosionFx* AExplosionFx::Spawn(UWorld* World, const FVector& Location, float 
 	AExplosionFx* Fx = World->SpawnActor<AExplosionFx>(AExplosionFx::StaticClass(), FTransform::Identity, Params);
 	if (Fx)
 	{
-		Fx->Activate(Location, PeakRadius, Material, Life);
+		Fx->Activate(Location, PeakRadius, Material, Life, bPlaySound);
 	}
 	return Fx;
 }

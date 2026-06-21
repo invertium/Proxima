@@ -24,12 +24,14 @@ public:
 	AExplosionFx();
 	virtual void Tick(float DeltaSeconds) override;
 
-	/** Centre the flash, set its peak radius (uu), tint it, and run for Life seconds. */
-	void Activate(const FVector& Location, float PeakRadius, UMaterialInterface* Material, float Life);
+	/** Centre the flash, set its peak radius (uu), tint it, and run for Life seconds.
+	 *  bPlaySound gates the boom SFX (off for small beam-impact flashes). */
+	void Activate(const FVector& Location, float PeakRadius, UMaterialInterface* Material, float Life,
+		bool bPlaySound = true);
 
 	/** Spawn + activate in one call. */
 	static AExplosionFx* Spawn(UWorld* World, const FVector& Location, float PeakRadius,
-		UMaterialInterface* Material, float Life = 0.6f);
+		UMaterialInterface* Material, float Life = 0.6f, bool bPlaySound = true);
 
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Mesh;

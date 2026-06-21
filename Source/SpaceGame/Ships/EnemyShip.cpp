@@ -117,6 +117,9 @@ void AEnemyShip::FireAtPlayer(const AActor* Target)
 	{
 		Health->ApplyDamage(EnemyBeamDamage);
 	}
+
+	// Small orange impact flash on the player (no boom — bPlaySound off).
+	AExplosionFx::Spawn(GetWorld(), End, 220.f, FxMaterial, 0.2f, false);
 }
 
 void AEnemyShip::Tick(float DeltaSeconds)
