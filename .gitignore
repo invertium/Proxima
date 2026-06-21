@@ -34,6 +34,9 @@ Plugins/UnrealClaude/UnrealClaude/Resources/mcp-bridge/node_modules/
 # UnrealClaude auto-generated execute_script files (regenerated on demand)
 Content/UnrealClaude/Scripts/
 
+# Raw downloaded asset packs (imported copies live under Content/Art/)
+_assets_dl/
+
 # Secrets — never commit API keys
 **/vibeue-proxy.json
 *.apikey

@@ -51,22 +51,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Enemy")
 	TObjectPtr<USceneComponent> ShipRoot;
 
+	/** Main hull — imported Quaternius "Imperial" cruiser mesh (CC0). */
 	UPROPERTY(VisibleAnywhere, Category = "Enemy")
 	TObjectPtr<UStaticMeshComponent> ShipMesh;
-
-	/** Twin forward prongs (M13 cruiser silhouette). */
-	UPROPERTY(VisibleAnywhere, Category = "Enemy")
-	TObjectPtr<UStaticMeshComponent> ProngLeft;
-
-	UPROPERTY(VisibleAnywhere, Category = "Enemy")
-	TObjectPtr<UStaticMeshComponent> ProngRight;
-
-	/** Glowing red sensor "eye" at the bow + engine glow at the stern (emissive, M13). */
-	UPROPERTY(VisibleAnywhere, Category = "Enemy")
-	TObjectPtr<UStaticMeshComponent> SensorEye;
-
-	UPROPERTY(VisibleAnywhere, Category = "Enemy")
-	TObjectPtr<UStaticMeshComponent> EngineGlow;
 
 	/** Radar blip + makes this a valid player weapon target. */
 	UPROPERTY(VisibleAnywhere, Category = "Enemy")

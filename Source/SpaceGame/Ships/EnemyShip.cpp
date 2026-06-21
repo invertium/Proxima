@@ -21,56 +21,20 @@ AEnemyShip::AEnemyShip()
 	ShipRoot = CreateDefaultSubobject<USceneComponent>(TEXT("ShipRoot"));
 	SetRootComponent(ShipRoot);
 
-	// Shared shape + material lookups (M13 — composited cruiser with emissive hull).
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> HullMat(TEXT("/Game/Art/Materials/M_EnemyHull.M_EnemyHull"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> RedGlow(TEXT("/Game/Art/Materials/M_GlowRed.M_GlowRed"));
+	// Imported enemy hull: Quaternius "Imperial" cruiser (CC0), red palette (M13/assets).
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> HullMesh(TEXT("/Game/Art/Meshes/Imperial.Imperial"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> HullMat(TEXT("/Game/Art/Materials/M_Imperial.M_Imperial"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> OrangeGlow(TEXT("/Game/Art/Materials/M_GlowOrange.M_GlowOrange"));
 
-	// Main hull: a wide blocky cruiser body.
+	// Main hull. Model length runs along local Y; yaw -90 swings the bow to actor +X.
 	ShipMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ShipMesh"));
 	ShipMesh->SetupAttachment(ShipRoot);
 	ShipMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	ShipMesh->SetCollisionObjectType(ECC_Pawn);
-	ShipMesh->SetRelativeScale3D(FVector(2.4f, 1.3f, 0.7f));
-	if (CubeMesh.Succeeded()) { ShipMesh->SetStaticMesh(CubeMesh.Object); }
+	ShipMesh->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+	ShipMesh->SetRelativeScale3D(FVector(0.6f));
+	if (HullMesh.Succeeded()) { ShipMesh->SetStaticMesh(HullMesh.Object); }
 	if (HullMat.Succeeded())  { ShipMesh->SetMaterial(0, HullMat.Object); }
-
-	// Twin forward prongs jutting toward the bow (+X).
-	auto MakeProng = [&](const TCHAR* Name, float Y) -> UStaticMeshComponent*
-	{
-		UStaticMeshComponent* P = CreateDefaultSubobject<UStaticMeshComponent>(Name);
-		P->SetupAttachment(ShipRoot);
-		P->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		P->SetRelativeLocation(FVector(150.f, Y, 0.f));
-		P->SetRelativeScale3D(FVector(1.7f, 0.28f, 0.28f));
-		if (CubeMesh.Succeeded()) { P->SetStaticMesh(CubeMesh.Object); }
-		if (HullMat.Succeeded())  { P->SetMaterial(0, HullMat.Object); }
-		return P;
-	};
-	ProngLeft  = MakeProng(TEXT("ProngLeft"),  -55.f);
-	ProngRight = MakeProng(TEXT("ProngRight"),  55.f);
-
-	// Glowing red sensor eye at the bow.
-	SensorEye = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SensorEye"));
-	SensorEye->SetupAttachment(ShipRoot);
-	SensorEye->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	SensorEye->SetRelativeLocation(FVector(120.f, 0.f, 18.f));
-	SensorEye->SetRelativeScale3D(FVector(0.45f, 0.45f, 0.45f));
-	if (SphereMesh.Succeeded()) { SensorEye->SetStaticMesh(SphereMesh.Object); }
-	if (RedGlow.Succeeded())    { SensorEye->SetMaterial(0, RedGlow.Object); }
-
-	// Engine glow at the stern (-X); cylinder axis along +X.
-	EngineGlow = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("EngineGlow"));
-	EngineGlow->SetupAttachment(ShipRoot);
-	EngineGlow->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	EngineGlow->SetRelativeLocation(FVector(-110.f, 0.f, 0.f));
-	EngineGlow->SetRelativeRotation(FRotator(90.f, 0.f, 0.f));
-	EngineGlow->SetRelativeScale3D(FVector(0.7f, 0.7f, 0.5f));
-	if (CylMesh.Succeeded())    { EngineGlow->SetStaticMesh(CylMesh.Object); }
-	if (OrangeGlow.Succeeded()) { EngineGlow->SetMaterial(0, OrangeGlow.Object); }
 
 	// Beam + explosion FX tint (M13).
 	if (OrangeGlow.Succeeded()) { FxMaterial = OrangeGlow.Object; }
