@@ -8,7 +8,9 @@
 #include "FX/BeamFx.h"
 #include "Ships/Spaceship.h"
 #include "GameFramework/Actor.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
+#include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UObject/UObjectIterator.h"
 
@@ -19,6 +21,10 @@ UWeaponComponent::UWeaponComponent()
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Glow(
 		TEXT("/Game/Art/Materials/M_GlowCyan.M_GlowCyan"));
 	if (Glow.Succeeded()) { BeamMaterial = Glow.Object; }
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> Fire(
+		TEXT("/Game/Audio/S_BeamFire.S_BeamFire"));
+	if (Fire.Succeeded()) { FireSound = Fire.Object; }
 }
 
 float UWeaponComponent::WeaponPowerScale() const
@@ -119,10 +125,14 @@ bool UWeaponComponent::FireBeam()
 	ABeamFx::Spawn(GetWorld(), Owner->GetActorLocation(), CurrentTarget->GetActorLocation(),
 		BeamMaterial, 22.f, BeamDrawTime);
 
-	// Recoil kick on the firing ship's camera (M14 game-feel).
+	// Recoil kick on the firing ship's camera + fire SFX (M14 game-feel).
 	if (ASpaceship* Ship = Cast<ASpaceship>(GetOwner()))
 	{
 		Ship->AddCameraTrauma(FireTrauma);
+	}
+	if (FireSound)
+	{
+		UGameplayStatics::PlaySound2D(this, FireSound);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[Weapon] BEAM FIRED at %s (range %.0f uu)"),

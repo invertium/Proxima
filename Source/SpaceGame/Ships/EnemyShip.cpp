@@ -8,6 +8,7 @@
 #include "FX/BeamFx.h"
 #include "FX/ExplosionFx.h"
 #include "Materials/MaterialInterface.h"
+#include "Sound/SoundBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -38,6 +39,10 @@ AEnemyShip::AEnemyShip()
 
 	// Beam + explosion FX tint (M13).
 	if (OrangeGlow.Succeeded()) { FxMaterial = OrangeGlow.Object; }
+
+	// Enemy beam-fire SFX (CC0).
+	static ConstructorHelpers::FObjectFinder<USoundBase> Fire(TEXT("/Game/Audio/S_EnemyFire.S_EnemyFire"));
+	if (Fire.Succeeded()) { FireSound = Fire.Object; }
 
 	// Radar blip (hostile red default) + makes this a valid player weapon target.
 	RadarContact = CreateDefaultSubobject<URadarContactComponent>(TEXT("RadarContact"));
@@ -98,8 +103,12 @@ void AEnemyShip::FireAtPlayer(const AActor* Target)
 	}
 	const FVector Start = GetActorLocation();
 	const FVector End = Target->GetActorLocation();
-	// Hostile orange beam (M13 emissive-mesh FX).
+	// Hostile orange beam (M13 emissive-mesh FX) + spatialized fire SFX (M14).
 	ABeamFx::Spawn(GetWorld(), Start, End, FxMaterial, 16.f, 0.18f);
+	if (FireSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, FireSound, Start);
+	}
 	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s FIRE at %s (range %.0f uu)"),
 		*GetName(), *Target->GetName(), FVector::Dist(Start, End));
 

@@ -8,6 +8,7 @@
 
 class UPowerComponent;
 class UMaterialInterface;
+class USoundBase;
 
 /**
  * UWeaponComponent — a single forward beam weapon. Charges 0..1 over time at a rate
@@ -89,4 +90,8 @@ private:
 	/** Emissive material for the beam FX (cyan), loaded in the constructor. */
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> BeamMaterial;
+
+	/** Beam-fire SFX (CC0), loaded in the constructor; played 2D on each shot. */
+	UPROPERTY(EditAnywhere, Category = "Ship|Weapon")
+	TObjectPtr<USoundBase> FireSound;
 };

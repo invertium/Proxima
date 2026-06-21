@@ -11,6 +11,7 @@ class UStaticMeshComponent;
 class URadarContactComponent;
 class UHealthComponent;
 class UMaterialInterface;
+class USoundBase;
 
 /** Coarse AI phase, surfaced for logging + [L] verification. */
 UENUM(BlueprintType)
@@ -92,6 +93,10 @@ protected:
 	/** Emissive material for the enemy's beam + death explosion (M13 FX). */
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> FxMaterial;
+
+	/** Enemy beam-fire SFX (CC0), loaded in the constructor; played at the enemy's location. */
+	UPROPERTY()
+	TObjectPtr<USoundBase> FireSound;
 
 private:
 	/** Bound to HealthComp->OnDeath: draw an explosion burst then despawn the ship. */

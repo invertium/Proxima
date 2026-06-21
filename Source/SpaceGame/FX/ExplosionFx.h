@@ -8,6 +8,7 @@
 
 class UStaticMeshComponent;
 class UMaterialInterface;
+class USoundBase;
 
 /**
  * AExplosionFx — a glowing sphere that expands then collapses over a short life and
@@ -32,6 +33,9 @@ public:
 
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Mesh;
+
+	/** Explosion SFX (CC0), loaded in the constructor; played at the blast location. */
+	UPROPERTY() TObjectPtr<USoundBase> ExplosionSound;
 
 private:
 	float Remaining = 0.f;

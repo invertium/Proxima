@@ -4,6 +4,8 @@
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 
 AExplosionFx::AExplosionFx()
@@ -21,6 +23,9 @@ AExplosionFx::AExplosionFx()
 	{
 		Mesh->SetStaticMesh(Sphere.Object);
 	}
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> Boom(TEXT("/Game/Audio/S_Explosion.S_Explosion"));
+	if (Boom.Succeeded()) { ExplosionSound = Boom.Object; }
 }
 
 void AExplosionFx::Activate(const FVector& Location, float PeakRadius, UMaterialInterface* Material, float Life)
@@ -34,6 +39,11 @@ void AExplosionFx::Activate(const FVector& Location, float PeakRadius, UMaterial
 	}
 	SetActorLocation(Location);
 	Mesh->SetWorldScale3D(FVector::ZeroVector);
+
+	if (ExplosionSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, Location);
+	}
 }
 
 AExplosionFx* AExplosionFx::Spawn(UWorld* World, const FVector& Location, float PeakRadius,

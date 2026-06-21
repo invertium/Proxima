@@ -9,7 +9,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/WeaponComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
+#include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 
 ASpaceship::ASpaceship()
@@ -65,6 +67,10 @@ ASpaceship::ASpaceship()
 	HealthComp->MaxHull = 100.f;
 	HealthComp->MaxShield = 0.f;
 
+	// Hull-hit SFX (CC0).
+	static ConstructorHelpers::FObjectFinder<USoundBase> Hit(TEXT("/Game/Audio/S_Hit.S_Hit"));
+	if (Hit.Succeeded()) { HitSound = Hit.Object; }
+
 	// Possess automatically so PIE shows the ship through its follow camera.
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
 }
@@ -91,6 +97,10 @@ void ASpaceship::AddCameraTrauma(float Amount)
 void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)
 {
 	AddCameraTrauma(EffectiveDamage * HitTraumaPerDamage);
+	if (HitSound)
+	{
+		UGameplayStatics::PlaySound2D(this, HitSound);
+	}
 }
 
 void ASpaceship::Tick(float DeltaSeconds)

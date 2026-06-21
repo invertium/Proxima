@@ -14,6 +14,7 @@ class UShipMovementComponent;
 class UPowerComponent;
 class UWeaponComponent;
 class UHealthComponent;
+class USoundBase;
 
 /**
  * ASpaceship — the player's ship. M2: visual hull + 3rd-person follow camera.
@@ -105,6 +106,10 @@ protected:
 	/** Trauma a player hit adds per unit of effective damage taken. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Feel")
 	float HitTraumaPerDamage = 0.04f;
+
+	/** Hull-hit SFX (CC0), loaded in the constructor; played 2D when the player takes damage. */
+	UPROPERTY(EditAnywhere, Category = "Ship|Feel")
+	TObjectPtr<USoundBase> HitSound;
 
 private:
 	/** Current shake energy 0..1; squared to drive the offset, decayed each tick. */
