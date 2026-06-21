@@ -375,3 +375,15 @@ M3 committed `acd8480`.
 **Process note:** calling `EditorLoadingAndSavingUtils.load_map(...)` over the **live MCP path crashes the editor** (same `TaskGraph.cpp:689` RecursionGuard family as the Interchange import — the map load does a task-graph wait that re-enters MCP's worker thread). Workaround: pass the map as a **launch argument** (`UnrealEditor <uproject> /Game/Maps/VSlice_Arena`) so it opens on the game thread, then operate on the already-loaded level via MCP (no `load_map` call).
 
 **Follow-ups remaining (M13):** explosion screenshot, HUD font styling. (Commit: Content/Maps/VSlice_Arena.umap + Content/Materials/{M_Starfield,M_Nebula} + tools/_make_nebula.py + docs.)
+
+## 2026-06-21 — ✅ Earth planet backdrop (user's Fab model, verified in PIE)
+
+**Goal (user):** add an Earth the player can fly around. The user added an Earth to their **Fab** library and dropped the `earth.blend` into `_assets_dl/`.
+
+**Pipeline (`tools/_import_earth.py`, two stages):** legendary can't reach Fab assets, and UE can't import `.blend`, so — Stage A: installed the `bpy` pip module (Blender headless, no full install) and exported the Earth mesh to **OBJ** + saved its packed **8K equirectangular texture** to PNG. Stage B (editor via MCP): imported the OBJ as a static mesh, the PNG as `T_Earth`, built `M_Earth` (albedo + faint self-fill emissive so the night side isn't black), and placed an `Earth_Backdrop` StaticMeshActor — scale 260 (mesh radius ~36uu → ~9360uu planet), parked at (13000,12000,-1500) within the nebula dome, collision off. Level saved.
+
+**Gotchas (saved to memory [[fbx-import-skeletal-mesh]]):** (1) the Fab mesh sits under empties, so **every FBX export imported as a SkeletalMesh** regardless of `FbxImportUI.import_as_skeletal=False` — switching to **OBJ** (no skeleton concept) imports static every time. (2) Deleting a stray skeletal mesh needs dependency order (PhysicsAsset → mesh → Skeleton) or `replace_existing` silently reuses the skeletal slot.
+
+**Verified (PIE):** [S] /tmp/earth_pie2.png — the detailed 8K Earth fills the view as a planet (continents/clouds/oceans, correct equirectangular mapping via the mesh's own UVs), Insurgent in front, enemy engaging, nebula + stars behind.
+
+**Note:** `T_Earth.uasset` is ~58 MB (8K source). Fine for now; could be dropped to 4K if repo size matters. (Commit: Content/Art/{Meshes/Earth, Textures/T_Earth, Materials/M_Earth} + Content/Maps/VSlice_Arena.umap + tools/_import_earth.py + docs.)
