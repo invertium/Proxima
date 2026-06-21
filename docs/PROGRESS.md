@@ -365,3 +365,13 @@ M3 committed `acd8480`.
 **Verified (PIE):** [S] /tmp/ship_player.png — blue Insurgent fighter from the follow-cam; /tmp/twoship3.png — Insurgent + the red Imperial cruiser framed together (nose-forward, correct scale). Throttle confirmed the ship travels along its visual nose (+X). Combat loop still live — flying unshielded into the enemy triggered the **DEFEAT** screen as expected.
 
 **Follow-ups:** still open from M13-partial — explosion screenshot, backdrop/nebula, HUD font styling. Old unused materials `M_PlayerHull`/`M_EnemyHull`/`M_GlowRed` left in place (harmless). (Commit: Source/Ships/{Spaceship,EnemyShip}.* + Content/Art/{Meshes,Textures,Materials}/* + tools/_import_ships.py + .gitignore + docs.)
+
+## 2026-06-21 — ✅ M13 (backdrop): nebula behind the starfield (verified in PIE)
+
+**What:** the arena already had a `Starfield_Dome` (Sphere + unlit two-sided `M_Starfield`) on a black background. Added a space **nebula** behind it without touching the stars: (1) flipped `M_Starfield` to **additive** blend so its black background reads as transparent (stars unchanged, now add over the nebula); (2) authored `/Game/Materials/M_Nebula` (unlit, two-sided) — a dark deep-space base plus three soft directional colour clouds (magenta/teal/blue) via `Normalize(WorldPosition)` → `Dot` against fixed directions → `Saturate` → `Power` → tinted `Multiply`, summed into Emissive; (3) placed a `Nebula_Dome` sphere (scale 600 ≈ r30000) just outside the starfield dome (≈r20000). All scripted in `tools/_make_nebula.py`.
+
+**Verified (PIE):** [S] /tmp/nebula1.png — rich magenta/purple nebula fills the scene behind the stars, with the blue Insurgent fighter front-and-centre; far cry from the prior flat black.
+
+**Process note:** calling `EditorLoadingAndSavingUtils.load_map(...)` over the **live MCP path crashes the editor** (same `TaskGraph.cpp:689` RecursionGuard family as the Interchange import — the map load does a task-graph wait that re-enters MCP's worker thread). Workaround: pass the map as a **launch argument** (`UnrealEditor <uproject> /Game/Maps/VSlice_Arena`) so it opens on the game thread, then operate on the already-loaded level via MCP (no `load_map` call).
+
+**Follow-ups remaining (M13):** explosion screenshot, HUD font styling. (Commit: Content/Maps/VSlice_Arena.umap + Content/Materials/{M_Starfield,M_Nebula} + tools/_make_nebula.py + docs.)
