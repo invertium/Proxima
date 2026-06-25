@@ -4,6 +4,7 @@
 
 #include "Core/BridgeHUDWidget.h"
 #include "Core/EndScreenWidget.h"
+#include "Core/SpaceGameMode.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/WeaponComponent.h"
@@ -106,6 +107,10 @@ void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
 	if (Alive == 0)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[Bridge] VICTORY — all hostiles destroyed"));
+		if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
+		{
+			GM->SetPhase(EGamePhase::Victory);
+		}
 		ShowEndScreen(
 			FText::FromString(TEXT("VICTORY")),
 			FText::FromString(TEXT("All hostiles destroyed.")),
@@ -292,6 +297,10 @@ void ABridgePlayerController::OnPossess(APawn* InPawn)
 void ABridgePlayerController::HandlePlayerDeath(AActor* DeadActor)
 {
 	UE_LOG(LogTemp, Log, TEXT("[Bridge] PLAYER DEFEATED — ship destroyed"));
+	if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
+	{
+		GM->SetPhase(EGamePhase::Defeat);
+	}
 	ShowEndScreen(
 		FText::FromString(TEXT("DEFEAT")),
 		FText::FromString(TEXT("Your ship was destroyed.")),

@@ -16,3 +16,15 @@ enum class EStation : uint8
 	Weapons     UMETA(DisplayName = "Weapons"),
 	Engineering UMETA(DisplayName = "Engineering")
 };
+
+/**
+ * Outcome state of the current encounter, surfaced to every console (and the LAN web
+ * stations) so the whole crew knows whether the game is live, won, or lost.
+ */
+UENUM(BlueprintType)
+enum class EGamePhase : uint8
+{
+	Playing UMETA(DisplayName = "Playing"),
+	Victory UMETA(DisplayName = "Victory"),
+	Defeat  UMETA(DisplayName = "Defeat")
+};

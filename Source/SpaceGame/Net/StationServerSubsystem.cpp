@@ -6,6 +6,8 @@
 #include "Components/PowerComponent.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/WeaponComponent.h"
+#include "Core/SpaceGameMode.h"
+#include "Core/StationTypes.h"
 #include "Engine/World.h"
 #include "HttpServerModule.h"
 #include "HttpServerResponse.h"
@@ -27,17 +29,37 @@ namespace
 <style>
  body{margin:0;background:#05080f;color:#cfe6ff;font-family:system-ui,sans-serif;text-align:center}
  h1{padding:24px 0 4px;font-weight:600;letter-spacing:2px}
- p{color:#6f86a8;margin:0 0 28px}
+ p{color:#6f86a8;margin:0 0 20px}
+ #state{max-width:480px;margin:0 auto 22px;padding:14px;border-radius:12px;font-weight:600;
+   letter-spacing:2px;border:1px solid #15243a;background:#0a1018}
+ #state.live{color:#3fbf6f}#state.win{color:#43ff7a;background:#0c2417}#state.lose{color:#ff5a4a;background:#2a0c0c}
  a.s{display:block;margin:14px auto;max-width:480px;padding:26px;border-radius:14px;
    text-decoration:none;color:#eaf4ff;font-size:1.5rem;letter-spacing:1px;
    background:#101a2c;border:1px solid #20406a}
  a.s:active{background:#16263f}
  .h{border-color:#2a6}.w{border-color:#a33}.e{border-color:#a82}
+ .ctl{display:flex;gap:12px;max-width:480px;margin:26px auto 0}
+ .ctl button{flex:1;font:inherit;color:#eaf4ff;background:#101a2c;border:1px solid #2b4c78;
+   border-radius:12px;padding:18px;font-size:1.05rem;letter-spacing:1px}
+ .ctl button:active{background:#16263f}
 </style></head><body>
 <h1>BRIDGE STATIONS</h1><p>pick a console</p>
+<div id="state" class="live">●</div>
 <a class="s h" href="/helm">HELM</a>
 <a class="s w" href="/weapons">WEAPONS</a>
 <a class="s e" href="/engineering">ENGINEERING</a>
+<div class="ctl">
+<button onclick="if(confirm('Start a new game for everyone?'))game('new')">NEW GAME</button>
+<button onclick="if(confirm('Restart the encounter for everyone?'))game('restart')">RESTART</button>
+</div>
+<script>
+function game(a){fetch('/api/game?action='+a);}
+async function poll(){try{const s=await(await fetch('/api/state')).json();const e=document.getElementById('state');
+ if(s.phase==='victory'){e.textContent='✔ VICTORY — all hostiles destroyed';e.className='win';}
+ else if(s.phase==='defeat'){e.textContent='✖ DEFEAT — ship destroyed';e.className='lose';}
+ else{e.textContent='● ENCOUNTER LIVE';e.className='live';}}catch(e){}}
+setInterval(poll,500);poll();
+</script>
 </body></html>)HTML");
 
 	// Station page template. {TITLE} {ACCENT} {BODY} {SCRIPT} are substituted in.
@@ -60,13 +82,27 @@ namespace
  input[type=range]{width:100%;height:42px;margin-top:16px}
  label{display:block;margin-top:18px;color:#8fb8e6;letter-spacing:1px;font-size:.9rem}
  .big{font-size:1.6rem;color:#eaf4ff}
+ .wrap{padding-bottom:74px}
+ footer.gs{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-between;
+   align-items:center;padding:10px 16px;letter-spacing:2px;border-top:1px solid #15243a;background:#070b14}
+ footer.gs #gsl{font-weight:600;font-size:1rem}
+ footer.gs.live #gsl{color:#3fbf6f}
+ footer.gs.win{background:#0c2417}footer.gs.win #gsl{color:#43ff7a}
+ footer.gs.lose{background:#2a0c0c}footer.gs.lose #gsl{color:#ff5a4a}
+ footer.gs button{width:auto;margin:0;padding:9px 16px;font-size:.85rem;border-radius:8px}
 </style></head><body>
 <header><span>{TITLE}</span><a href="/stations">&larr; stations</a></header>
 <div class="wrap">{BODY}</div>
+<footer id="gs" class="gs live"><span id="gsl">●</span>
+<button onclick="if(confirm('Restart the encounter for everyone?'))post('/api/game?action=restart')">&#8635; RESTART</button></footer>
 <script>
 const $=s=>document.querySelector(s);
 function post(path){fetch(path);}
-async function poll(){try{const r=await fetch('/api/state');const s=await r.json();render(s);}catch(e){}}
+function renderFooter(s){const f=$('#gs'),l=$('#gsl');
+ if(s.phase==='victory'){l.textContent='✔ VICTORY';f.className='gs win';}
+ else if(s.phase==='defeat'){l.textContent='✖ DEFEAT';f.className='gs lose';}
+ else{l.textContent='● ENCOUNTER LIVE';f.className='gs live';}}
+async function poll(){try{const r=await fetch('/api/state');const s=await r.json();render(s);renderFooter(s);}catch(e){}}
 {SCRIPT}
 setInterval(poll,250);poll();
 </script></body></html>)HTML");
@@ -227,6 +263,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/weapons"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWeapons);
 	Bind(TEXT("/api/power"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandlePower);
+	Bind(TEXT("/api/game"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleGame);
 
 	Http.StartAllListeners();
 
@@ -327,12 +364,25 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 
 	auto P = [Power](EShipSystem Sys) { return Power ? Power->GetSystemPower(Sys) : 0.f; };
 
+	// Encounter outcome, so every console can show whether the game is live / won / lost.
+	const TCHAR* PhaseStr = TEXT("playing");
+	if (const UWorld* World = GetWorld())
+	{
+		if (const ASpaceGameMode* GM = World->GetAuthGameMode<ASpaceGameMode>())
+		{
+			const EGamePhase Phase = GM->GetPhase();
+			PhaseStr = Phase == EGamePhase::Victory ? TEXT("victory")
+				: Phase == EGamePhase::Defeat ? TEXT("defeat") : TEXT("playing");
+		}
+	}
+
 	// Hand-built JSON (avoids pulling in the Json module for this flat object).
 	const FString Json = FString::Printf(TEXT(
-		"{\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
+		"{\"phase\":\"%s\",\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
 		"\"charge\":%.3f,\"target\":\"%s\",\"targetRange\":%.1f,\"inRange\":%s,"
 		"\"power\":[%.3f,%.3f,%.3f],\"reactorLoad\":%.3f,\"reactorBudget\":%.3f,"
 		"\"hull\":%.1f,\"maxHull\":%.1f}"),
+		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
 		Move ? Move->GetThrottle() : 0.f,
 		Move ? Move->GetEffectiveMaxSpeed() : 0.f,
@@ -401,6 +451,24 @@ bool UStationServerSubsystem::HandlePower(const FHttpServerRequest& Request, con
 			if (Request.QueryParams.Contains(TEXT("system")))
 			{
 				Power->AdjustSystemPower((EShipSystem)Sys, QueryFloat(Request, TEXT("delta"), 0.f));
+			}
+		}
+	}
+	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleGame(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// "new" and "restart" both reload the encounter from scratch (single-encounter slice).
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	if (Action && (*Action == TEXT("restart") || *Action == TEXT("new")))
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (ASpaceGameMode* GM = World->GetAuthGameMode<ASpaceGameMode>())
+			{
+				GM->RestartEncounter();
 			}
 		}
 	}

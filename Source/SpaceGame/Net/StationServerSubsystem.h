@@ -46,6 +46,8 @@ private:
 	bool HandleHelm(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleWeapons(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandlePower(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	// New Game / Restart — reloads the encounter.
+	bool HandleGame(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 
 	/** Resolve the local player ship in this world, or null if not spawned yet. */
 	ASpaceship* GetShip() const;

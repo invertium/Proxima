@@ -458,3 +458,11 @@ Drove the stations from an actual browser (Playwright MCP, switched to Firefox) 
 - **Dead port after a PIE restart.** `Deinitialize` called the *global* `StopAllListeners()`, which stopped other modules' listeners (e.g. the editor's `:3000`) and left `:8080` unable to rebind (TIME_WAIT). Now we only unbind our own routes and leave the listener for the next PIE to reclaim; address-reuse covers any forced rebind. Verified `:8080` stays reachable across a PIE stop/start with no bind errors. (Commit `8262044`.)
 
 Browser-verified end-to-end over the LAN IP: distinct consoles, 250ms live polling (Weapons cycle locked `EnemyShip_0` with live range), Helm throttle slider drove `throttle→1.0`, world ticking (speed integrated 10→1230→1440). `.playwright-mcp/` scratch gitignored.
+
+## 2026-06-25 — ✅ M16 game-state controls + per-station status footer
+
+Surfaced the encounter outcome to the whole crew and added New Game / Restart controls over the LAN.
+- **`EGamePhase {Playing,Victory,Defeat}`** (StationTypes.h) lives on `ASpaceGameMode` (`GetPhase`/`SetPhase`); the bridge controller sets it on the existing defeat (player `OnDeath`) and victory (last hostile down) paths. `ASpaceGameMode::RestartEncounter()` unpauses and `OpenLevel`s the current map — a fresh encounter that respawns ship + hostiles and recreates the world subsystems (the LAN server rebinds cleanly per the earlier lifecycle fix). New Game and Restart both map to it for this single-encounter slice.
+- **Server:** `/api/state` JSON gains `"phase"`; new `GET /api/game?action=restart|new` calls `RestartEncounter()`. Every station page now has a fixed **status footer** (green ● ENCOUNTER LIVE / ✔ VICTORY / ✖ DEFEAT) with a guarded `↻ RESTART`. The `/stations` landing page shows the same live phase banner plus **NEW GAME / RESTART** buttons (both `confirm()`-guarded so one device doesn't wipe the run for everyone).
+
+**Verified (Firefox over the LAN IP + curl):** `phase` tracked playing→defeat on player death and reset to playing on restart; a browser-issued `/api/game?action=restart` reloaded the level (hull 100, server rebound); screenshots confirmed the ENCOUNTER LIVE banner/controls on `/stations` and the red ✖ DEFEAT footer on the Engineering console. (Commit: Core/{StationTypes.h,SpaceGameMode.{h,cpp},BridgePlayerController.cpp} + Net/StationServerSubsystem.{h,cpp} + docs.)
