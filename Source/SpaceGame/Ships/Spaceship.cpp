@@ -3,6 +3,7 @@
 #include "Ships/Spaceship.h"
 
 #include "Camera/CameraComponent.h"
+#include "Components/AudioComponent.h"
 #include "Components/HealthComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/ShipMovementComponent.h"
@@ -71,6 +72,24 @@ ASpaceship::ASpaceship()
 	static ConstructorHelpers::FObjectFinder<USoundBase> Hit(TEXT("/Game/Audio/S_Hit.S_Hit"));
 	if (Hit.Succeeded()) { HitSound = Hit.Object; }
 
+	// Looping engine-hum bed (M14). Auto-plays at idle volume; Tick rides volume + pitch
+	// on throttle so the drive audibly spools up under power.
+	static ConstructorHelpers::FObjectFinder<USoundBase> Hum(TEXT("/Game/Audio/S_EngineHum.S_EngineHum"));
+	EngineAudio = CreateDefaultSubobject<UAudioComponent>(TEXT("EngineAudio"));
+	EngineAudio->SetupAttachment(ShipRoot);
+	EngineAudio->bAutoActivate = true;
+	EngineAudio->VolumeMultiplier = 0.12f;
+	if (Hum.Succeeded()) { EngineAudio->SetSound(Hum.Object); }
+
+	// Looping low-hull klaxon (M14). Stays silent until UpdateAmbientAudio plays it as
+	// hull drops past LowHullFraction.
+	static ConstructorHelpers::FObjectFinder<USoundBase> Alarm(TEXT("/Game/Audio/S_Alarm.S_Alarm"));
+	AlarmAudio = CreateDefaultSubobject<UAudioComponent>(TEXT("AlarmAudio"));
+	AlarmAudio->SetupAttachment(ShipRoot);
+	AlarmAudio->bAutoActivate = false;
+	AlarmAudio->VolumeMultiplier = 0.5f;
+	if (Alarm.Succeeded()) { AlarmAudio->SetSound(Alarm.Object); }
+
 	// Possess automatically so PIE shows the ship through its follow camera.
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
 }
@@ -104,9 +123,40 @@ void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)
 	}
 }
 
+void ASpaceship::UpdateAmbientAudio()
+{
+	// Engine-hum bed rides throttle: quiet idle → fuller + slightly higher-pitched under power.
+	if (EngineAudio)
+	{
+		const float Throttle = MovementComp ? FMath::Clamp(FMath::Abs(MovementComp->GetThrottle()), 0.f, 1.f) : 0.f;
+		EngineAudio->SetVolumeMultiplier(FMath::Lerp(0.12f, 0.5f, Throttle));
+		EngineAudio->SetPitchMultiplier(FMath::Lerp(0.9f, 1.25f, Throttle));
+	}
+
+	// Low-hull klaxon: edge-triggered play/stop as hull crosses LowHullFraction.
+	if (AlarmAudio && HealthComp)
+	{
+		const float MaxHull = HealthComp->GetMaxHull();
+		const float Frac = MaxHull > 0.f ? HealthComp->GetHull() / MaxHull : 0.f;
+		const bool bShouldAlarm = HealthComp->IsAlive() && Frac <= LowHullFraction;
+		if (bShouldAlarm && !bAlarmActive)
+		{
+			AlarmAudio->Play();
+			bAlarmActive = true;
+		}
+		else if (!bShouldAlarm && bAlarmActive)
+		{
+			AlarmAudio->Stop();
+			bAlarmActive = false;
+		}
+	}
+}
+
 void ASpaceship::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	UpdateAmbientAudio();
 
 	if (!FollowCamera)
 	{

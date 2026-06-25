@@ -431,3 +431,7 @@ Added a small `AExplosionFx` flash at the point each beam lands — cyan where t
 - All `PlaySound*` calls executed through the editor audio device without error; the four SoundWaves are valid. (Audible playback now confirmable by ear at the machine.)
 
 Editor stable throughout; ended PIE cleanly. **M14 backlog cleared.** (Commit: Source/Components/WeaponComponent.cpp + Source/Ships/{Spaceship,EnemyShip}.cpp + Source/FX/ExplosionFx.cpp + docs.)
+
+## 2026-06-25 — ✅ M14 (ambient audio): engine hum + low-hull alarm
+
+Two looping `UAudioComponent`s on `ASpaceship` (M14 nice-to-haves). **Engine hum** — Kenney `spaceEngineLow` (CC0) → mono WAV `S_EngineHum` (looping); auto-plays at idle volume, and `UpdateAmbientAudio()` (called each Tick) rides its volume `0.12→0.5` and pitch `0.9→1.25×` on `MovementComp->GetThrottle()` so the drive spools up under power. **Low-hull alarm** — a synthesized two-tone klaxon `S_Alarm` (ffmpeg sine 780/560 Hz, 0.44s loop); edge-triggered `Play()`/`Stop()` when hull crosses `LowHullFraction` (0.3). Both built clean. Audible check folded into the next PIE pass. (Commit: Source/Ships/Spaceship.{h,cpp} + Content/Audio/{S_EngineHum,S_Alarm} + tools + docs.)

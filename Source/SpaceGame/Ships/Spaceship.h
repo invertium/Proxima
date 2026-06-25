@@ -14,6 +14,7 @@ class UShipMovementComponent;
 class UPowerComponent;
 class UWeaponComponent;
 class UHealthComponent;
+class UAudioComponent;
 class USoundBase;
 
 /**
@@ -111,7 +112,27 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Ship|Feel")
 	TObjectPtr<USoundBase> HitSound;
 
+	// --- Ambient audio (M14 nice-to-haves) ---
+
+	/** Looping engine-hum bed; volume + pitch ride throttle so the drive "spools up". */
+	UPROPERTY(VisibleAnywhere, Category = "Ship|Feel")
+	TObjectPtr<UAudioComponent> EngineAudio;
+
+	/** Looping low-hull klaxon; started/stopped as hull crosses LowHullFraction. */
+	UPROPERTY(VisibleAnywhere, Category = "Ship|Feel")
+	TObjectPtr<UAudioComponent> AlarmAudio;
+
+	/** Hull fraction (0..1) at/below which the low-hull alarm sounds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Feel")
+	float LowHullFraction = 0.3f;
+
 private:
 	/** Current shake energy 0..1; squared to drive the offset, decayed each tick. */
 	float CameraTrauma = 0.f;
+
+	/** Tracks whether the alarm is currently sounding (edge-triggers play/stop). */
+	bool bAlarmActive = false;
+
+	/** Per-tick: ride engine-hum volume/pitch on throttle and toggle the low-hull alarm. */
+	void UpdateAmbientAudio();
 };
