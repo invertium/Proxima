@@ -41,3 +41,6 @@ _assets_dl/
 **/vibeue-proxy.json
 *.apikey
 .env
+
+# Playwright MCP scratch (browser snapshots/screenshots)
+.playwright-mcp/

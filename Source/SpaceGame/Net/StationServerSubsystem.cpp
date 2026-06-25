@@ -11,6 +11,7 @@
 #include "HttpServerResponse.h"
 #include "IPAddress.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Ships/Spaceship.h"
 #include "SocketSubsystem.h"
 
@@ -171,6 +172,19 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 
+	// Bind to all adapters (0.0.0.0), not just loopback, so other LAN devices can reach the
+	// stations — the whole point of this server. Also enable address reuse so a later PIE
+	// session can re-grab the port without waiting out the previous socket's TIME_WAIT. This
+	// per-port override is read when the listener binds (below), so it must be set first.
+	// NB: only takes effect when a *fresh* listener is created for the port — i.e. on the
+	// first PIE after an editor launch (an already-listening loopback listener would be reused
+	// as-is), so a full editor restart is needed the first time this lands.
+	{
+		TArray<FString> Overrides;
+		Overrides.Add(FString::Printf(TEXT("(Port=%d,BindAddress=any,ReuseAddressAndPort=true)"), Port));
+		GConfig->SetArray(TEXT("HTTPServer.Listeners"), TEXT("ListenerOverrides"), Overrides, GEngineIni);
+	}
+
 	FHttpServerModule& Http = FHttpServerModule::Get();
 	Router = Http.GetHttpRouter(Port);
 	if (!Router.IsValid())
@@ -215,7 +229,6 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/power"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandlePower);
 
 	Http.StartAllListeners();
-	bListening = true;
 
 	const FString Lan = GetLanAddress();
 	const TCHAR* Host = Lan.IsEmpty() ? TEXT("<this-machine-LAN-IP>") : *Lan;
@@ -238,12 +251,11 @@ void UStationServerSubsystem::Deinitialize()
 	RouteHandles.Reset();
 	Router.Reset();
 
-	if (bListening)
-	{
-		// Stops listeners for all routers, but ours are now unbound so this is safe in PIE.
-		FHttpServerModule::Get().StopAllListeners();
-		bListening = false;
-	}
+	// Deliberately NOT calling StopAllListeners(): it's global (it would also stop other
+	// modules' listeners, e.g. the editor's on :3000), and tearing the socket down here only
+	// to rebind it on the next PIE can fail while it lingers in TIME_WAIT. The listener stays
+	// up with no routes (404s) between sessions; the next PIE re-grabs the same router and
+	// rebinds. The HTTPServer module cleans the socket up on editor shutdown.
 
 	Super::Deinitialize();
 }

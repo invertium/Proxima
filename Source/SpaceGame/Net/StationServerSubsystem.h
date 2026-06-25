@@ -59,9 +59,6 @@ private:
 	/** Routes we bound, unbound on Deinitialize so a later PIE run rebinds cleanly. */
 	TArray<FHttpRouteHandle> RouteHandles;
 
-	/** Whether StartAllListeners succeeded (so Deinitialize only stops what we started). */
-	bool bListening = false;
-
 	/** Port the router is bound to. */
 	int32 Port = 8080;
 };
