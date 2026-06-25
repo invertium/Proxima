@@ -78,6 +78,8 @@ setInterval(poll,500);poll();
  button{font:inherit;color:#eaf4ff;background:#101a2c;border:1px solid {ACCENT};
    border-radius:12px;padding:20px;width:100%;font-size:1.25rem;letter-spacing:1px;margin-top:14px}
  button:active{background:#16263f}
+ button.rdy{border-color:#43ff7a;color:#aef0c0;background:#0e2418}
+ button.blk{color:#6f86a8;border-color:#33425c;background:#0b1220}
  .row{display:flex;gap:12px}.row button{margin-top:12px}
  input[type=range]{width:100%;height:42px;margin-top:16px}
  label{display:block;margin-top:18px;color:#8fb8e6;letter-spacing:1px;font-size:.9rem}
@@ -148,12 +150,20 @@ setInterval(poll,250);poll();
 			"<div class='stat'><b>RANGE</b><span id='rng'>-</span></div>"
 			"<div class='stat'><b>IN RANGE</b><span id='inr'>-</span></div>"
 			"<button onclick=\"post('/api/weapons?action=cycle')\">CYCLE TARGET</button>"
-			"<button onclick=\"post('/api/weapons?action=fire')\">FIRE BEAM</button>");
+			"<button id='fire' onclick=\"post('/api/weapons?action=fire')\">FIRE BEAM</button>");
+		// The FIRE button reflects readiness: it only fires when a target is locked, in range,
+		// and the beam is fully charged — otherwise it shows *why* it can't (so the crew isn't
+		// left wondering why "nothing happens"). Flies into range is the Helm's job.
 		const FString Script = TEXT(
 			"function render(s){$('#chg').textContent=Math.round(s.charge*100)+'%';"
 			"$('#tgt').textContent=s.target;"
 			"$('#rng').textContent=s.targetRange<0?'-':Math.round(s.targetRange);"
-			"$('#inr').textContent=s.inRange?'YES':'no';}");
+			"$('#inr').textContent=s.inRange?'YES':'no';"
+			"const fb=$('#fire');"
+			"if(s.target==='none'){fb.textContent='NO TARGET';fb.className='blk';}"
+			"else if(s.charge<1){fb.textContent='CHARGING '+Math.round(s.charge*100)+'%';fb.className='blk';}"
+			"else if(!s.inRange){fb.textContent='OUT OF RANGE';fb.className='blk';}"
+			"else{fb.textContent='● FIRE BEAM';fb.className='rdy';}}");
 		return MakePage(TEXT("WEAPONS"), TEXT("#a33"), Body, Script);
 	}
 
