@@ -39,7 +39,9 @@ public:
 private:
 	// --- Route handlers (all run on the game thread) ---
 	bool HandleIndex(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
-	bool HandleStationPage(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	// StationId payload (0=Helm,1=Weapons,2=Engineering) is bound per route, since exact-
+	// matched routes don't carry the path in Request.RelativePath.
+	bool HandleStationPage(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete, int32 StationId);
 	bool HandleState(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleHelm(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleWeapons(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);

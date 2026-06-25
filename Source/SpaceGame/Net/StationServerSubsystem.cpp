@@ -194,9 +194,18 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// NB: the HTTP server rejects the bare root path "/" (FHttpPath::IsValidPath), so the
 	// landing page lives at /stations and that's the URL we advertise.
 	Bind(TEXT("/stations"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleIndex);
-	Bind(TEXT("/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleStationPage);
-	Bind(TEXT("/weapons"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleStationPage);
-	Bind(TEXT("/engineering"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleStationPage);
+
+	// Station pages share one handler; the station id is a bound payload arg so each route
+	// renders the right console (RelativePath is empty for exact-matched routes).
+	auto BindStation = [this](const TCHAR* Path, int32 StationId)
+	{
+		FHttpRouteHandle Handle = Router->BindRoute(FHttpPath(Path), EHttpServerRequestVerbs::VERB_GET,
+			FHttpRequestHandler::CreateUObject(this, &UStationServerSubsystem::HandleStationPage, StationId));
+		if (Handle.IsValid()) { RouteHandles.Add(Handle); }
+	};
+	BindStation(TEXT("/helm"), 0);
+	BindStation(TEXT("/weapons"), 1);
+	BindStation(TEXT("/engineering"), 2);
 	// Command endpoints are GET (with query params): UE's HTTP server rejects POSTs that
 	// lack a Content-Length header, which empty browser fetch() POSTs don't reliably send.
 	// These are simple idempotent-ish console commands on a LAN, so GET is fine.
@@ -280,20 +289,14 @@ bool UStationServerSubsystem::HandleIndex(const FHttpServerRequest& Request, con
 	return true;
 }
 
-bool UStationServerSubsystem::HandleStationPage(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+bool UStationServerSubsystem::HandleStationPage(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete, int32 StationId)
 {
 	FString Html;
-	if (Request.RelativePath.GetPath() == TEXT("/weapons"))
+	switch (StationId)
 	{
-		Html = WeaponsPage();
-	}
-	else if (Request.RelativePath.GetPath() == TEXT("/engineering"))
-	{
-		Html = EngineeringPage();
-	}
-	else
-	{
-		Html = HelmPage();
+	case 1:  Html = WeaponsPage(); break;
+	case 2:  Html = EngineeringPage(); break;
+	default: Html = HelmPage(); break;
 	}
 	OnComplete(MakeResponse(Html, TEXT("text/html; charset=utf-8")));
 	return true;
