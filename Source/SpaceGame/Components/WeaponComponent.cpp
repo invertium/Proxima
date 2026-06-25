@@ -133,7 +133,8 @@ bool UWeaponComponent::FireBeam()
 	}
 	if (FireSound)
 	{
-		UGameplayStatics::PlaySound2D(this, FireSound);
+		// Per-shot pitch jitter so sustained beam fire stays lively (M14).
+		UGameplayStatics::PlaySound2D(this, FireSound, 1.f, FMath::FRandRange(0.94f, 1.06f));
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[Weapon] BEAM FIRED at %s (range %.0f uu)"),

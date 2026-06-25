@@ -99,7 +99,8 @@ void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)
 	AddCameraTrauma(EffectiveDamage * HitTraumaPerDamage);
 	if (HitSound)
 	{
-		UGameplayStatics::PlaySound2D(this, HitSound);
+		// Slight per-hit pitch jitter so rapid hits don't sound machine-stamped (M14).
+		UGameplayStatics::PlaySound2D(this, HitSound, 1.f, FMath::FRandRange(0.92f, 1.08f));
 	}
 }
 

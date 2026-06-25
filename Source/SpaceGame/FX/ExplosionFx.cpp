@@ -43,7 +43,8 @@ void AExplosionFx::Activate(const FVector& Location, float PeakRadius, UMaterial
 
 	if (bPlaySound && ExplosionSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, Location);
+		// Pitch jitter so successive booms don't sound identical (M14).
+		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, Location, 1.f, FMath::FRandRange(0.9f, 1.1f));
 	}
 }
 

@@ -118,7 +118,8 @@ void AEnemyShip::FireAtPlayer(const AActor* Target)
 	ABeamFx::Spawn(GetWorld(), Start, End, FxMaterial, 16.f, 0.18f);
 	if (FireSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, FireSound, Start);
+		// Per-shot pitch jitter so repeated enemy fire stays lively (M14).
+		UGameplayStatics::PlaySoundAtLocation(this, FireSound, Start, 1.f, FMath::FRandRange(0.94f, 1.06f));
 	}
 	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s FIRE at %s (range %.0f uu)"),
 		*GetName(), *Target->GetName(), FVector::Dist(Start, End));

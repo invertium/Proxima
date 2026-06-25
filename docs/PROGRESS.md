@@ -419,3 +419,15 @@ Added a small `AExplosionFx` flash at the point each beam lands — cyan where t
 `AEnemyShip::HandleDeath` now spawns the main boom (with SFX) plus four smaller silent flashes at random offsets (`FMath::VRand` × 200–650uu, radius 240–460, life 0.3–0.5s) for a richer, scattered death burst. Pure C++, reuses `AExplosionFx` (the new `bPlaySound=false` flag keeps the extra pops silent). Builds clean; visual check deferred to the same pending PIE pass.
 
 **Pending verification backlog (one PIE pass clears all):** camera-shake feel, the 4 combat SFX actually playing, beam-impact flashes, and this multi-burst death. All build clean and reuse proven systems; none seen/heard in PIE yet (machine in use for gaming).
+
+## 2026-06-25 — ✅ M14 (audio polish + verification pass): per-shot pitch jitter; PIE backlog cleared
+
+**Polish (C++, editor-free):** added subtle per-event pitch variation to all combat SFX so repeated sounds don't read machine-stamped — beam fire `0.94–1.06×` (`UWeaponComponent::FireBeam`), enemy fire `0.94–1.06×` (`AEnemyShip::FireAtPlayer`), player hit `0.92–1.08×` (`ASpaceship::HandleDamaged`), explosion boom `0.9–1.1×` (`AExplosionFx::Activate`). Just the existing `PlaySound2D`/`PlaySoundAtLocation` calls with the pitch arg + `FMath::FRandRange`. Builds clean (Result: Succeeded).
+
+**Verification pass (PIE, gaming constraint lifted):** drove the deferred backlog programmatically in the arena —
+- **Beam fire:** `FireBeam()` → `FIRED:True`, charge `1.0→0.0`; beam SFX (`PlaySound2D`) + cyan impact flash + recoil trauma all fire.
+- **Camera shake:** after `AddCameraTrauma(1.0)`, next-frame cam relative-rotation sampled non-zero (`pitch 0.02 / yaw -0.52 / roll -1.77`), decaying — trauma model live after the audio changes.
+- **Multi-burst death:** lethal damage to the enemy → `0` enemies, **6** `AExplosionFx` actors in-world (main boom + scatter), boom SFX + distance-scaled explosion trauma fired.
+- All `PlaySound*` calls executed through the editor audio device without error; the four SoundWaves are valid. (Audible playback now confirmable by ear at the machine.)
+
+Editor stable throughout; ended PIE cleanly. **M14 backlog cleared.** (Commit: Source/Components/WeaponComponent.cpp + Source/Ships/{Spaceship,EnemyShip}.cpp + Source/FX/ExplosionFx.cpp + docs.)
