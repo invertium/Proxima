@@ -449,3 +449,12 @@ The main machine is now **server + viewscreen**; other devices on the LAN drive 
 Ship resolved via `GetPlayerPawn(world,0)` → `ASpaceship`, then its existing component setters (`SetThrottle/SetTurn`, `CycleTarget/FireBeam`, `AdjustSystemPower`) — same entry points the local 1/2/3 console uses, which stays as a single-machine fallback (all input is event-driven, so web + local don't fight per-tick). LAN IP discovered via `ISocketSubsystem::GetLocalAdapterAddresses` (skips `127.*`) and logged at startup.
 
 **PIE verification:** server came up clean (`http://192.168.178.71:8080/stations` logged). Over curl: `throttle=0.7` → throttle 0→0.7, speed climbing to 1230; `power?system=0&delta=0.1` → engine power 1.0→1.1, maxSpeed 1800→1980; `weapons?action=cycle` → target `EnemyShip_0` @ 6389uu; `action=fire` → charge 1.0→0.204. All endpoints 200; pages serve correct titles/links. Ended PIE cleanly. (Commit: Source/Net/StationServerSubsystem.{h,cpp} + SpaceGame.Build.cs + docs.)
+
+## 2026-06-25 — ✅ M16 fixes (real-browser verification: Firefox over LAN)
+
+Drove the stations from an actual browser (Playwright MCP, switched to Firefox) and fixed three bugs the curl pass had missed:
+- **Only Helm rendered.** Exact-matched HTTP routes don't carry the path in `Request.RelativePath`, so the shared page handler always fell through to Helm. Now each route binds a station-id payload (`/helm`=0,`/weapons`=1,`/engineering`=2) and switches on it. (Commit `f2ac8fb`.)
+- **Loopback-only bind.** The listener bound `127.0.0.1`, so LAN devices couldn't reach it — the whole point. Set a per-port `HTTPServer` config override (`BindAddress=any`, `ReuseAddressAndPort=true`) via `GConfig` before `GetHttpRouter`, so it binds `0.0.0.0`. Confirmed reachable + driveable from Firefox at `http://192.168.178.71:8080`. (Commit `8262044`.)
+- **Dead port after a PIE restart.** `Deinitialize` called the *global* `StopAllListeners()`, which stopped other modules' listeners (e.g. the editor's `:3000`) and left `:8080` unable to rebind (TIME_WAIT). Now we only unbind our own routes and leave the listener for the next PIE to reclaim; address-reuse covers any forced rebind. Verified `:8080` stays reachable across a PIE stop/start with no bind errors. (Commit `8262044`.)
+
+Browser-verified end-to-end over the LAN IP: distinct consoles, 250ms live polling (Weapons cycle locked `EnemyShip_0` with live range), Helm throttle slider drove `throttle→1.0`, world ticking (speed integrated 10→1230→1440). `.playwright-mcp/` scratch gitignored.
