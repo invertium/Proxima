@@ -435,3 +435,17 @@ Editor stable throughout; ended PIE cleanly. **M14 backlog cleared.** (Commit: S
 ## 2026-06-25 — ✅ M14 (ambient audio): engine hum + low-hull alarm
 
 Two looping `UAudioComponent`s on `ASpaceship` (M14 nice-to-haves). **Engine hum** — Kenney `spaceEngineLow` (CC0) → mono WAV `S_EngineHum` (looping); auto-plays at idle volume, and `UpdateAmbientAudio()` (called each Tick) rides its volume `0.12→0.5` and pitch `0.9→1.25×` on `MovementComp->GetThrottle()` so the drive spools up under power. **Low-hull alarm** — a synthesized two-tone klaxon `S_Alarm` (ffmpeg sine 780/560 Hz, 0.44s loop); edge-triggered `Play()`/`Stop()` when hull crosses `LowHullFraction` (0.3). Both built clean. Audible check folded into the next PIE pass. (Commit: Source/Ships/Spaceship.{h,cpp} + Content/Audio/{S_EngineHum,S_Alarm} + tools + docs.)
+
+## 2026-06-25 — ✅ M16 (LAN web-stations): browser bridge consoles over the network
+
+The main machine is now **server + viewscreen**; other devices on the LAN drive the bridge stations from a browser. New `UStationServerSubsystem : UWorldSubsystem` (Game/PIE worlds only) stands up an in-process HTTP server on **port 8080** in `OnWorldBeginPlay` and tears it down (unbinds routes + stops listeners) in `Deinitialize`, so repeated PIE runs rebind cleanly. Module deps added: `HTTPServer`, `Sockets`, `Networking`.
+
+**Routes** (handlers run on the game thread, so they touch the ship's components directly):
+- `GET /stations` — touch-friendly station picker (root `/` is rejected by `FHttpPath::IsValidPath`, so the landing lives at `/stations`).
+- `GET /helm` `/weapons` `/engineering` — embedded dependency-free HTML/JS consoles; JS polls `/api/state` every 250ms.
+- `GET /api/state` — hand-built JSON snapshot (speed/throttle/maxSpeed, charge/target/range/in-range, per-system power + reactor load, hull).
+- `GET /api/helm?throttle=&turn=`, `/api/weapons?action=fire|cycle`, `/api/power?system=&delta=` — commands. (GET, not POST: UE's HTTP server 411s empty browser `fetch` POSTs that omit `Content-Length`.)
+
+Ship resolved via `GetPlayerPawn(world,0)` → `ASpaceship`, then its existing component setters (`SetThrottle/SetTurn`, `CycleTarget/FireBeam`, `AdjustSystemPower`) — same entry points the local 1/2/3 console uses, which stays as a single-machine fallback (all input is event-driven, so web + local don't fight per-tick). LAN IP discovered via `ISocketSubsystem::GetLocalAdapterAddresses` (skips `127.*`) and logged at startup.
+
+**PIE verification:** server came up clean (`http://192.168.178.71:8080/stations` logged). Over curl: `throttle=0.7` → throttle 0→0.7, speed climbing to 1230; `power?system=0&delta=0.1` → engine power 1.0→1.1, maxSpeed 1800→1980; `weapons?action=cycle` → target `EnemyShip_0` @ 6389uu; `action=fire` → charge 1.0→0.204. All endpoints 200; pages serve correct titles/links. Ended PIE cleanly. (Commit: Source/Net/StationServerSubsystem.{h,cpp} + SpaceGame.Build.cs + docs.)

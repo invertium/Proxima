@@ -10,7 +10,9 @@ public class SpaceGame : ModuleRules
 	
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+		// LAN bridge-station clients (M16): in-process HTTP server + socket layer for
+		// LAN-IP discovery so phones/tablets connect to the stations over the network.
+		PrivateDependencyModuleNames.AddRange(new string[] { "HTTPServer", "Sockets", "Networking" });
 
 		// Module root on the include path so subfolder-qualified includes work
 		// across the planned layout (Core/Ships/Components/AI — DECISIONS D8),
