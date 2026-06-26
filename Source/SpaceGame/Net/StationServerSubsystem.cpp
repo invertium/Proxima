@@ -9,6 +9,7 @@
 #include "Components/ShipMovementComponent.h"
 #include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
+#include "Core/MissionSubsystem.h"
 #include "Core/SpaceGameMode.h"
 #include "Core/StationTypes.h"
 #include "Engine/World.h"
@@ -267,7 +268,12 @@ setInterval(poll,250);poll();
 	{
 		// Cycle to a contact, run a timed scan, then read its hull/shield live off the target.
 		const FString Body = TEXT(
-			"<div class='stat'><b>CONTACT</b><span id='tgt' class='big'>none</span></div>"
+			"<div class='stat'><b>MISSION</b><span id='msn'>&mdash;</span></div>"
+			"<label>COMMS</label>"
+			"<div id='comms' style='height:150px;overflow-y:auto;background:#0b1220;border:1px solid #15243a;"
+			"border-radius:8px;padding:8px;text-align:left;font-size:.92rem;line-height:1.3'>"
+			"<span style='color:#5a6f8a'>no transmissions</span></div>"
+			"<div class='stat' style='margin-top:18px'><b>CONTACT</b><span id='tgt' class='big'>none</span></div>"
 			"<label>SCAN</label>"
 			"<div style='height:18px;background:#0b1220;border:1px solid #15243a;border-radius:6px;overflow:hidden'>"
 			"<div id='scan' style='height:100%;width:0%;background:#37c;transition:width .15s'></div></div>"
@@ -285,7 +291,13 @@ setInterval(poll,250);poll();
 			"<div class='stat'><b>SHIELD</b><span id='sh'>—</span></div>"
 			"</div>");
 		const FString Script = TEXT(
-			"function render(s){$('#tgt').textContent=s.sciTarget;"
+			"function render(s){"
+			"$('#msn').textContent=s.mission||'\\u2014';"
+			"const cm=$('#comms'),items=(s.comms||[]);"
+			"if(items.length){cm.innerHTML=items.map(function(c,i){return '<div style=\"padding:3px 0;'+"
+			"(i===items.length-1?'color:#aef0c0':'color:#8fb8e6')+'\"><b>'+c.sender+':</b> '+c.text+'</div>';}).join('');"
+			"if(String(items.length)!==cm.dataset.n){cm.dataset.n=items.length;cm.scrollTop=cm.scrollHeight;}}"
+			"$('#tgt').textContent=s.sciTarget;"
 			"$('#scan').style.width=Math.round(s.sciProgress*100)+'%';"
 			"const sb=$('#scanbtn');"
 			"if(s.sciTarget==='none'){$('#st').textContent='no contact';sb.textContent='SCAN';sb.className='blk';}"
@@ -309,6 +321,15 @@ setInterval(poll,250);poll();
 	TUniquePtr<FHttpServerResponse> MakeResponse(const FString& Body, const FString& ContentType)
 	{
 		return FHttpServerResponse::Create(Body, ContentType);
+	}
+
+	// Minimal JSON string escape (quotes + backslashes) for comms text built by hand.
+	FString JsonEscape(const FString& In)
+	{
+		FString Out = In;
+		Out.ReplaceInline(TEXT("\\"), TEXT("\\\\"));
+		Out.ReplaceInline(TEXT("\""), TEXT("\\\""));
+		return Out;
 	}
 
 	// Read a numeric query param (defaulting if missing/unparseable).
@@ -529,6 +550,23 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		}
 	}
 
+	// Mission name + story comms log (Science console) from the mission subsystem.
+	FString MissionName;
+	FString Comms;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+		{
+			MissionName = MS->GetMissionName();
+			for (const FCommsMessage& M : MS->GetComms())
+			{
+				if (!Comms.IsEmpty()) { Comms += TEXT(","); }
+				Comms += FString::Printf(TEXT("{\"sender\":\"%s\",\"text\":\"%s\"}"),
+					*JsonEscape(M.Sender), *JsonEscape(M.Text));
+			}
+		}
+	}
+
 	// Hand-built JSON (avoids pulling in the Json module for this flat object).
 	const FString Json = FString::Printf(TEXT(
 		"{\"phase\":\"%s\",\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
@@ -538,6 +576,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"ammo\":%d,\"maxAmmo\":%d,\"torpedoReady\":%s,\"torpedoReload\":%.3f,"
 		"\"sciTarget\":\"%s\",\"sciProgress\":%.3f,\"sciScanning\":%s,\"sciScanned\":%s,"
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
+		"\"mission\":\"%s\",\"comms\":[%s],"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -564,6 +603,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Sci ? Sci->GetTargetMaxHull() : -1.f,
 		Sci ? Sci->GetTargetShield() : -1.f,
 		Sci ? Sci->GetTargetMaxShield() : -1.f,
+		*MissionName, *Comms,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));

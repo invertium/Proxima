@@ -31,6 +31,16 @@ struct FMissionDef
 	UPROPERTY() TArray<FCommsBeat> Comms;
 };
 
+/** A transmission shown on the Science comms log. */
+USTRUCT()
+struct FCommsMessage
+{
+	GENERATED_BODY()
+
+	UPROPERTY() FString Sender;
+	UPROPERTY() FString Text;
+};
+
 /**
  * UMissionSubsystem — builds the encounter for the current campaign mission. On world begin
  * play it reads the mission index from the game instance, clears any level-placed hostiles,
@@ -53,6 +63,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mission")
 	FString GetMissionName() const { return Mission.Name; }
 
+	/** The scripted transmissions fired so far this mission (oldest first), for the Science console. */
+	const TArray<FCommsMessage>& GetComms() const { return CommsLog; }
+
 	/** The campaign table size (kept in sync with USpaceGameInstance::GetMissionCount). */
 	static int32 MissionCount();
 
@@ -63,6 +76,21 @@ private:
 	/** Destroy level-placed hostiles and spawn this mission's fleet ahead of the player. */
 	void BuildEncounter(UWorld& World);
 
+	/** Poll for time-triggered comms beats (repeating timer; paused with the game). */
+	void CheckTimedBeats();
+
+	/** Bound to each spawned hostile's death: advance the kill count + fire kill-triggered beats. */
+	UFUNCTION()
+	void HandleEnemyKilled(AActor* DeadActor);
+
+	/** Append a beat to the comms log (once). */
+	void FireBeat(FCommsBeat& Beat);
+
 	int32 MissionIndex = 0;
 	FMissionDef Mission;
+
+	TArray<FCommsMessage> CommsLog;
+	float StartTime = 0.f;
+	int32 KillCount = 0;
+	FTimerHandle BeatTimer;
 };

@@ -611,3 +611,23 @@ scale0.95; Interceptor 2100/turn75/hull80/beam20/scale0.6) — confirming the ch
 ship. The ship-select panel reuses the same WidgetTree button pattern as the four already-screenshotted
 menus. (Commit: Ships/Spaceship.{h,cpp} + Core/MainMenuWidget.{h,cpp} + Core/MenuUI.h + the refactored
 overlay widgets + docs.)
+
+## 2026-06-26 — ✅ M18.6 Story comms on the Science station
+
+The campaign now tells its story through transmissions on the Science console.
+- **`UMissionSubsystem`** drives each mission's comms script (`FCommsBeat`: sender + text + an
+  `AtSeconds` time trigger or an `OnKill` count trigger). A repeating 0.25s timer (paused with the game)
+  fires time-beats; binding each spawned hostile's `OnDeath` advances a kill count that fires kill-beats.
+  Fired beats accumulate in a `CommsLog` (`FCommsMessage`), exposed via `GetComms()`.
+- **Server** — `/api/state` gains `mission` (name) + a `comms` array (`{sender,text}`, JSON-escaped),
+  read from the world's mission subsystem. `SciencePage` gains a **MISSION** readout and a scrolling
+  **COMMS** log (sender + text, newest highlighted, auto-scrolled).
+
+**Verified (MCP + Firefox over the LAN IP):** on mission 0 the timed briefing fired (~1s: *COMMAND —
+"two unknowns just dropped in…"*) and killing one hostile fired the kill-beat (*SCOUT-7 — "the scout is
+down…"*); both appeared in `/api/state.comms` and rendered on the Science **COMMS** panel (newest in
+green, mission "First Contact"). (Commit: Core/MissionSubsystem.{h,cpp} + Net/StationServerSubsystem.cpp
++ docs.)
+
+**M18 complete** — the vertical slice is now a small campaign: main menu + ship select, in-game pause +
+save/load, three escalating missions of varied enemy ships, and a story told over the Science comms.

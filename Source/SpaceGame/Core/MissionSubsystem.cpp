@@ -2,12 +2,14 @@
 
 #include "Core/MissionSubsystem.h"
 
+#include "Components/HealthComponent.h"
 #include "Core/BridgePlayerController.h"
 #include "Core/SpaceGameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Ships/EnemyShip.h"
+#include "TimerManager.h"
 
 namespace
 {
@@ -93,6 +95,49 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		MissionIndex, *Mission.Name, Mission.Enemies.Num());
 
 	BuildEncounter(InWorld);
+
+	// Run the mission's comms script: timed beats off a repeating timer (paused with the game),
+	// kill-triggered beats off the hostiles' deaths (bound in BuildEncounter).
+	CommsLog.Reset();
+	KillCount = 0;
+	StartTime = InWorld.GetTimeSeconds();
+	InWorld.GetTimerManager().SetTimer(BeatTimer, this, &UMissionSubsystem::CheckTimedBeats, 0.25f, true);
+}
+
+void UMissionSubsystem::CheckTimedBeats()
+{
+	const UWorld* World = GetWorld();
+	if (!World) { return; }
+	const float Elapsed = World->GetTimeSeconds() - StartTime;
+	for (FCommsBeat& B : Mission.Comms)
+	{
+		if (!B.bFired && B.OnKill < 0 && B.AtSeconds <= Elapsed)
+		{
+			FireBeat(B);
+		}
+	}
+}
+
+void UMissionSubsystem::HandleEnemyKilled(AActor* DeadActor)
+{
+	++KillCount;
+	for (FCommsBeat& B : Mission.Comms)
+	{
+		if (!B.bFired && B.OnKill == KillCount)
+		{
+			FireBeat(B);
+		}
+	}
+}
+
+void UMissionSubsystem::FireBeat(FCommsBeat& Beat)
+{
+	Beat.bFired = true;
+	FCommsMessage Msg;
+	Msg.Sender = Beat.Sender;
+	Msg.Text = Beat.Text;
+	CommsLog.Add(Msg);
+	UE_LOG(LogTemp, Log, TEXT("[Comms] %s: %s"), *Beat.Sender, *Beat.Text);
 }
 
 void UMissionSubsystem::BuildEncounter(UWorld& World)
@@ -130,6 +175,11 @@ void UMissionSubsystem::BuildEncounter(UWorld& World)
 		{
 			Enemy->ShipType = Mission.Enemies[i];
 			UGameplayStatics::FinishSpawningActor(Enemy, Xform);
+			// Drive kill-triggered comms beats off each hostile's death.
+			if (UHealthComponent* H = Enemy->GetHealthComp())
+			{
+				H->OnDeath.AddUniqueDynamic(this, &UMissionSubsystem::HandleEnemyKilled);
+			}
 		}
 	}
 
