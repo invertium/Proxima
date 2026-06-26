@@ -223,15 +223,41 @@ setInterval(poll,250);poll();
 				"<button onclick=\"post('/api/power?system=%d&delta=0.1')\">+</button>"
 				"</div>"), Name, Idx, Idx, Idx);
 		};
-		const FString Body = Sys(TEXT("ENGINE"), 0) + Sys(TEXT("WEAPONS"), 1) + Sys(TEXT("SHIELDS"), 2) +
-			TEXT("<div class='stat' style='margin-top:18px'><b>REACTOR LOAD</b><span id='load'>-</span></div>"
-			     "<div class='stat'><b>HULL</b><span id='hull'>-</span></div>");
+		const FString Body =
+			TEXT("<label>HULL INTEGRITY</label>"
+			     "<div style='height:22px;background:#0b1220;border:1px solid #15243a;border-radius:6px;overflow:hidden'>"
+			     "<div id='hullbar' style='height:100%;width:0%;background:#43ff7a;transition:width .2s'></div></div>"
+			     "<div class='stat'><b>HULL</b><span id='hull' class='big'>-</span></div>")
+			+ Sys(TEXT("ENGINE"), 0) + Sys(TEXT("WEAPONS"), 1) + Sys(TEXT("SHIELDS"), 2)
+			+ TEXT(
+			     "<label>DAMAGE CONTROL &mdash; WELD WHEN THE MARKER HITS THE GREEN</label>"
+			     "<div id='sweep' style='position:relative;height:46px;margin-top:10px;background:#0b1220;"
+			     "border:1px solid #33425c;border-radius:8px;overflow:hidden'>"
+			     "<div style='position:absolute;left:40%;width:20%;top:0;bottom:0;background:rgba(67,255,122,.18);"
+			     "border-left:1px solid #43ff7a;border-right:1px solid #43ff7a'></div>"
+			     "<div id='mark' style='position:absolute;left:0;top:0;bottom:0;width:4px;background:#eaf4ff;"
+			     "box-shadow:0 0 8px #fff'></div></div>"
+			     "<button id='weld' onclick='weld()'>&#9670; WELD</button>"
+			     "<div class='stat' style='margin-top:18px'><b>REACTOR LOAD</b><span id='load'>-</span></div>");
+		// The hull bar + numeric readout poll from /api/state; the weld minigame runs entirely
+		// client-side (requestAnimationFrame sweep) and only POSTs a repair when the marker is
+		// inside the green zone — the server still rate-limits + caps the actual hull restore.
 		const FString Script = TEXT(
 			"function render(s){$('#p0').textContent=Math.round(s.power[0]*100)+'%';"
 			"$('#p1').textContent=Math.round(s.power[1]*100)+'%';"
 			"$('#p2').textContent=Math.round(s.power[2]*100)+'%';"
 			"$('#load').textContent=s.reactorLoad.toFixed(1)+' / '+s.reactorBudget.toFixed(1);"
-			"$('#hull').textContent=Math.round(s.hull)+' / '+Math.round(s.maxHull);}");
+			"const f=s.maxHull>0?s.hull/s.maxHull:0;"
+			"$('#hullbar').style.width=Math.round(f*100)+'%';"
+			"$('#hullbar').style.background=f<0.3?'#ff5a4a':(f<0.6?'#e6b800':'#43ff7a');"
+			"$('#hull').textContent=Math.round(s.hull)+' / '+Math.round(s.maxHull);}"
+			"let sp=0,sd=1,lt=0;"
+			"function loop(ts){if(lt){const dt=(ts-lt)/1000;sp+=sd*dt/1.2;"
+			"if(sp>=1){sp=1;sd=-1;}if(sp<=0){sp=0;sd=1;}}lt=ts;"
+			"const m=$('#mark');if(m)m.style.left='calc('+(sp*100)+'% - 2px)';"
+			"requestAnimationFrame(loop);}requestAnimationFrame(loop);"
+			"function flash(c){const s=$('#sweep');s.style.boxShadow='0 0 14px '+c;setTimeout(function(){s.style.boxShadow='';},160);}"
+			"function weld(){if(sp>=0.40&&sp<=0.60){post('/api/engineering?action=repair');flash('#43ff7a');}else{flash('#ff5a4a');}}");
 		return MakePage(TEXT("ENGINEERING"), TEXT("#a82"), Body, Script);
 	}
 
@@ -316,6 +342,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/weapons"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWeapons);
 	Bind(TEXT("/api/power"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandlePower);
+	Bind(TEXT("/api/engineering"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleEngineering);
 	Bind(TEXT("/api/game"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleGame);
 
 	Http.StartAllListeners();
@@ -540,6 +567,35 @@ bool UStationServerSubsystem::HandlePower(const FHttpServerRequest& Request, con
 			if (Request.QueryParams.Contains(TEXT("system")))
 			{
 				Power->AdjustSystemPower((EShipSystem)Sys, QueryFloat(Request, TEXT("delta"), 0.f));
+			}
+		}
+	}
+	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleEngineering(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Each accepted weld restores a fixed chunk of hull, capped at MaxHull by RepairHull. A
+	// minimum interval throttles it so a fast/scripted client can't weld the ship to full in
+	// one frame — repairs stay paced like the on-screen sweep.
+	constexpr float RepairPerHit = 8.f;
+	constexpr double MinRepairInterval = 0.25; // seconds (sim time) between credited welds
+
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	if (Action && *Action == TEXT("repair"))
+	{
+		if (ASpaceship* Ship = GetShip())
+		{
+			if (UHealthComponent* Health = Ship->GetHealthComp())
+			{
+				const UWorld* World = GetWorld();
+				const double Now = World ? World->GetTimeSeconds() : 0.0;
+				if (Now - LastRepairTime >= MinRepairInterval)
+				{
+					LastRepairTime = Now;
+					Health->RepairHull(RepairPerHit);
+				}
 			}
 		}
 	}

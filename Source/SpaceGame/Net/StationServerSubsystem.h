@@ -46,6 +46,8 @@ private:
 	bool HandleHelm(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleWeapons(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandlePower(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	// Damage-control repair (timing-sweep minigame); rate-limited so it can't be spammed to full.
+	bool HandleEngineering(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	// New Game / Restart — reloads the encounter.
 	bool HandleGame(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 
@@ -63,4 +65,7 @@ private:
 
 	/** Port the router is bound to. */
 	int32 Port = 8080;
+
+	/** World-time of the last credited repair, to throttle the Engineering weld minigame. */
+	double LastRepairTime = 0.0;
 };
