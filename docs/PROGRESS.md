@@ -566,3 +566,29 @@ ESC now brings up a pause overlay over the live encounter.
 overlay (5 buttons) rendered over the dimmed encounter; toggling again removed it and the live scene
 (ship + HUD, HULL 74%) resumed. (Commit: Core/PauseMenuWidget.{h,cpp} + Core/BridgePlayerController.{h,cpp}
 + docs.)
+
+## 2026-06-26 — ✅ M18.4 Enemy types + mission-driven spawning
+
+Encounters became data-driven missions with a varied fleet, plus a real campaign loop.
+- **Enemy archetypes** — `EEnemyType {Gunship,Scout,Cruiser}` on `AEnemyShip`, applied in `BeginPlay`
+  via `ApplyTypePreset()` (runtime `StaticLoadObject` for mesh/material): Scout = small/fast/fragile
+  Insurgent hull (cyan, 50/20), Gunship = the baseline Imperial (orange, 100/50), Cruiser = big/slow/
+  tanky Imperial (red, 220/110, hits hard). Reuses the two existing meshes — no new art.
+  `UHealthComponent::ResetPools()` re-fills the pools after a preset changes the Max values.
+- **`UMissionSubsystem`** (`Core/MissionSubsystem.{h,cpp}`, world subsystem) — on world begin play reads
+  `MissionIndex` from the game instance, **clears any level-placed hostiles**, and **spawns the mission's
+  fleet** (deferred-spawn with the archetype) in a fan ahead of the player, then re-binds the controller's
+  win condition (subsystems begin play after the PC). Campaign = a 3-mission in-code table (`FMissionDef`:
+  name + enemy list + comms beats) of escalating fleets.
+- **Campaign loop** — on victory the controller advances + saves the campaign and shows a C++
+  `UOutcomeMenuWidget` (replacing the static WBP end screen): **SECTOR CLEARED / NEXT MISSION** (reloads
+  the encounter at the new index) or **CAMPAIGN COMPLETE** on the last mission; defeat shows **RETRY /
+  MAIN MENU**. Shared C++-UMG button helpers moved to `Core/MenuUI.h` (fixes a unity-build name clash).
+
+**Verified (MCP + OS screenshot):** mission 0 spawned **Scout(50/20) + Gunship(100/50)**; setting the
+index to 1 + reloading spawned **Gunship + Gunship + Cruiser(220/110)** — escalation + distinct presets
+confirmed, placed enemies cleared. Clearing the fleet advanced the campaign (0→1, saved) and showed the
+green **SECTOR CLEARED / NEXT MISSION** overlay (player survived at 92% hull); a player death showed the
+red **DEFEAT / RETRY** overlay. (Commit: Ships/EnemyShip.{h,cpp} + Components/HealthComponent.{h,cpp} +
+Core/{MissionSubsystem,OutcomeMenuWidget,MenuUI}.* + Core/BridgePlayerController.{h,cpp} + the menu
+widgets + docs.)

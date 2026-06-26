@@ -11,6 +11,7 @@
 class UBridgeHUDWidget;
 class UEndScreenWidget;
 class UPauseMenuWidget;
+class UOutcomeMenuWidget;
 
 /**
  * ABridgePlayerController — owns the bridge HUD and the active-station state, and
@@ -38,12 +39,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Bridge")
 	void EngAdjustSystem(EShipSystem System, bool bIncrease);
 
+	/** (Re)subscribe to every current hostile's death — the win condition. Public so the mission
+	 *  spawner can call it after it spawns the encounter (subsystems begin play after the PC). */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void BindEnemyDeaths();
+
 	// --- Pause menu actions (called by UPauseMenuWidget's buttons, M18) ---
 	void PauseResume();
 	void PauseSave();
 	void PauseRestart();
 	void PauseMainMenu();
 	void PauseQuit();
+
+	// --- Outcome actions (called by UOutcomeMenuWidget's buttons, M18 campaign flow) ---
+	void OutcomePrimary();
+	void OutcomeSecondary();
 
 protected:
 	virtual void BeginPlay() override;
@@ -54,9 +64,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bridge")
 	TSubclassOf<UBridgeHUDWidget> HUDWidgetClass;
 
-	/** Outcome overlay class (defeat M11 / victory M12); resolves WBP_EndScreen at play time. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bridge")
-	TSubclassOf<UEndScreenWidget> EndScreenClass;
 
 private:
 	void SelectHelm()        { SetStation(EStation::Helm); }
@@ -101,11 +108,10 @@ private:
 	UFUNCTION()
 	void HandleEnemyDeath(AActor* DeadActor);
 
-	/** Subscribe to all placed hostiles' deaths (the win condition). */
-	void BindEnemyDeaths();
-
-	/** Build + show the outcome overlay, pause the sim, and hand input to the UI. */
-	void ShowEndScreen(const FText& Title, const FText& Subtitle, FLinearColor TitleColor);
+	/** Build + show the actionable outcome overlay (pauses + UI input). PrimaryKind selects
+	 *  what the primary button does (next mission / retry / main menu). */
+	void ShowOutcome(const FText& Title, FLinearColor Color, const FText& Subtitle,
+		const FString& PrimaryLabel, const FString& SecondaryLabel);
 
 	// --- Pause overlay (ESC, M18) ---
 	/** Toggle the pause overlay: pause + show UI, or hide + resume. BlueprintCallable so it can
@@ -115,11 +121,16 @@ private:
 	void ShowPauseMenu();
 	void HidePauseMenu();
 
+	/** What the outcome overlay's primary button does. */
+	enum class EOutcomeKind : uint8 { VictoryNext, VictoryComplete, Defeat };
+
 	UPROPERTY()
 	TObjectPtr<UBridgeHUDWidget> HUDWidget;
 
 	UPROPERTY()
-	TObjectPtr<UEndScreenWidget> EndScreen;
+	TObjectPtr<UOutcomeMenuWidget> Outcome;
+
+	EOutcomeKind OutcomeKind = EOutcomeKind::Defeat;
 
 	UPROPERTY()
 	TObjectPtr<UPauseMenuWidget> PauseMenu;

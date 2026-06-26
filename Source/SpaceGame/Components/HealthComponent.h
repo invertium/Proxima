@@ -40,6 +40,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Health")
 	float RepairHull(float Amount);
 
+	/** Re-fill hull + shield pools to their current Max and clear the death latch. Used when
+	 *  a ship variant/type sets new Max values at runtime (M18 enemy types / player ships). */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Health")
+	void ResetPools();
+
 	UFUNCTION(BlueprintPure, Category = "Ship|Health")
 	float GetHull() const { return Hull; }
 

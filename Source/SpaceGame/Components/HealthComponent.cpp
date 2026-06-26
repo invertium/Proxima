@@ -97,3 +97,10 @@ float UHealthComponent::RepairHull(float Amount)
 		Owner ? *Owner->GetName() : TEXT("?"), Amount, Hull, MaxHull);
 	return Hull;
 }
+
+void UHealthComponent::ResetPools()
+{
+	Hull = MaxHull;
+	Shield = MaxShield;
+	bDeathBroadcast = false;
+}

@@ -9,26 +9,16 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Core/BridgePlayerController.h"
+#include "Core/MenuUI.h"
+
+using MenuUI::MakeText;
+using MenuUI::MakeFlatButton;
 
 namespace
 {
-	UTextBlock* MakeText(UWidgetTree* Tree, const FString& Str, int32 Size, FLinearColor Color)
-	{
-		UTextBlock* T = Tree->ConstructWidget<UTextBlock>();
-		T->SetText(FText::FromString(Str));
-		FSlateFontInfo Font = T->GetFont();
-		Font.Size = Size;
-		T->SetFont(Font);
-		T->SetColorAndOpacity(FSlateColor(Color));
-		T->SetJustification(ETextJustify::Center);
-		return T;
-	}
-
 	UButton* AddButton(UWidgetTree* Tree, UVerticalBox* Box, const FString& Label)
 	{
-		UButton* B = Tree->ConstructWidget<UButton>();
-		B->SetBackgroundColor(FLinearColor(0.06f, 0.10f, 0.17f, 1.f));
-		B->AddChild(MakeText(Tree, Label, 20, FLinearColor(0.92f, 0.96f, 1.f, 1.f)));
+		UButton* B = MakeFlatButton(Tree, Label);
 		if (UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(B))
 		{
 			Slot->SetPadding(FMargin(0.f, 6.f));
@@ -59,7 +49,7 @@ void UPauseMenuWidget::BuildUI()
 	Root->SetContent(Box);
 
 	if (UVerticalBoxSlot* S = Box->AddChildToVerticalBox(
-		MakeText(WidgetTree, TEXT("PAUSED"), 40, FLinearColor(0.6f, 0.85f, 1.f, 1.f))))
+		MakeText(WidgetTree, FText::FromString(TEXT("PAUSED")), 40, FLinearColor(0.6f, 0.85f, 1.f, 1.f))))
 	{
 		S->SetPadding(FMargin(0.f, 0.f, 0.f, 24.f));
 		S->SetHorizontalAlignment(HAlign_Center);
@@ -71,7 +61,7 @@ void UPauseMenuWidget::BuildUI()
 	AddButton(WidgetTree, Box, TEXT("MAIN MENU"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnMainMenu);
 	AddButton(WidgetTree, Box, TEXT("QUIT"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnQuit);
 
-	Toast = MakeText(WidgetTree, TEXT(""), 16, FLinearColor(0.4f, 1.f, 0.55f, 1.f));
+	Toast = MakeText(WidgetTree, FText::GetEmpty(), 16, FLinearColor(0.4f, 1.f, 0.55f, 1.f));
 	if (UVerticalBoxSlot* TS = Box->AddChildToVerticalBox(Toast))
 	{
 		TS->SetPadding(FMargin(0.f, 16.f, 0.f, 0.f));

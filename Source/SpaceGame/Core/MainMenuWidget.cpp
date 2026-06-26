@@ -8,41 +8,28 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Core/MenuUI.h"
 #include "Core/SpaceGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+
+using MenuUI::MakeText;
+using MenuUI::MakeFlatButton;
 
 namespace
 {
 	// Encounter map opened by New Game / Continue.
 	const TCHAR* const EncounterMap = TEXT("VSlice_Arena");
 
-	UTextBlock* MakeText(UWidgetTree* Tree, const FString& Str, int32 Size, FLinearColor Color)
+	// Add a menu button to the box with standard padding + binding handled by the caller.
+	UButton* AddMenuButton(UWidgetTree* Tree, UVerticalBox* Box, const FString& Label)
 	{
-		UTextBlock* T = Tree->ConstructWidget<UTextBlock>();
-		T->SetText(FText::FromString(Str));
-		FSlateFontInfo Font = T->GetFont();
-		Font.Size = Size;
-		T->SetFont(Font);
-		T->SetColorAndOpacity(FSlateColor(Color));
-		T->SetJustification(ETextJustify::Center);
-		return T;
-	}
-
-	// A flat dark-blue button with centred label; returns the button + (optionally) its label.
-	UButton* MakeButton(UWidgetTree* Tree, UVerticalBox* Box, const FString& Label,
-		UTextBlock** OutLabel = nullptr)
-	{
-		UButton* B = Tree->ConstructWidget<UButton>();
-		B->SetBackgroundColor(FLinearColor(0.06f, 0.10f, 0.17f, 1.f));
-		UTextBlock* T = MakeText(Tree, Label, 22, FLinearColor(0.92f, 0.96f, 1.f, 1.f));
-		B->AddChild(T);
+		UButton* B = MakeFlatButton(Tree, Label);
 		if (UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(B))
 		{
 			Slot->SetPadding(FMargin(0.f, 8.f));
 			Slot->SetHorizontalAlignment(HAlign_Fill);
 		}
-		if (OutLabel) { *OutLabel = T; }
 		return B;
 	}
 }
@@ -67,24 +54,24 @@ void UMainMenuWidget::BuildUI()
 	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
 	Root->SetContent(Box);
 
-	Box->AddChildToVerticalBox(MakeText(WidgetTree, TEXT("S P A C E G A M E"), 52,
+	Box->AddChildToVerticalBox(MakeText(WidgetTree, FText::FromString(TEXT("S P A C E G A M E")), 52,
 		FLinearColor(0.6f, 0.85f, 1.f, 1.f)));
-	UTextBlock* Sub = MakeText(WidgetTree, TEXT("BRIDGE SIMULATOR"), 20, FLinearColor(0.4f, 0.55f, 0.7f, 1.f));
+	UTextBlock* Sub = MakeText(WidgetTree, FText::FromString(TEXT("BRIDGE SIMULATOR")), 20,
+		FLinearColor(0.4f, 0.55f, 0.7f, 1.f));
 	if (UVerticalBoxSlot* SubSlot = Box->AddChildToVerticalBox(Sub))
 	{
 		SubSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 40.f));
 		SubSlot->SetHorizontalAlignment(HAlign_Center);
 	}
 
-	UButton* NewGameBtn = MakeButton(WidgetTree, Box, TEXT("NEW GAME"));
+	UButton* NewGameBtn = AddMenuButton(WidgetTree, Box, TEXT("NEW GAME"));
 	NewGameBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnNewGame);
 
-	UTextBlock* ContinueText = nullptr;
-	ContinueButton = MakeButton(WidgetTree, Box, TEXT("CONTINUE"), &ContinueText);
-	ContinueLabel = ContinueText;
+	ContinueButton = AddMenuButton(WidgetTree, Box, TEXT("CONTINUE"));
+	ContinueLabel = Cast<UTextBlock>(ContinueButton->GetChildAt(0));
 	ContinueButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnContinue);
 
-	UButton* QuitBtn = MakeButton(WidgetTree, Box, TEXT("QUIT"));
+	UButton* QuitBtn = AddMenuButton(WidgetTree, Box, TEXT("QUIT"));
 	QuitBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnQuit);
 }
 

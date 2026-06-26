@@ -23,6 +23,18 @@ enum class EEnemyAIState : uint8
 };
 
 /**
+ * Enemy archetype (M18). Each preset (applied in BeginPlay) reskins + rescales the ship and
+ * tunes its AI/health stats, so a mission can field a varied fleet from the two existing meshes.
+ */
+UENUM(BlueprintType)
+enum class EEnemyType : uint8
+{
+	Gunship UMETA(DisplayName = "Gunship"), // baseline Imperial cruiser (orange)
+	Scout   UMETA(DisplayName = "Scout"),   // small/fast/fragile Insurgent hull (cyan)
+	Cruiser UMETA(DisplayName = "Cruiser")  // big/slow/tanky, hits hard (red)
+};
+
+/**
  * AEnemyShip — a hostile ship with self-contained Tick AI (no AIController needed):
  * it finds the player pawn, yaws to face it, flies in to a standoff distance, and once
  * within engage range fires on a fixed interval (logged + drawn beam). Carries a
@@ -46,8 +58,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Enemy")
 	UHealthComponent* GetHealthComp() const { return HealthComp; }
 
+	/** Archetype, set by the mission spawner before FinishSpawning; applied in BeginPlay. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
+	EEnemyType ShipType = EEnemyType::Gunship;
+
 protected:
 	virtual void BeginPlay() override;
+
+	/** Reskin/rescale + retune this ship for ShipType (mesh, material, scale, AI + health stats). */
+	void ApplyTypePreset();
 
 	UPROPERTY(VisibleAnywhere, Category = "Enemy")
 	TObjectPtr<USceneComponent> ShipRoot;

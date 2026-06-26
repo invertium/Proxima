@@ -5,6 +5,7 @@
 #include "Components/HealthComponent.h"
 #include "Components/RadarContactComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "FX/BeamFx.h"
 #include "FX/ExplosionFx.h"
 #include "Materials/MaterialInterface.h"
@@ -55,6 +56,9 @@ void AEnemyShip::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Reskin/retune for the archetype (set by the mission spawner before FinishSpawning).
+	ApplyTypePreset();
+
 	FireCooldown = FireInterval;
 
 	// Despawn + explode when the player's beam drains our hull to zero (M10).
@@ -63,7 +67,67 @@ void AEnemyShip::BeginPlay()
 		HealthComp->OnDeath.AddDynamic(this, &AEnemyShip::HandleDeath);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s spawned at %s"), *GetName(), *GetActorLocation().ToString());
+	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s (%s) spawned at %s"), *GetName(),
+		ShipType == EEnemyType::Scout ? TEXT("Scout") : ShipType == EEnemyType::Cruiser ? TEXT("Cruiser") : TEXT("Gunship"),
+		*GetActorLocation().ToString());
+}
+
+void AEnemyShip::ApplyTypePreset()
+{
+	// Per-archetype mesh + material + scale + AI/health tuning. Reuses the two existing meshes
+	// (Imperial cruiser, Insurgent fighter) recoloured/rescaled — no new art needed.
+	auto Load = [](const TCHAR* Path) -> UObject*
+	{
+		return StaticLoadObject(UObject::StaticClass(), nullptr, Path);
+	};
+
+	const TCHAR* MeshPath = TEXT("/Game/Art/Meshes/Imperial.Imperial");
+	const TCHAR* MatPath  = TEXT("/Game/Art/Materials/M_Imperial.M_Imperial");
+	const TCHAR* FxPath   = TEXT("/Game/Art/Materials/M_GlowOrange.M_GlowOrange");
+	float Scale = 0.6f;
+	FLinearColor Blip(1.0f, 0.25f, 0.2f, 1.f);
+
+	switch (ShipType)
+	{
+	case EEnemyType::Scout:
+		MeshPath = TEXT("/Game/Art/Meshes/Insurgent.Insurgent");
+		MatPath  = TEXT("/Game/Art/Materials/M_Insurgent.M_Insurgent");
+		FxPath   = TEXT("/Game/Art/Materials/M_GlowCyan.M_GlowCyan");
+		Scale = 0.4f;
+		Blip = FLinearColor(0.3f, 0.9f, 1.0f, 1.f);
+		MoveSpeed = 1900.f; TurnRateDeg = 80.f; StandoffDistance = 4500.f;
+		EngageRange = 10000.f; FireInterval = 1.6f; EnemyBeamDamage = 5.f;
+		if (HealthComp) { HealthComp->MaxHull = 50.f;  HealthComp->MaxShield = 20.f; }
+		break;
+
+	case EEnemyType::Cruiser:
+		FxPath = TEXT("/Game/Art/Materials/M_GlowRed.M_GlowRed");
+		Scale = 1.05f;
+		Blip = FLinearColor(1.0f, 0.15f, 0.12f, 1.f);
+		MoveSpeed = 700.f; TurnRateDeg = 32.f; StandoffDistance = 7500.f;
+		EngageRange = 14000.f; FireInterval = 3.2f; EnemyBeamDamage = 14.f;
+		if (HealthComp) { HealthComp->MaxHull = 220.f; HealthComp->MaxShield = 110.f; }
+		break;
+
+	case EEnemyType::Gunship:
+	default:
+		MoveSpeed = 1100.f; TurnRateDeg = 50.f; StandoffDistance = 6000.f;
+		EngageRange = 12000.f; FireInterval = 2.5f; EnemyBeamDamage = 8.f;
+		if (HealthComp) { HealthComp->MaxHull = 100.f; HealthComp->MaxShield = 50.f; }
+		break;
+	}
+
+	if (ShipMesh)
+	{
+		if (UStaticMesh* M = Cast<UStaticMesh>(Load(MeshPath)))   { ShipMesh->SetStaticMesh(M); }
+		if (UMaterialInterface* Mat = Cast<UMaterialInterface>(Load(MatPath))) { ShipMesh->SetMaterial(0, Mat); }
+		ShipMesh->SetRelativeScale3D(FVector(Scale));
+	}
+	if (UMaterialInterface* Fx = Cast<UMaterialInterface>(Load(FxPath))) { FxMaterial = Fx; }
+	if (RadarContact) { RadarContact->BlipColor = Blip; }
+
+	// New Max values just landed — refill the pools so the ship starts at full for its type.
+	if (HealthComp) { HealthComp->ResetPools(); }
 }
 
 void AEnemyShip::HandleDeath(AActor* DeadActor)

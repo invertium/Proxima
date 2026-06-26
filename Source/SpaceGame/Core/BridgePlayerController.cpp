@@ -3,7 +3,7 @@
 #include "Core/BridgePlayerController.h"
 
 #include "Core/BridgeHUDWidget.h"
-#include "Core/EndScreenWidget.h"
+#include "Core/OutcomeMenuWidget.h"
 #include "Core/PauseMenuWidget.h"
 #include "Core/SpaceGameInstance.h"
 #include "Core/SpaceGameMode.h"
@@ -109,15 +109,40 @@ void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
 
 	if (Alive == 0)
 	{
+		// If the player died on the same beat (defeat overlay already up), don't also bank a win.
+		if (Outcome) { return; }
+
 		UE_LOG(LogTemp, Log, TEXT("[Bridge] VICTORY — all hostiles destroyed"));
 		if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
 		{
 			GM->SetPhase(EGamePhase::Victory);
 		}
-		ShowEndScreen(
-			FText::FromString(TEXT("VICTORY")),
-			FText::FromString(TEXT("All hostiles destroyed.")),
-			FLinearColor(0.3f, 1.0f, 0.45f, 1.0f)); // green
+
+		// Advance + persist the campaign, then offer the next mission (or wrap the campaign).
+		USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>();
+		const int32 Current = GI ? GI->GetMissionIndex() : 0;
+		const bool bMore = Current < USpaceGameInstance::GetMissionCount() - 1;
+		if (GI)
+		{
+			GI->AdvanceMission();
+			GI->SaveCampaign();
+		}
+
+		const FLinearColor Green(0.3f, 1.0f, 0.45f, 1.0f);
+		if (bMore)
+		{
+			OutcomeKind = EOutcomeKind::VictoryNext;
+			ShowOutcome(FText::FromString(TEXT("SECTOR CLEARED")), Green,
+				FText::FromString(TEXT("Mission complete. Stand by for the next engagement.")),
+				TEXT("NEXT MISSION"), TEXT("MAIN MENU"));
+		}
+		else
+		{
+			OutcomeKind = EOutcomeKind::VictoryComplete;
+			ShowOutcome(FText::FromString(TEXT("CAMPAIGN COMPLETE")), Green,
+				FText::FromString(TEXT("All sectors cleared. Well done, Captain.")),
+				TEXT("MAIN MENU"), FString());
+		}
 	}
 }
 
@@ -307,35 +332,23 @@ void ABridgePlayerController::HandlePlayerDeath(AActor* DeadActor)
 	{
 		GM->SetPhase(EGamePhase::Defeat);
 	}
-	ShowEndScreen(
-		FText::FromString(TEXT("DEFEAT")),
+	OutcomeKind = EOutcomeKind::Defeat;
+	ShowOutcome(
+		FText::FromString(TEXT("DEFEAT")), FLinearColor(1.0f, 0.25f, 0.2f, 1.0f),
 		FText::FromString(TEXT("Your ship was destroyed.")),
-		FLinearColor(1.0f, 0.25f, 0.2f, 1.0f)); // red
+		TEXT("RETRY"), TEXT("MAIN MENU"));
 }
 
-void ABridgePlayerController::ShowEndScreen(const FText& Title, const FText& Subtitle, FLinearColor TitleColor)
+void ABridgePlayerController::ShowOutcome(const FText& Title, FLinearColor Color, const FText& Subtitle,
+	const FString& PrimaryLabel, const FString& SecondaryLabel)
 {
-	if (EndScreen) { return; } // already shown — encounter is over
+	if (Outcome) { return; } // already shown — encounter is over
 
-	// Resolve the authored WBP at play time (no extra restart when the asset is created).
-	if (!EndScreenClass)
+	Outcome = CreateWidget<UOutcomeMenuWidget>(this, UOutcomeMenuWidget::StaticClass());
+	if (Outcome)
 	{
-		EndScreenClass = LoadClass<UEndScreenWidget>(
-			nullptr, TEXT("/Game/UI/Common/WBP_EndScreen.WBP_EndScreen_C"));
-	}
-
-	if (EndScreenClass)
-	{
-		EndScreen = CreateWidget<UEndScreenWidget>(this, EndScreenClass);
-		if (EndScreen)
-		{
-			EndScreen->SetOutcome(Title, Subtitle, TitleColor);
-			EndScreen->AddToViewport(100); // above the bridge HUD
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[Bridge] EndScreenClass not set — no outcome overlay."));
+		Outcome->Setup(Title, Color, Subtitle, PrimaryLabel, SecondaryLabel);
+		Outcome->AddToViewport(100); // above the bridge HUD
 	}
 
 	// Freeze the encounter and hand input to the UI.
@@ -349,7 +362,7 @@ void ABridgePlayerController::ShowEndScreen(const FText& Title, const FText& Sub
 void ABridgePlayerController::TogglePause()
 {
 	// Don't let the pause overlay fight the end-of-encounter screen.
-	if (EndScreen) { return; }
+	if (Outcome) { return; }
 	if (bPaused) { HidePauseMenu(); } else { ShowPauseMenu(); }
 }
 
@@ -419,4 +432,34 @@ void ABridgePlayerController::PauseMainMenu()
 void ABridgePlayerController::PauseQuit()
 {
 	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+}
+
+// --- Outcome overlay actions (M18 campaign flow) ---
+
+void ABridgePlayerController::OutcomePrimary()
+{
+	UGameplayStatics::SetGamePaused(this, false);
+	switch (OutcomeKind)
+	{
+	case EOutcomeKind::VictoryNext:
+		// MissionIndex was already advanced + saved; reloading the encounter builds the next one.
+		UGameplayStatics::OpenLevel(this, FName(TEXT("VSlice_Arena")));
+		break;
+	case EOutcomeKind::Defeat:
+		if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
+		{
+			GM->RestartEncounter();
+		}
+		break;
+	case EOutcomeKind::VictoryComplete:
+	default:
+		UGameplayStatics::OpenLevel(this, FName(TEXT("MainMenu")));
+		break;
+	}
+}
+
+void ABridgePlayerController::OutcomeSecondary()
+{
+	UGameplayStatics::SetGamePaused(this, false);
+	UGameplayStatics::OpenLevel(this, FName(TEXT("MainMenu")));
 }
