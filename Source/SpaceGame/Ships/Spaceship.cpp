@@ -8,6 +8,7 @@
 #include "Components/PowerComponent.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -60,6 +61,9 @@ ASpaceship::ASpaceship()
 
 	// Forward beam weapon (recharge scaled by Weapons power, M8).
 	WeaponComp = CreateDefaultSubobject<UWeaponComponent>(TEXT("WeaponComp"));
+
+	// Limited-ammo torpedo launcher (M17); shares the beam's locked target.
+	TorpedoComp = CreateDefaultSubobject<UTorpedoLauncherComponent>(TEXT("TorpedoComp"));
 
 	// Hull + shield-power mitigation (M11). The player's "shields" are the engineering
 	// Shields-power mitigation (D11), so the absorb pool is zero — damage hits hull,

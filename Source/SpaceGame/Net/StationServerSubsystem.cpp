@@ -6,6 +6,7 @@
 #include "Components/PowerComponent.h"
 #include "Components/RadarContactComponent.h"
 #include "Components/ShipMovementComponent.h"
+#include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Core/SpaceGameMode.h"
 #include "Core/StationTypes.h"
@@ -183,21 +184,29 @@ setInterval(poll,250);poll();
 			"<div class='stat'><b>TARGET</b><span id='tgt'>none</span></div>"
 			"<div class='stat'><b>RANGE</b><span id='rng'>-</span></div>"
 			"<div class='stat'><b>IN RANGE</b><span id='inr'>-</span></div>"
+			"<div class='stat'><b>TORPEDOES</b><span id='ammo' class='big'>0</span></div>"
 			"<button onclick=\"post('/api/weapons?action=cycle')\">CYCLE TARGET</button>"
-			"<button id='fire' onclick=\"post('/api/weapons?action=fire')\">FIRE BEAM</button>");
-		// The FIRE button reflects readiness: it only fires when a target is locked, in range,
-		// and the beam is fully charged — otherwise it shows *why* it can't (so the crew isn't
-		// left wondering why "nothing happens"). Flies into range is the Helm's job.
+			"<button id='fire' onclick=\"post('/api/weapons?action=fire')\">FIRE BEAM</button>"
+			"<button id='torp' onclick=\"post('/api/weapons?action=torpedo')\">FIRE TORPEDO</button>");
+		// Both FIRE buttons reflect readiness: green only when the shot will actually land,
+		// otherwise dimmed with the reason. The beam needs charge + in-range; the torpedo
+		// (which homes to the target and bypasses shields) needs only ammo + reload + a lock.
 		const FString Script = TEXT(
 			"function render(s){$('#chg').textContent=Math.round(s.charge*100)+'%';"
 			"$('#tgt').textContent=s.target;"
 			"$('#rng').textContent=s.targetRange<0?'-':Math.round(s.targetRange);"
 			"$('#inr').textContent=s.inRange?'YES':'no';"
+			"$('#ammo').textContent=s.ammo+' / '+s.maxAmmo;"
 			"const fb=$('#fire');"
 			"if(s.target==='none'){fb.textContent='NO TARGET';fb.className='blk';}"
 			"else if(s.charge<1){fb.textContent='CHARGING '+Math.round(s.charge*100)+'%';fb.className='blk';}"
 			"else if(!s.inRange){fb.textContent='OUT OF RANGE';fb.className='blk';}"
-			"else{fb.textContent='● FIRE BEAM';fb.className='rdy';}}");
+			"else{fb.textContent='● FIRE BEAM';fb.className='rdy';}"
+			"const tb=$('#torp');"
+			"if(s.ammo<=0){tb.textContent='NO TORPEDOES';tb.className='blk';}"
+			"else if(s.target==='none'){tb.textContent='NO TARGET';tb.className='blk';}"
+			"else if(s.torpedoReload<1){tb.textContent='RELOADING '+Math.round(s.torpedoReload*100)+'%';tb.className='blk';}"
+			"else{tb.textContent='◎ FIRE TORPEDO';tb.className='rdy';}}");
 		return MakePage(TEXT("WEAPONS"), TEXT("#a33"), Body, Script);
 	}
 
@@ -400,6 +409,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	const ASpaceship* Ship = GetShip();
 	const UShipMovementComponent* Move = Ship ? Ship->GetMovementComp() : nullptr;
 	const UWeaponComponent* Weap = Ship ? Ship->GetWeaponComp() : nullptr;
+	const UTorpedoLauncherComponent* Torp = Ship ? Ship->GetTorpedoComp() : nullptr;
 	const UPowerComponent* Power = Ship ? Ship->GetPowerComp() : nullptr;
 	const UHealthComponent* Health = Ship ? Ship->GetHealthComp() : nullptr;
 
@@ -447,6 +457,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"charge\":%.3f,\"target\":\"%s\",\"targetRange\":%.1f,\"inRange\":%s,"
 		"\"power\":[%.3f,%.3f,%.3f],\"reactorLoad\":%.3f,\"reactorBudget\":%.3f,"
 		"\"hull\":%.1f,\"maxHull\":%.1f,"
+		"\"ammo\":%d,\"maxAmmo\":%d,\"torpedoReady\":%s,\"torpedoReload\":%.3f,"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -461,6 +472,10 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Power ? Power->ReactorBudget : 0.f,
 		Health ? Health->GetHull() : 0.f,
 		Health ? Health->GetMaxHull() : 0.f,
+		Torp ? Torp->GetAmmo() : 0,
+		Torp ? Torp->GetMaxAmmo() : 0,
+		(Torp && Torp->IsReady()) ? TEXT("true") : TEXT("false"),
+		Torp ? Torp->GetReloadFraction() : 1.f,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
@@ -501,6 +516,13 @@ bool UStationServerSubsystem::HandleWeapons(const FHttpServerRequest& Request, c
 			else if (Action && *Action == TEXT("fire"))
 			{
 				Weap->FireBeam();
+			}
+			else if (Action && *Action == TEXT("torpedo"))
+			{
+				if (UTorpedoLauncherComponent* Torp = Ship->GetTorpedoComp())
+				{
+					Torp->Fire();
+				}
 			}
 		}
 	}

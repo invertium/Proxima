@@ -30,9 +30,15 @@ public:
 	/**
 	 * Apply incoming damage: shields absorb first, the remainder hits hull. Returns the
 	 * hull remaining. Fires OnDeath the first time hull crosses to zero.
+	 * bBypassShield (torpedoes, M17) skips both shield-power mitigation and the shield pool,
+	 * landing the full amount straight on hull.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ship|Health")
-	float ApplyDamage(float Amount);
+	float ApplyDamage(float Amount, bool bBypassShield = false);
+
+	/** Restore hull (never above MaxHull; a dead hull stays dead). Returns hull remaining. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Health")
+	float RepairHull(float Amount);
 
 	UFUNCTION(BlueprintPure, Category = "Ship|Health")
 	float GetHull() const { return Hull; }
