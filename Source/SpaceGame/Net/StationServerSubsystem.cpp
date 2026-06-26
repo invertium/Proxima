@@ -4,6 +4,7 @@
 
 #include "Components/HealthComponent.h"
 #include "Components/PowerComponent.h"
+#include "Components/RadarContactComponent.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Core/SpaceGameMode.h"
@@ -16,6 +17,10 @@
 #include "Misc/ConfigCacheIni.h"
 #include "Ships/Spaceship.h"
 #include "SocketSubsystem.h"
+#include "UObject/UObjectIterator.h"
+
+// World distance (uu) from the Helm map centre to the outer ring — mirrors URadarWidget::RadarRangeUU.
+static constexpr float HelmRadarRangeUU = 20000.f;
 
 namespace
 {
@@ -121,8 +126,13 @@ setInterval(poll,250);poll();
 
 	FString HelmPage()
 	{
+		// Top-down tactical map (north-up, player-centred) mirroring URadarWidget, drawn on a
+		// canvas, plus a numeric heading readout and the throttle/turn controls.
 		const FString Body = TEXT(
-			"<div class='stat'><b>SPEED</b><span id='spd' class='big'>0</span></div>"
+			"<canvas id='map' width='320' height='320' "
+			"style='display:block;margin:6px auto 0;background:#070d16;border-radius:50%;border:1px solid #15243a'></canvas>"
+			"<div class='stat'><b>HEADING</b><span id='hdg' class='big'>0&deg;</span></div>"
+			"<div class='stat'><b>SPEED</b><span id='spd'>0</span></div>"
 			"<div class='stat'><b>THROTTLE</b><span id='thr'>0%</span></div>"
 			"<div class='stat'><b>MAX SPEED</b><span id='mx'>0</span></div>"
 			"<label>THROTTLE</label>"
@@ -135,10 +145,34 @@ setInterval(poll,250);poll();
 			"<button ontouchstart=\"post('/api/helm?turn=1')\" onmousedown=\"post('/api/helm?turn=1')\" "
 			"ontouchend=\"post('/api/helm?turn=0')\" onmouseup=\"post('/api/helm?turn=0')\">STBD &#9654;</button>"
 			"</div>");
+		// world +X = up (-screenY), world +Y = right (+screenX) — same mapping as RadarWidget.
 		const FString Script = TEXT(
-			"function render(s){$('#spd').textContent=Math.round(s.speed);"
+			"function render(s){"
+			"$('#hdg').textContent=Math.round(((s.heading%360)+360)%360)+'\\u00b0';"
+			"$('#spd').textContent=Math.round(s.speed);"
 			"$('#thr').textContent=Math.round(s.throttle*100)+'%';"
-			"$('#mx').textContent=Math.round(s.maxSpeed);}");
+			"$('#mx').textContent=Math.round(s.maxSpeed);"
+			"drawMap(s);}"
+			"function drawMap(s){const c=$('#map'),x=c.getContext('2d');const W=c.width,H=c.height;"
+			"const cx=W/2,cy=H/2,R=W/2-8;const scale=R/(s.radarRange||20000);"
+			"x.clearRect(0,0,W,H);"
+			"x.strokeStyle='rgba(40,115,90,.6)';x.lineWidth=1;"
+			"for(const f of [1,.66,.33]){x.beginPath();x.arc(cx,cy,R*f,0,7);x.stroke();}"
+			"x.strokeStyle='rgba(30,80,70,.55)';x.beginPath();"
+			"x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.stroke();"
+			"const w2s=(dx,dy)=>{let sx=dy*scale,sy=-dx*scale;const m=Math.hypot(sx,sy);"
+			"if(m>R){sx=sx/m*R;sy=sy/m*R;}return [cx+sx,cy+sy];};"
+			"for(const k of (s.contacts||[])){const[px,py]=w2s(k.x-s.px,k.y-s.py);"
+			"x.strokeStyle=k.color||'#ff4030';x.lineWidth=1.5;"
+			"x.beginPath();x.arc(px,py,5,0,7);x.stroke();"
+			"x.beginPath();x.moveTo(px-7,py);x.lineTo(px+7,py);x.moveTo(px,py-7);x.lineTo(px,py+7);x.stroke();}"
+			"const a=s.heading*Math.PI/180;const fx=Math.cos(a),fy=Math.sin(a);"
+			"const sfx=fy,sfy=-fx;const tx=cx+sfx*22,ty=cy+sfy*22;const perpx=-sfy,perpy=sfx;"
+			"x.strokeStyle='#33e6ff';x.lineWidth=2;"
+			"x.beginPath();x.arc(cx,cy,4,0,7);x.stroke();"
+			"x.beginPath();x.moveTo(cx,cy);x.lineTo(tx,ty);"
+			"x.moveTo(tx,ty);x.lineTo(tx-sfx*8+perpx*5,ty-sfy*8+perpy*5);"
+			"x.moveTo(tx,ty);x.lineTo(tx-sfx*8-perpx*5,ty-sfy*8-perpy*5);x.stroke();}");
 		return MakePage(TEXT("HELM"), TEXT("#2a6"), Body, Script);
 	}
 
@@ -386,12 +420,34 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		}
 	}
 
+	// Helm tactical map data: player world XY + heading, plus a blip per radar contact.
+	const FVector PlayerLoc = Ship ? Ship->GetActorLocation() : FVector::ZeroVector;
+	const float Heading = Ship ? Ship->GetActorRotation().Yaw : 0.f;
+
+	FString Contacts;
+	if (const UWorld* World = GetWorld())
+	{
+		for (TObjectIterator<URadarContactComponent> It; It; ++It)
+		{
+			const URadarContactComponent* C = *It;
+			if (!IsValid(C) || C->GetWorld() != World) { continue; }
+			const AActor* A = C->GetOwner();
+			if (!A || A == Ship) { continue; }
+			const FVector L = A->GetActorLocation();
+			const FColor Col = C->BlipColor.ToFColor(true);
+			if (!Contacts.IsEmpty()) { Contacts += TEXT(","); }
+			Contacts += FString::Printf(TEXT("{\"x\":%.1f,\"y\":%.1f,\"color\":\"#%02x%02x%02x\"}"),
+				L.X, L.Y, Col.R, Col.G, Col.B);
+		}
+	}
+
 	// Hand-built JSON (avoids pulling in the Json module for this flat object).
 	const FString Json = FString::Printf(TEXT(
 		"{\"phase\":\"%s\",\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
 		"\"charge\":%.3f,\"target\":\"%s\",\"targetRange\":%.1f,\"inRange\":%s,"
 		"\"power\":[%.3f,%.3f,%.3f],\"reactorLoad\":%.3f,\"reactorBudget\":%.3f,"
-		"\"hull\":%.1f,\"maxHull\":%.1f}"),
+		"\"hull\":%.1f,\"maxHull\":%.1f,"
+		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
 		Move ? Move->GetThrottle() : 0.f,
@@ -404,7 +460,8 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Power ? Power->GetTotalPower() : 0.f,
 		Power ? Power->ReactorBudget : 0.f,
 		Health ? Health->GetHull() : 0.f,
-		Health ? Health->GetMaxHull() : 0.f);
+		Health ? Health->GetMaxHull() : 0.f,
+		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
 	return true;

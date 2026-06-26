@@ -474,3 +474,11 @@ Chasing "fire beam over the web doesn't trigger the animations":
 - **Root cause #2: no feedback when a shot is blocked.** `UWeaponComponent::FireBeam()` silently returns false when out of range / not charged / no target, and the web Weapons console gave no hint, so it looked dead (enemies spawn beyond the 15000uu beam range, so the first fire is usually blocked). The FIRE button now reflects readiness: green **● FIRE BEAM** only when a target is locked, in range, and fully charged; otherwise dimmed **OUT OF RANGE / CHARGING n% / NO TARGET**. (Closing to range is the Helm's job — the intended cross-station loop.) Confirmed both states in Firefox; an in-range web fire spawns the BeamFx + impact flash and empties the charge.
 
 (Commit: Net/StationServerSubsystem.cpp + docs. The throttle setting is a machine-local editor pref.)
+
+## 2026-06-26 — ✅ M17.1 Helm tactical map + heading
+
+Gave Helm a real top-down tactical map instead of bare speed numbers.
+- **Server:** `/api/state` JSON gains `heading` (player yaw), `radarRange` (20000uu, mirrors `URadarWidget::RadarRangeUU`), `px`/`py` (player world XY), and a `contacts` array (`{x,y,color}`) built by iterating `TObjectIterator<URadarContactComponent>` in the play world (skips the player, hostile blip colour → `#rrggbb`).
+- **Helm page:** a dependency-free `<canvas>` map (north-up, player-centred) mirroring `RadarWidget`'s `WorldToScreen` (`screen = (Δy·scale, −Δx·scale)`, clamped to the outer ring), drawing range rings, cross axes, an enemy blip per contact, and a cyan player heading arrow at centre — plus a numeric **HEADING** readout. Throttle/turn controls kept below.
+
+**Verified (Firefox over the LAN IP):** map drew the hostile blip above the player at heading 0°; after a turn+burn the readout showed 151°, the heading arrow rotated to match, and the blip repositioned as the ship moved — confirming the world→screen mapping. (Commit: Net/StationServerSubsystem.cpp + docs.)
