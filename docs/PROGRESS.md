@@ -508,3 +508,27 @@ Added a brand-new fourth bridge station — web-only, decoupled from the `EStati
 - **Server:** `/api/state` gains a science block (`sciTarget`/`sciProgress`/`sciScanning`/`sciScanned` + `sciHull`/`sciMaxHull`/`sciShield`/`sciMaxShield`, `−1` until revealed); new `/api/science?action=cycle|scan` (`HandleScience`); new `SciencePage()` wired as StationId 3 (`/science`, `BindStation`), plus a **SCIENCE** link on the `/stations` index. The page shows the contact, a scan-progress bar + status, CYCLE/SCAN buttons (SCAN green when ready), and — once scanned — live HULL + SHIELD bars.
 
 **Verified (MCP actor inspection + Firefox over the LAN IP):** cycling locked `EnemyShip_0`; mid-scan the values stayed hidden (`sciHull −1`, progress 0.4) and the bar filled; on completion it revealed **100/100 hull, 50/50 shield**. Dealing 40 damage to the enemy (shields-first) immediately moved the science readout to **shield 10/50** with hull unchanged — confirming the live read. The `/stations` index now lists all four consoles. (Commit: Components/ScienceComponent.{h,cpp} + Ships/Spaceship.{h,cpp} + Net/StationServerSubsystem.{h,cpp} + docs.)
+
+---
+
+# M18 — Campaign shell (menus, save game, more ships, story comms)
+
+Growing the vertical slice into a small campaign: a host menu + in-game pause, a save system,
+ship variety, and a story told as comms on the Science station. Built one milestone per commit.
+
+## 2026-06-26 — ✅ M18.1 GameInstance + SaveGame (campaign persistence)
+
+The backbone for the menu's Continue and the pause menu's Save.
+- **`USpaceGameInstance`** (`Core/SpaceGameInstance.{h,cpp}`) survives level loads and holds the live
+  campaign state — `MissionIndex` + `PlayerShip` (`EPlayerShipType {Interceptor,Cruiser}`, added to
+  `StationTypes.h`). API: `SaveCampaign`/`LoadCampaign`/`HasSave`/`ResetCampaign`/`AdvanceMission`
+  (clamped to `GetMissionCount()`=3) + getters/setters. Registered as `GameInstanceClass` in
+  `DefaultEngine.ini`.
+- **`USpaceSaveGame`** (`Core/SpaceSaveGame.h`) — the on-disk record (slot "campaign"), persisted via
+  `UGameplayStatics::SaveGameToSlot/LoadGameFromSlot/DoesSaveGameExist`. Progress-only (mission +
+  ship); encounters start fresh, so there's no mid-fight snapshot.
+
+**Verified (MCP, in PIE):** the running game instance is `SpaceGameInstance`; set mission 2 + Cruiser →
+`SaveCampaign` (true) → `ResetCampaign` (back to 0/Interceptor) → `LoadCampaign` restored **mission 2 /
+Cruiser** off disk; `AdvanceMission` clamped at the last index (2). (Commit: Core/SpaceGameInstance.{h,cpp}
++ Core/SpaceSaveGame.h + Core/StationTypes.h + Config/DefaultEngine.ini + docs.)

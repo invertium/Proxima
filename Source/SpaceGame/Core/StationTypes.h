@@ -28,3 +28,14 @@ enum class EGamePhase : uint8
 	Victory UMETA(DisplayName = "Victory"),
 	Defeat  UMETA(DisplayName = "Defeat")
 };
+
+/**
+ * Player ship the campaign is being played with (chosen at New Game, persisted in the save).
+ * Both reuse existing art; they trade speed for toughness (applied in ASpaceship::BeginPlay).
+ */
+UENUM(BlueprintType)
+enum class EPlayerShipType : uint8
+{
+	Interceptor UMETA(DisplayName = "Interceptor"), // fast, lighter hull
+	Cruiser     UMETA(DisplayName = "Cruiser")      // slower, tankier, harder-hitting
+};
