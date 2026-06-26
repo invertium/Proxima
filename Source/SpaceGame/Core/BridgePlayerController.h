@@ -10,6 +10,7 @@
 
 class UBridgeHUDWidget;
 class UEndScreenWidget;
+class UPauseMenuWidget;
 
 /**
  * ABridgePlayerController — owns the bridge HUD and the active-station state, and
@@ -36,6 +37,13 @@ public:
 	/** Select a system and step its power (mouse/touch path for the Engineering +/- buttons). */
 	UFUNCTION(BlueprintCallable, Category = "Bridge")
 	void EngAdjustSystem(EShipSystem System, bool bIncrease);
+
+	// --- Pause menu actions (called by UPauseMenuWidget's buttons, M18) ---
+	void PauseResume();
+	void PauseSave();
+	void PauseRestart();
+	void PauseMainMenu();
+	void PauseQuit();
 
 protected:
 	virtual void BeginPlay() override;
@@ -99,11 +107,25 @@ private:
 	/** Build + show the outcome overlay, pause the sim, and hand input to the UI. */
 	void ShowEndScreen(const FText& Title, const FText& Subtitle, FLinearColor TitleColor);
 
+	// --- Pause overlay (ESC, M18) ---
+	/** Toggle the pause overlay: pause + show UI, or hide + resume. BlueprintCallable so it can
+	 *  be driven for tests (PIE eats a real ESC press to stop play). */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void TogglePause();
+	void ShowPauseMenu();
+	void HidePauseMenu();
+
 	UPROPERTY()
 	TObjectPtr<UBridgeHUDWidget> HUDWidget;
 
 	UPROPERTY()
 	TObjectPtr<UEndScreenWidget> EndScreen;
+
+	UPROPERTY()
+	TObjectPtr<UPauseMenuWidget> PauseMenu;
+
+	/** True while the pause overlay is up (guards the toggle). */
+	bool bPaused = false;
 
 	EStation CurrentStation = EStation::Helm;
 

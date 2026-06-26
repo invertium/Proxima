@@ -549,3 +549,20 @@ A proper front door on the host viewscreen.
 ways); simulating New Game (`OpenLevel`) transitioned MainMenu → `VSlice_Arena` with `Spaceship_0`
 possessed and unpaused. (Commit: Core/{MainMenuWidget,MenuGameMode,MenuPlayerController}.{h,cpp} +
 Content/Maps/MainMenu.umap + Config/DefaultEngine.ini + docs.)
+
+## 2026-06-26 — ✅ M18.3 In-game pause overlay (ESC)
+
+ESC now brings up a pause overlay over the live encounter.
+- **`UPauseMenuWidget`** (`Core/PauseMenuWidget.{h,cpp}`, C++ `WidgetTree`) — a dimming panel with
+  **RESUME / SAVE / RESTART / MAIN MENU / QUIT** and a transient *CAMPAIGN SAVED* toast. Buttons call
+  back into the owning `ABridgePlayerController`.
+- **`ABridgePlayerController`** — `EKeys::Escape` (bExecuteWhenPaused) toggles the overlay:
+  `ShowPauseMenu`/`HidePauseMenu` pause/unpause + swap input mode (UI-only ↔ game-and-UI). Actions:
+  Save → `GameInstance->SaveCampaign()` (+ toast); Restart → `RestartEncounter()`; Main Menu →
+  `OpenLevel(MainMenu)`; Quit → `QuitGame`. Guarded so it never fights the end-of-encounter screen.
+  `TogglePause` is BlueprintCallable so it's testable (PIE eats a real ESC to stop play).
+
+**Verified (PIE + OS screenshot + MCP):** driving `TogglePause` paused the game and the **PAUSED**
+overlay (5 buttons) rendered over the dimmed encounter; toggling again removed it and the live scene
+(ship + HUD, HULL 74%) resumed. (Commit: Core/PauseMenuWidget.{h,cpp} + Core/BridgePlayerController.{h,cpp}
++ docs.)

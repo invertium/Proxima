@@ -4,6 +4,8 @@
 
 #include "Core/BridgeHUDWidget.h"
 #include "Core/EndScreenWidget.h"
+#include "Core/PauseMenuWidget.h"
+#include "Core/SpaceGameInstance.h"
 #include "Core/SpaceGameMode.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/PowerComponent.h"
@@ -13,6 +15,7 @@
 #include "Ships/EnemyShip.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "InputCoreTypes.h"
 
 void ABridgePlayerController::BeginPlay()
@@ -146,6 +149,9 @@ void ABridgePlayerController::SetupInputComponent()
 	// (Right is shared with Engineering — each handler early-outs off-station).
 	InputComponent->BindKey(EKeys::Right,     IE_Pressed, this, &ABridgePlayerController::WeaponCycleTarget);
 	InputComponent->BindKey(EKeys::SpaceBar,  IE_Pressed, this, &ABridgePlayerController::WeaponFire);
+
+	// Escape toggles the pause overlay (M18). bExecuteWhenPaused so it can also un-pause.
+	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ABridgePlayerController::TogglePause).bExecuteWhenPaused = true;
 }
 
 UShipMovementComponent* ABridgePlayerController::GetShipMovement() const
@@ -336,4 +342,81 @@ void ABridgePlayerController::ShowEndScreen(const FText& Title, const FText& Sub
 	bShowMouseCursor = true;
 	SetInputMode(FInputModeUIOnly());
 	UGameplayStatics::SetGamePaused(this, true);
+}
+
+// --- Pause overlay (ESC, M18) ---
+
+void ABridgePlayerController::TogglePause()
+{
+	// Don't let the pause overlay fight the end-of-encounter screen.
+	if (EndScreen) { return; }
+	if (bPaused) { HidePauseMenu(); } else { ShowPauseMenu(); }
+}
+
+void ABridgePlayerController::ShowPauseMenu()
+{
+	if (!PauseMenu)
+	{
+		PauseMenu = CreateWidget<UPauseMenuWidget>(this, UPauseMenuWidget::StaticClass());
+	}
+	if (PauseMenu && !PauseMenu->IsInViewport())
+	{
+		PauseMenu->AddToViewport(120); // above the bridge HUD
+	}
+	bPaused = true;
+	bShowMouseCursor = true;
+	SetInputMode(FInputModeUIOnly());
+	UGameplayStatics::SetGamePaused(this, true);
+}
+
+void ABridgePlayerController::HidePauseMenu()
+{
+	if (PauseMenu)
+	{
+		PauseMenu->RemoveFromParent();
+		PauseMenu = nullptr; // rebuilt fresh next time (clears any toast)
+	}
+	bPaused = false;
+	UGameplayStatics::SetGamePaused(this, false);
+	// Restore the bridge's game-and-UI input (consoles stay clickable + key binds live).
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InputMode);
+}
+
+void ABridgePlayerController::PauseResume()
+{
+	HidePauseMenu();
+}
+
+void ABridgePlayerController::PauseSave()
+{
+	if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>())
+	{
+		if (GI->SaveCampaign() && PauseMenu)
+		{
+			PauseMenu->ShowSavedToast();
+		}
+	}
+}
+
+void ABridgePlayerController::PauseRestart()
+{
+	UGameplayStatics::SetGamePaused(this, false);
+	if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
+	{
+		GM->RestartEncounter();
+	}
+}
+
+void ABridgePlayerController::PauseMainMenu()
+{
+	UGameplayStatics::SetGamePaused(this, false);
+	UGameplayStatics::OpenLevel(this, FName(TEXT("MainMenu")));
+}
+
+void ABridgePlayerController::PauseQuit()
+{
+	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
 }
