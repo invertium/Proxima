@@ -532,3 +532,20 @@ The backbone for the menu's Continue and the pause menu's Save.
 `SaveCampaign` (true) → `ResetCampaign` (back to 0/Interceptor) → `LoadCampaign` restored **mission 2 /
 Cruiser** off disk; `AdvanceMission` clamped at the last index (2). (Commit: Core/SpaceGameInstance.{h,cpp}
 + Core/SpaceSaveGame.h + Core/StationTypes.h + Config/DefaultEngine.ini + docs.)
+
+## 2026-06-26 — ✅ M18.2 Main Menu map + front-end
+
+A proper front door on the host viewscreen.
+- **`UMainMenuWidget`** (`Core/MainMenuWidget.{h,cpp}`) — built entirely in C++ via `WidgetTree`
+  (no WBP): title + **NEW GAME / CONTINUE / QUIT**. New Game `ResetCampaign()`s and opens the
+  encounter; Continue `LoadCampaign()`s and resumes (button **greyed when `!HasSave()`**); Quit exits.
+- **`AMenuGameMode` + `AMenuPlayerController`** (`Core/`) — the controller builds the menu, adds it to
+  the viewport, and switches to UI-only input with the cursor shown; no pawn is spawned.
+- **`MainMenu` map** (`Content/Maps/MainMenu.umap`, created via MCP) with its World Settings GameMode
+  override = `AMenuGameMode`; set as `EditorStartupMap` + `GameDefaultMap` in `DefaultEngine.ini`.
+
+**Verified (PIE + OS screenshot + MCP):** the menu renders (SPACEGAME / BRIDGE SIMULATOR + 3 buttons);
+**Continue is bright with a save present and greys out after deleting the save** (HasSave gating both
+ways); simulating New Game (`OpenLevel`) transitioned MainMenu → `VSlice_Arena` with `Spaceship_0`
+possessed and unpaused. (Commit: Core/{MainMenuWidget,MenuGameMode,MenuPlayerController}.{h,cpp} +
+Content/Maps/MainMenu.umap + Config/DefaultEngine.ini + docs.)
