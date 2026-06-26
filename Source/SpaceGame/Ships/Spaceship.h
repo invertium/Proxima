@@ -14,6 +14,7 @@ class UShipMovementComponent;
 class UPowerComponent;
 class UWeaponComponent;
 class UTorpedoLauncherComponent;
+class UScienceComponent;
 class UHealthComponent;
 class UAudioComponent;
 class USoundBase;
@@ -46,6 +47,10 @@ public:
 	/** Limited-ammo torpedo tube (shares the beam's target); Weapons console fires it. */
 	UFUNCTION(BlueprintPure, Category = "Ship")
 	UTorpedoLauncherComponent* GetTorpedoComp() const { return TorpedoComp; }
+
+	/** Science sensors: scans enemy contacts to reveal their hull/shield. */
+	UFUNCTION(BlueprintPure, Category = "Ship")
+	UScienceComponent* GetScienceComp() const { return ScienceComp; }
 
 	/** Hull + shield-power mitigation; enemy beams damage this, 0 hull = defeat. */
 	UFUNCTION(BlueprintPure, Category = "Ship")
@@ -92,6 +97,10 @@ protected:
 	/** Limited-ammo torpedo launcher (M17); shares the beam weapon's locked target. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
 	TObjectPtr<UTorpedoLauncherComponent> TorpedoComp;
+
+	/** Science sensors (M17): scans enemy contacts to reveal hull/shield. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
+	TObjectPtr<UScienceComponent> ScienceComp;
 
 	/** Hull + shield-power mitigation (D11); 0 hull triggers the defeat screen. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")

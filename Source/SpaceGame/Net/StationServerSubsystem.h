@@ -48,6 +48,8 @@ private:
 	bool HandlePower(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	// Damage-control repair (timing-sweep minigame); rate-limited so it can't be spammed to full.
 	bool HandleEngineering(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	// Science: cycle scan target + run a scan that reveals the contact's hull/shield.
+	bool HandleScience(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	// New Game / Restart — reloads the encounter.
 	bool HandleGame(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 

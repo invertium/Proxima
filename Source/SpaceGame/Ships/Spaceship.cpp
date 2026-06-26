@@ -7,6 +7,7 @@
 #include "Components/HealthComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/ShipMovementComponent.h"
+#include "Components/ScienceComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
@@ -64,6 +65,9 @@ ASpaceship::ASpaceship()
 
 	// Limited-ammo torpedo launcher (M17); shares the beam's locked target.
 	TorpedoComp = CreateDefaultSubobject<UTorpedoLauncherComponent>(TEXT("TorpedoComp"));
+
+	// Science sensors (M17): scans enemy contacts to reveal hull/shield.
+	ScienceComp = CreateDefaultSubobject<UScienceComponent>(TEXT("ScienceComp"));
 
 	// Hull + shield-power mitigation (M11). The player's "shields" are the engineering
 	// Shields-power mitigation (D11), so the absorb pool is zero — damage hits hull,

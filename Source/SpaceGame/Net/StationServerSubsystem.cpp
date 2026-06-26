@@ -5,6 +5,7 @@
 #include "Components/HealthComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/RadarContactComponent.h"
+#include "Components/ScienceComponent.h"
 #include "Components/ShipMovementComponent.h"
 #include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
@@ -43,7 +44,7 @@ namespace
    text-decoration:none;color:#eaf4ff;font-size:1.5rem;letter-spacing:1px;
    background:#101a2c;border:1px solid #20406a}
  a.s:active{background:#16263f}
- .h{border-color:#2a6}.w{border-color:#a33}.e{border-color:#a82}
+ .h{border-color:#2a6}.w{border-color:#a33}.e{border-color:#a82}.sc{border-color:#37c}
  .ctl{display:flex;gap:12px;max-width:480px;margin:26px auto 0}
  .ctl button{flex:1;font:inherit;color:#eaf4ff;background:#101a2c;border:1px solid #2b4c78;
    border-radius:12px;padding:18px;font-size:1.05rem;letter-spacing:1px}
@@ -54,6 +55,7 @@ namespace
 <a class="s h" href="/helm">HELM</a>
 <a class="s w" href="/weapons">WEAPONS</a>
 <a class="s e" href="/engineering">ENGINEERING</a>
+<a class="s sc" href="/science">SCIENCE</a>
 <div class="ctl">
 <button onclick="if(confirm('Start a new game for everyone?'))game('new')">NEW GAME</button>
 <button onclick="if(confirm('Restart the encounter for everyone?'))game('restart')">RESTART</button>
@@ -261,6 +263,48 @@ setInterval(poll,250);poll();
 		return MakePage(TEXT("ENGINEERING"), TEXT("#a82"), Body, Script);
 	}
 
+	FString SciencePage()
+	{
+		// Cycle to a contact, run a timed scan, then read its hull/shield live off the target.
+		const FString Body = TEXT(
+			"<div class='stat'><b>CONTACT</b><span id='tgt' class='big'>none</span></div>"
+			"<label>SCAN</label>"
+			"<div style='height:18px;background:#0b1220;border:1px solid #15243a;border-radius:6px;overflow:hidden'>"
+			"<div id='scan' style='height:100%;width:0%;background:#37c;transition:width .15s'></div></div>"
+			"<div class='stat'><b>STATUS</b><span id='st'>—</span></div>"
+			"<button onclick=\"post('/api/science?action=cycle')\">CYCLE TARGET</button>"
+			"<button id='scanbtn' onclick=\"post('/api/science?action=scan')\">SCAN</button>"
+			"<div id='readout' style='margin-top:8px;opacity:.4'>"
+			"<label>HULL</label>"
+			"<div style='height:20px;background:#0b1220;border:1px solid #15243a;border-radius:6px;overflow:hidden'>"
+			"<div id='hbar' style='height:100%;width:0%;background:#43ff7a;transition:width .2s'></div></div>"
+			"<div class='stat'><b>HULL</b><span id='h'>—</span></div>"
+			"<label>SHIELD</label>"
+			"<div style='height:20px;background:#0b1220;border:1px solid #15243a;border-radius:6px;overflow:hidden'>"
+			"<div id='sbar' style='height:100%;width:0%;background:#37c;transition:width .2s'></div></div>"
+			"<div class='stat'><b>SHIELD</b><span id='sh'>—</span></div>"
+			"</div>");
+		const FString Script = TEXT(
+			"function render(s){$('#tgt').textContent=s.sciTarget;"
+			"$('#scan').style.width=Math.round(s.sciProgress*100)+'%';"
+			"const sb=$('#scanbtn');"
+			"if(s.sciTarget==='none'){$('#st').textContent='no contact';sb.textContent='SCAN';sb.className='blk';}"
+			"else if(s.sciScanned){$('#st').textContent='SCAN COMPLETE';sb.textContent='SCANNED';sb.className='blk';}"
+			"else if(s.sciScanning){$('#st').textContent='scanning '+Math.round(s.sciProgress*100)+'%';sb.textContent='SCANNING…';sb.className='blk';}"
+			"else{$('#st').textContent='ready to scan';sb.textContent='◎ SCAN';sb.className='rdy';}"
+			"const r=$('#readout');"
+			"if(s.sciScanned&&s.sciHull>=0){r.style.opacity='1';"
+			"const hf=s.sciMaxHull>0?s.sciHull/s.sciMaxHull:0;"
+			"$('#hbar').style.width=Math.round(hf*100)+'%';"
+			"$('#h').textContent=Math.round(s.sciHull)+' / '+Math.round(s.sciMaxHull);"
+			"const sf=s.sciMaxShield>0?s.sciShield/s.sciMaxShield:0;"
+			"$('#sbar').style.width=Math.round(sf*100)+'%';"
+			"$('#sh').textContent=Math.round(s.sciShield)+' / '+Math.round(s.sciMaxShield);}"
+			"else{r.style.opacity='.4';$('#hbar').style.width='0%';$('#sbar').style.width='0%';"
+			"$('#h').textContent='—';$('#sh').textContent='—';}}");
+		return MakePage(TEXT("SCIENCE"), TEXT("#37c"), Body, Script);
+	}
+
 	// Build a response with the given body + content type.
 	TUniquePtr<FHttpServerResponse> MakeResponse(const FString& Body, const FString& ContentType)
 	{
@@ -335,6 +379,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	BindStation(TEXT("/helm"), 0);
 	BindStation(TEXT("/weapons"), 1);
 	BindStation(TEXT("/engineering"), 2);
+	BindStation(TEXT("/science"), 3);
 	// Command endpoints are GET (with query params): UE's HTTP server rejects POSTs that
 	// lack a Content-Length header, which empty browser fetch() POSTs don't reliably send.
 	// These are simple idempotent-ish console commands on a LAN, so GET is fine.
@@ -343,6 +388,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/weapons"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWeapons);
 	Bind(TEXT("/api/power"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandlePower);
 	Bind(TEXT("/api/engineering"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleEngineering);
+	Bind(TEXT("/api/science"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleScience);
 	Bind(TEXT("/api/game"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleGame);
 
 	Http.StartAllListeners();
@@ -425,6 +471,7 @@ bool UStationServerSubsystem::HandleStationPage(const FHttpServerRequest& Reques
 	{
 	case 1:  Html = WeaponsPage(); break;
 	case 2:  Html = EngineeringPage(); break;
+	case 3:  Html = SciencePage(); break;
 	default: Html = HelmPage(); break;
 	}
 	OnComplete(MakeResponse(Html, TEXT("text/html; charset=utf-8")));
@@ -437,11 +484,15 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	const UShipMovementComponent* Move = Ship ? Ship->GetMovementComp() : nullptr;
 	const UWeaponComponent* Weap = Ship ? Ship->GetWeaponComp() : nullptr;
 	const UTorpedoLauncherComponent* Torp = Ship ? Ship->GetTorpedoComp() : nullptr;
+	const UScienceComponent* Sci = Ship ? Ship->GetScienceComp() : nullptr;
 	const UPowerComponent* Power = Ship ? Ship->GetPowerComp() : nullptr;
 	const UHealthComponent* Health = Ship ? Ship->GetHealthComp() : nullptr;
 
 	const AActor* Target = Weap ? Weap->GetCurrentTarget() : nullptr;
 	const FString TargetName = Target ? Target->GetName() : TEXT("none");
+
+	const AActor* SciTarget = Sci ? Sci->GetScanTarget() : nullptr;
+	const FString SciTargetName = SciTarget ? SciTarget->GetName() : TEXT("none");
 
 	auto P = [Power](EShipSystem Sys) { return Power ? Power->GetSystemPower(Sys) : 0.f; };
 
@@ -485,6 +536,8 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"power\":[%.3f,%.3f,%.3f],\"reactorLoad\":%.3f,\"reactorBudget\":%.3f,"
 		"\"hull\":%.1f,\"maxHull\":%.1f,"
 		"\"ammo\":%d,\"maxAmmo\":%d,\"torpedoReady\":%s,\"torpedoReload\":%.3f,"
+		"\"sciTarget\":\"%s\",\"sciProgress\":%.3f,\"sciScanning\":%s,\"sciScanned\":%s,"
+		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -503,6 +556,14 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Torp ? Torp->GetMaxAmmo() : 0,
 		(Torp && Torp->IsReady()) ? TEXT("true") : TEXT("false"),
 		Torp ? Torp->GetReloadFraction() : 1.f,
+		*SciTargetName,
+		Sci ? Sci->GetScanProgress() : 0.f,
+		(Sci && Sci->IsScanning()) ? TEXT("true") : TEXT("false"),
+		(Sci && Sci->IsScanned()) ? TEXT("true") : TEXT("false"),
+		Sci ? Sci->GetTargetHull() : -1.f,
+		Sci ? Sci->GetTargetMaxHull() : -1.f,
+		Sci ? Sci->GetTargetShield() : -1.f,
+		Sci ? Sci->GetTargetMaxShield() : -1.f,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
@@ -567,6 +628,27 @@ bool UStationServerSubsystem::HandlePower(const FHttpServerRequest& Request, con
 			if (Request.QueryParams.Contains(TEXT("system")))
 			{
 				Power->AdjustSystemPower((EShipSystem)Sys, QueryFloat(Request, TEXT("delta"), 0.f));
+			}
+		}
+	}
+	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleScience(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	if (ASpaceship* Ship = GetShip())
+	{
+		if (UScienceComponent* Sci = Ship->GetScienceComp())
+		{
+			const FString* Action = Request.QueryParams.Find(TEXT("action"));
+			if (Action && *Action == TEXT("cycle"))
+			{
+				Sci->CycleTarget();
+			}
+			else if (Action && *Action == TEXT("scan"))
+			{
+				Sci->BeginScan();
 			}
 		}
 	}
