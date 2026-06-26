@@ -27,10 +27,20 @@ protected:
 private:
 	void BuildUI();
 
-	UFUNCTION() void OnNewGame();
+	UFUNCTION() void OnNewGame();   // -> ship select
 	UFUNCTION() void OnContinue();
 	UFUNCTION() void OnQuit();
 
+	// Ship select (shown after New Game).
+	UFUNCTION() void OnPickInterceptor();
+	UFUNCTION() void OnPickCruiser();
+	UFUNCTION() void OnBack();
+
+	/** Start a fresh campaign with the chosen ship. */
+	void StartCampaign();
+
+	UPROPERTY() TObjectPtr<class UBorder> Root;
+	UPROPERTY() TObjectPtr<class UWidget> MainPanel;
 	UPROPERTY() TObjectPtr<UButton> ContinueButton;
 	UPROPERTY() TObjectPtr<UTextBlock> ContinueLabel;
 };

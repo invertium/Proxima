@@ -14,23 +14,16 @@
 #include "Kismet/KismetSystemLibrary.h"
 
 using MenuUI::MakeText;
-using MenuUI::MakeFlatButton;
 
 namespace
 {
 	// Encounter map opened by New Game / Continue.
 	const TCHAR* const EncounterMap = TEXT("VSlice_Arena");
 
-	// Add a menu button to the box with standard padding + binding handled by the caller.
+	// Menu buttons use a slightly larger vertical padding than the in-game overlays.
 	UButton* AddMenuButton(UWidgetTree* Tree, UVerticalBox* Box, const FString& Label)
 	{
-		UButton* B = MakeFlatButton(Tree, Label);
-		if (UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(B))
-		{
-			Slot->SetPadding(FMargin(0.f, 8.f));
-			Slot->SetHorizontalAlignment(HAlign_Fill);
-		}
-		return B;
+		return MenuUI::AddFlatButton(Tree, Box, Label, 8.f);
 	}
 }
 
@@ -45,13 +38,14 @@ TSharedRef<SWidget> UMainMenuWidget::RebuildWidget()
 
 void UMainMenuWidget::BuildUI()
 {
-	UBorder* Root = WidgetTree->ConstructWidget<UBorder>();
+	Root = WidgetTree->ConstructWidget<UBorder>();
 	Root->SetBrushColor(FLinearColor(0.02f, 0.03f, 0.06f, 1.f));
 	Root->SetHorizontalAlignment(HAlign_Center);
 	Root->SetVerticalAlignment(VAlign_Center);
 	WidgetTree->RootWidget = Root;
 
 	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
+	MainPanel = Box;
 	Root->SetContent(Box);
 
 	Box->AddChildToVerticalBox(MakeText(WidgetTree, FText::FromString(TEXT("S P A C E G A M E")), 52,
@@ -92,6 +86,51 @@ void UMainMenuWidget::NativeConstruct()
 }
 
 void UMainMenuWidget::OnNewGame()
+{
+	// Swap the menu to a ship-select panel; picking a ship starts the campaign.
+	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
+
+	if (UVerticalBoxSlot* S = Box->AddChildToVerticalBox(
+		MakeText(WidgetTree, FText::FromString(TEXT("SELECT YOUR SHIP")), 36, FLinearColor(0.6f, 0.85f, 1.f, 1.f))))
+	{
+		S->SetPadding(FMargin(0.f, 0.f, 0.f, 24.f));
+		S->SetHorizontalAlignment(HAlign_Center);
+	}
+
+	AddMenuButton(WidgetTree, Box, TEXT("INTERCEPTOR  —  fast, agile, light hull"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnPickInterceptor);
+	AddMenuButton(WidgetTree, Box, TEXT("CRUISER  —  slow, tough, hits hard"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnPickCruiser);
+	AddMenuButton(WidgetTree, Box, TEXT("BACK"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnBack);
+
+	if (Root) { Root->SetContent(Box); }
+}
+
+void UMainMenuWidget::OnPickInterceptor()
+{
+	if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>())
+	{
+		GI->SetPlayerShip(EPlayerShipType::Interceptor);
+	}
+	StartCampaign();
+}
+
+void UMainMenuWidget::OnPickCruiser()
+{
+	if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>())
+	{
+		GI->SetPlayerShip(EPlayerShipType::Cruiser);
+	}
+	StartCampaign();
+}
+
+void UMainMenuWidget::OnBack()
+{
+	if (Root && MainPanel) { Root->SetContent(MainPanel); }
+}
+
+void UMainMenuWidget::StartCampaign()
 {
 	if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>())
 	{

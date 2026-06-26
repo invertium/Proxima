@@ -64,6 +64,10 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 
+	/** Apply the campaign's chosen ship variant (from the game instance): mesh/scale + movement,
+	 *  health and weapon stat trade-offs. Interceptor = fast/agile/light; Cruiser = slow/tanky. */
+	void ApplyShipPreset();
+
 	/** Bound to HealthComp->OnDamaged: convert a hit into camera trauma. */
 	UFUNCTION()
 	void HandleDamaged(float EffectiveDamage, float HullRemaining);

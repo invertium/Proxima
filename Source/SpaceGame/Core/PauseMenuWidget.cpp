@@ -12,21 +12,7 @@
 #include "Core/MenuUI.h"
 
 using MenuUI::MakeText;
-using MenuUI::MakeFlatButton;
-
-namespace
-{
-	UButton* AddButton(UWidgetTree* Tree, UVerticalBox* Box, const FString& Label)
-	{
-		UButton* B = MakeFlatButton(Tree, Label);
-		if (UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(B))
-		{
-			Slot->SetPadding(FMargin(0.f, 6.f));
-			Slot->SetHorizontalAlignment(HAlign_Fill);
-		}
-		return B;
-	}
-}
+using MenuUI::AddFlatButton;
 
 TSharedRef<SWidget> UPauseMenuWidget::RebuildWidget()
 {
@@ -55,11 +41,11 @@ void UPauseMenuWidget::BuildUI()
 		S->SetHorizontalAlignment(HAlign_Center);
 	}
 
-	AddButton(WidgetTree, Box, TEXT("RESUME"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnResume);
-	AddButton(WidgetTree, Box, TEXT("SAVE"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnSave);
-	AddButton(WidgetTree, Box, TEXT("RESTART"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnRestart);
-	AddButton(WidgetTree, Box, TEXT("MAIN MENU"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnMainMenu);
-	AddButton(WidgetTree, Box, TEXT("QUIT"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnQuit);
+	AddFlatButton(WidgetTree, Box, TEXT("RESUME"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnResume);
+	AddFlatButton(WidgetTree, Box, TEXT("SAVE"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnSave);
+	AddFlatButton(WidgetTree, Box, TEXT("RESTART"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnRestart);
+	AddFlatButton(WidgetTree, Box, TEXT("MAIN MENU"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnMainMenu);
+	AddFlatButton(WidgetTree, Box, TEXT("QUIT"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnQuit);
 
 	Toast = MakeText(WidgetTree, FText::GetEmpty(), 16, FLinearColor(0.4f, 1.f, 0.55f, 1.f));
 	if (UVerticalBoxSlot* TS = Box->AddChildToVerticalBox(Toast))

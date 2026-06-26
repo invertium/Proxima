@@ -12,21 +12,7 @@
 #include "Core/MenuUI.h"
 
 using MenuUI::MakeText;
-using MenuUI::MakeFlatButton;
-
-namespace
-{
-	UButton* AddButton(UWidgetTree* Tree, UVerticalBox* Box, const FString& Label)
-	{
-		UButton* B = MakeFlatButton(Tree, Label);
-		if (UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(B))
-		{
-			Slot->SetPadding(FMargin(0.f, 6.f));
-			Slot->SetHorizontalAlignment(HAlign_Fill);
-		}
-		return B;
-	}
-}
+using MenuUI::AddFlatButton;
 
 void UOutcomeMenuWidget::Setup(const FText& Title, FLinearColor TitleColor, const FText& Subtitle,
 	const FString& PrimaryLabel, const FString& SecondaryLabel)
@@ -71,11 +57,11 @@ void UOutcomeMenuWidget::BuildUI()
 
 	if (!CfgPrimary.IsEmpty())
 	{
-		AddButton(WidgetTree, Box, CfgPrimary)->OnClicked.AddDynamic(this, &UOutcomeMenuWidget::OnPrimary);
+		AddFlatButton(WidgetTree, Box, CfgPrimary)->OnClicked.AddDynamic(this, &UOutcomeMenuWidget::OnPrimary);
 	}
 	if (!CfgSecondary.IsEmpty())
 	{
-		AddButton(WidgetTree, Box, CfgSecondary)->OnClicked.AddDynamic(this, &UOutcomeMenuWidget::OnSecondary);
+		AddFlatButton(WidgetTree, Box, CfgSecondary)->OnClicked.AddDynamic(this, &UOutcomeMenuWidget::OnSecondary);
 	}
 }
 

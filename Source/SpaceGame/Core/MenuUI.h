@@ -10,6 +10,8 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 
 namespace MenuUI
 {
@@ -31,6 +33,18 @@ namespace MenuUI
 		UButton* B = Tree->ConstructWidget<UButton>();
 		B->SetBackgroundColor(FLinearColor(0.06f, 0.10f, 0.17f, 1.f));
 		B->AddChild(MakeText(Tree, FText::FromString(Label), 20, FLinearColor(0.92f, 0.96f, 1.f, 1.f)));
+		return B;
+	}
+
+	/** Add a full-width flat button to a vertical box with vertical padding PadY. */
+	inline UButton* AddFlatButton(UWidgetTree* Tree, UVerticalBox* Box, const FString& Label, float PadY = 6.f)
+	{
+		UButton* B = MakeFlatButton(Tree, Label);
+		if (UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(B))
+		{
+			Slot->SetPadding(FMargin(0.f, PadY));
+			Slot->SetHorizontalAlignment(HAlign_Fill);
+		}
 		return B;
 	}
 }

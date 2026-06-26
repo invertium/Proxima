@@ -11,6 +11,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
+#include "Core/SpaceGameInstance.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
@@ -104,6 +106,10 @@ ASpaceship::ASpaceship()
 
 void ASpaceship::BeginPlay()
 {
+	// Apply the campaign's chosen variant before Super, so the components init their pools/ammo
+	// from the variant's Max values (Health Hull, Torpedo ammo).
+	ApplyShipPreset();
+
 	Super::BeginPlay();
 
 	// Hits add camera trauma (M14 game-feel).
@@ -114,6 +120,51 @@ void ASpaceship::BeginPlay()
 
 	UE_LOG(LogTemp, Log, TEXT("ASpaceship spawned: %s at %s"),
 		*GetName(), *GetActorLocation().ToString());
+}
+
+void ASpaceship::ApplyShipPreset()
+{
+	EPlayerShipType Type = EPlayerShipType::Interceptor;
+	if (const USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>())
+	{
+		Type = GI->GetPlayerShip();
+	}
+
+	const TCHAR* MatPath = TEXT("/Game/Art/Materials/M_Insurgent.M_Insurgent");
+	float Scale = 0.6f;
+
+	if (Type == EPlayerShipType::Cruiser)
+	{
+		// Heavy: slower + less agile, but a much tougher hull and harder-hitting weapons.
+		MatPath = TEXT("/Game/Art/Materials/M_PlayerHull.M_PlayerHull");
+		Scale = 0.95f;
+		if (MovementComp) { MovementComp->MaxSpeed = 1300.f; MovementComp->Acceleration = 900.f; MovementComp->MaxTurnRate = 42.f; }
+		if (HealthComp)   { HealthComp->MaxHull = 160.f; }
+		if (WeaponComp)   { WeaponComp->BeamDamage = 34.f; WeaponComp->BaseRechargeRate = 0.3f; }
+		if (TorpedoComp)  { TorpedoComp->MaxAmmo = 6; }
+	}
+	else
+	{
+		// Interceptor: fast + agile, lighter hull, quicker (lighter) beam.
+		Scale = 0.6f;
+		if (MovementComp) { MovementComp->MaxSpeed = 2100.f; MovementComp->Acceleration = 1500.f; MovementComp->MaxTurnRate = 75.f; }
+		if (HealthComp)   { HealthComp->MaxHull = 80.f; }
+		if (WeaponComp)   { WeaponComp->BeamDamage = 20.f; WeaponComp->BaseRechargeRate = 0.55f; }
+		if (TorpedoComp)  { TorpedoComp->MaxAmmo = 3; }
+	}
+
+	if (ShipMesh)
+	{
+		if (UMaterialInterface* Mat = Cast<UMaterialInterface>(
+			StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, MatPath)))
+		{
+			ShipMesh->SetMaterial(0, Mat);
+		}
+		ShipMesh->SetRelativeScale3D(FVector(Scale));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Ship] Variant: %s"),
+		Type == EPlayerShipType::Cruiser ? TEXT("Cruiser") : TEXT("Interceptor"));
 }
 
 void ASpaceship::AddCameraTrauma(float Amount)

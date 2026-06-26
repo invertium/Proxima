@@ -592,3 +592,22 @@ green **SECTOR CLEARED / NEXT MISSION** overlay (player survived at 92% hull); a
 red **DEFEAT / RETRY** overlay. (Commit: Ships/EnemyShip.{h,cpp} + Components/HealthComponent.{h,cpp} +
 Core/{MissionSubsystem,OutcomeMenuWidget,MenuUI}.* + Core/BridgePlayerController.{h,cpp} + the menu
 widgets + docs.)
+
+## 2026-06-26 — ✅ M18.5 Player-ship choice
+
+The player picks a ship at New Game; it persists in the save and shapes how the ship plays.
+- **`ASpaceship::ApplyShipPreset()`** (run before `Super::BeginPlay`, so components init pools/ammo from
+  the variant) reads `EPlayerShipType` off the game instance and applies a preset: **Interceptor** =
+  fast/agile/light (MaxSpeed 2100, turn 75, hull 80, beam 20, 3 torps, scale 0.6, Insurgent skin);
+  **Cruiser** = slow/tanky/heavy-hitting (MaxSpeed 1300, turn 42, hull 160, beam 34, 6 torps, scale 0.95,
+  `M_PlayerHull` skin).
+- **Main menu ship-select** — NEW GAME now opens a **SELECT YOUR SHIP** panel (INTERCEPTOR / CRUISER /
+  BACK); the pick sets `GameInstance->PlayerShip`, resets the campaign, and opens mission 0. Shared
+  C++-UMG button helper promoted to `MenuUI::AddFlatButton` (a second unity-build collision fix).
+
+**Verified (MCP, in PIE):** with the game instance set to **Cruiser** then **Interceptor** and the arena
+reloaded, the possessed ship's live stats matched each preset exactly (Cruiser 1300/turn42/hull160/beam34/
+scale0.95; Interceptor 2100/turn75/hull80/beam20/scale0.6) — confirming the choice flows GameInstance →
+ship. The ship-select panel reuses the same WidgetTree button pattern as the four already-screenshotted
+menus. (Commit: Ships/Spaceship.{h,cpp} + Core/MainMenuWidget.{h,cpp} + Core/MenuUI.h + the refactored
+overlay widgets + docs.)
