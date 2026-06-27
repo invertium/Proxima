@@ -701,3 +701,23 @@ phaser arc); the rendered radar showed the narrow phaser wedge and wider torpedo
 bow arrow, the torpedo wedge highlighted and the target blip sitting in it but at the phaser-wedge edge.
 (Commit: Components/WeaponComponent.{h,cpp} + Components/TorpedoLauncherComponent.{h,cpp} +
 Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-06-27 — 📡 Enemy callsigns on Helm radar + Weapons target
+
+Hostiles now go by readable radio callsigns instead of raw actor names like "EnemyShip_1".
+
+- **Callsigns** — `AEnemyShip` carries a `Callsign` plus `MakeCallsign(type, ordinal)`, which draws from
+  per-archetype name pools (Scout: WASP/HORNET/SHRIKE…, Gunship: VIPER/REAPER/JACKAL…, Cruiser:
+  LEVIATHAN/TITAN/WARLORD…) suffixed by a per-type ordinal → e.g. `WASP-1`, `VIPER-1`. The mission
+  spawner assigns them (tracking a per-type count) before `FinishSpawning`; `BeginPlay` defaults any
+  unnamed ship.
+- **Surfaced on the consoles** — `/api/state` now tags each radar contact with a `label`, and the
+  beam/science target names resolve through the callsign (via a `DisplayName` helper). The Helm canvas
+  draws the callsign beside each blip in the blip's colour; the Weapons console's **TARGET** row and
+  the Science console's target show the callsign.
+
+**Verified (PIE + headless-Firefox renders):** mission 0 fielded `WASP-1` (Scout) and `VIPER-1`
+(Gunship); the Helm radar labelled both blips in matching colours, and the Weapons screen read
+`TARGET: WASP-1`. (Commit: Ships/EnemyShip.{h,cpp} + Core/MissionSubsystem.cpp + Net/StationServerSubsystem.cpp + docs.)

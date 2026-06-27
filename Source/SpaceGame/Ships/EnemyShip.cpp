@@ -59,6 +59,12 @@ void AEnemyShip::BeginPlay()
 	// Reskin/retune for the archetype (set by the mission spawner before FinishSpawning).
 	ApplyTypePreset();
 
+	// Fallback callsign for any ship the mission spawner didn't name (e.g. level-placed).
+	if (Callsign.IsEmpty())
+	{
+		Callsign = MakeCallsign(ShipType, 0);
+	}
+
 	FireCooldown = FireInterval;
 	GraceTimer = EngageDelay; // hold fire briefly so the player can get oriented at mission start
 
@@ -68,9 +74,25 @@ void AEnemyShip::BeginPlay()
 		HealthComp->OnDeath.AddDynamic(this, &AEnemyShip::HandleDeath);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s (%s) spawned at %s"), *GetName(),
+	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s \"%s\" (%s) spawned at %s"), *GetName(), *Callsign,
 		ShipType == EEnemyType::Scout ? TEXT("Scout") : ShipType == EEnemyType::Cruiser ? TEXT("Cruiser") : TEXT("Gunship"),
 		*GetActorLocation().ToString());
+}
+
+FString AEnemyShip::MakeCallsign(EEnemyType Type, int32 OrdinalOfType)
+{
+	// Flavourful per-archetype name pools; the ordinal cycles the pool and tags the suffix number so
+	// even a same-type fleet stays unambiguous on the consoles (e.g. WASP-1, HORNET-2, ...).
+	static const TArray<FString> Scouts   = { TEXT("WASP"), TEXT("HORNET"), TEXT("SHRIKE"), TEXT("RAPTOR"), TEXT("FALCON") };
+	static const TArray<FString> Gunships = { TEXT("VIPER"), TEXT("REAPER"), TEXT("JACKAL"), TEXT("MAULER"), TEXT("RAVEN") };
+	static const TArray<FString> Cruisers = { TEXT("LEVIATHAN"), TEXT("TITAN"), TEXT("WARLORD"), TEXT("BASILISK"), TEXT("GORGON") };
+
+	const TArray<FString>& Pool =
+		Type == EEnemyType::Scout   ? Scouts   :
+		Type == EEnemyType::Cruiser ? Cruisers : Gunships;
+
+	const int32 Idx = FMath::Max(0, OrdinalOfType);
+	return FString::Printf(TEXT("%s-%d"), *Pool[Idx % Pool.Num()], Idx + 1);
 }
 
 void AEnemyShip::ApplyTypePreset()

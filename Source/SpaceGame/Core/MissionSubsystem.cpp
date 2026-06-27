@@ -157,6 +157,7 @@ void UMissionSubsystem::BuildEncounter(UWorld& World)
 	for (AActor* A : Placed) { if (A) { A->Destroy(); } }
 
 	const int32 N = Mission.Enemies.Num();
+	TMap<EEnemyType, int32> TypeCounts; // per-archetype ordinal, so callsigns read WASP-1, HORNET-2, ...
 	for (int32 i = 0; i < N; ++i)
 	{
 		// Spread across ±35° and stagger the range so they don't stack.
@@ -173,7 +174,9 @@ void UMissionSubsystem::BuildEncounter(UWorld& World)
 			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 		if (Enemy)
 		{
-			Enemy->ShipType = Mission.Enemies[i];
+			const EEnemyType Type = Mission.Enemies[i];
+			Enemy->ShipType = Type;
+			Enemy->Callsign = AEnemyShip::MakeCallsign(Type, TypeCounts.FindOrAdd(Type)++);
 			UGameplayStatics::FinishSpawningActor(Enemy, Xform);
 			// Drive kill-triggered comms beats off each hostile's death.
 			if (UHealthComponent* H = Enemy->GetHealthComp())

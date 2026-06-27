@@ -58,9 +58,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Enemy")
 	UHealthComponent* GetHealthComp() const { return HealthComp; }
 
+	/** Radio callsign shown on the crew consoles (e.g. "VIPER-2"). Falls back to a type-based
+	 *  default in BeginPlay if the mission spawner didn't assign one. */
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	const FString& GetCallsign() const { return Callsign; }
+
+	/** Build a flavourful callsign for an archetype + per-type ordinal (e.g. Scout #1 -> "WASP-1"). */
+	static FString MakeCallsign(EEnemyType Type, int32 OrdinalOfType);
+
 	/** Archetype, set by the mission spawner before FinishSpawning; applied in BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
 	EEnemyType ShipType = EEnemyType::Gunship;
+
+	/** Callsign, set by the mission spawner before FinishSpawning (or defaulted in BeginPlay). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
+	FString Callsign;
 
 protected:
 	virtual void BeginPlay() override;

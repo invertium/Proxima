@@ -19,6 +19,7 @@
 #include "IPAddress.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Ships/EnemyShip.h"
 #include "Ships/Spaceship.h"
 #include "SocketSubsystem.h"
 #include "UObject/UObjectIterator.h"
@@ -189,7 +190,9 @@ setInterval(poll,250);poll();
 			"for(const k of (s.contacts||[])){const[px,py]=w2s(k.x-s.px,k.y-s.py);"
 			"x.strokeStyle=k.color||'#ff4030';x.lineWidth=1.5;"
 			"x.beginPath();x.arc(px,py,5,0,7);x.stroke();"
-			"x.beginPath();x.moveTo(px-7,py);x.lineTo(px+7,py);x.moveTo(px,py-7);x.lineTo(px,py+7);x.stroke();}"
+			"x.beginPath();x.moveTo(px-7,py);x.lineTo(px+7,py);x.moveTo(px,py-7);x.lineTo(px,py+7);x.stroke();"
+			"if(k.label){x.fillStyle=k.color||'#ff4030';x.font='11px system-ui';x.textAlign='left';"
+			"x.fillText(k.label,Math.min(px+9,W-46),Math.max(11,py+3));}}"
 			"const a=s.heading*Math.PI/180;const fx=Math.cos(a),fy=Math.sin(a);"
 			"const sfx=fy,sfy=-fx;const tx=cx+sfx*22,ty=cy+sfy*22;const perpx=-sfy,perpy=sfx;"
 			"x.strokeStyle='#33e6ff';x.lineWidth=2;"
@@ -535,11 +538,18 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	const UPowerComponent* Power = Ship ? Ship->GetPowerComp() : nullptr;
 	const UHealthComponent* Health = Ship ? Ship->GetHealthComp() : nullptr;
 
+	// Hostiles read out by radio callsign (e.g. "VIPER-2") rather than the raw actor name.
+	auto DisplayName = [](const AActor* A) -> FString
+	{
+		if (const AEnemyShip* E = Cast<AEnemyShip>(A)) { return E->GetCallsign(); }
+		return A ? A->GetName() : TEXT("none");
+	};
+
 	const AActor* Target = Weap ? Weap->GetCurrentTarget() : nullptr;
-	const FString TargetName = Target ? Target->GetName() : TEXT("none");
+	const FString TargetName = Target ? DisplayName(Target) : TEXT("none");
 
 	const AActor* SciTarget = Sci ? Sci->GetScanTarget() : nullptr;
-	const FString SciTargetName = SciTarget ? SciTarget->GetName() : TEXT("none");
+	const FString SciTargetName = SciTarget ? DisplayName(SciTarget) : TEXT("none");
 
 	auto P = [Power](EShipSystem Sys) { return Power ? Power->GetSystemPower(Sys) : 0.f; };
 
@@ -570,9 +580,10 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 			if (!A || A == Ship) { continue; }
 			const FVector L = A->GetActorLocation();
 			const FColor Col = C->BlipColor.ToFColor(true);
+			const FString Label = DisplayName(A);
 			if (!Contacts.IsEmpty()) { Contacts += TEXT(","); }
-			Contacts += FString::Printf(TEXT("{\"x\":%.1f,\"y\":%.1f,\"color\":\"#%02x%02x%02x\"}"),
-				L.X, L.Y, Col.R, Col.G, Col.B);
+			Contacts += FString::Printf(TEXT("{\"x\":%.1f,\"y\":%.1f,\"color\":\"#%02x%02x%02x\",\"label\":\"%s\"}"),
+				L.X, L.Y, Col.R, Col.G, Col.B, *Label);
 		}
 	}
 
