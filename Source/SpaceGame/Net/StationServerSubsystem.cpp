@@ -136,6 +136,9 @@ setInterval(poll,250);poll();
 		const FString Body = TEXT(
 			"<canvas id='map' width='320' height='320' "
 			"style='display:block;margin:6px auto 0;background:#070d16;border-radius:50%;border:1px solid #15243a'></canvas>"
+			"<div style='text-align:center;font-size:.8rem;letter-spacing:1px;margin-top:6px;color:#8fb8e6'>"
+			"FIRING ARCS &nbsp; <span style='color:#ff7a5a'>&#9632; PHASER</span> &nbsp; "
+			"<span style='color:#78b4ff'>&#9632; TORPEDO</span></div>"
 			"<div class='stat'><b>HEADING</b><span id='hdg' class='big'>0&deg;</span></div>"
 			"<div class='stat'><b>SPEED</b><span id='spd'>0</span></div>"
 			"<div class='stat'><b>THROTTLE</b><span id='thr'>0%</span></div>"
@@ -165,6 +168,22 @@ setInterval(poll,250);poll();
 			"for(const f of [1,.66,.33]){x.beginPath();x.arc(cx,cy,R*f,0,7);x.stroke();}"
 			"x.strokeStyle='rgba(30,80,70,.55)';x.beginPath();"
 			"x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.stroke();"
+			// Forward firing-arc wedges (helm aims by turning a target blip into a wedge). A wedge is
+			// centred on the heading; world heading p maps to screen (sin p, -cos p), matching the bow
+			// arrow below. Brighter fill when the locked target sits inside that weapon's arc.
+			"const hr=s.heading*Math.PI/180;"
+			"function wedge(halfDeg,fill,edge){const h=halfDeg*Math.PI/180;"
+			"x.beginPath();x.moveTo(cx,cy);const N=20;"
+			"for(let i=0;i<=N;i++){const p=hr-h+2*h*i/N;x.lineTo(cx+Math.sin(p)*R,cy-Math.cos(p)*R);}"
+			"x.closePath();x.fillStyle=fill;x.fill();"
+			"x.strokeStyle=edge;x.lineWidth=1.5;x.beginPath();"
+			"x.moveTo(cx+Math.sin(hr-h)*R,cy-Math.cos(hr-h)*R);x.lineTo(cx,cy);"
+			"x.lineTo(cx+Math.sin(hr+h)*R,cy-Math.cos(hr+h)*R);x.stroke();}"
+			"const dP=()=>{if(s.phaserArc>0)wedge(s.phaserArc/2,"
+			"s.inArc?'rgba(255,90,70,.32)':'rgba(255,90,70,.13)','rgba(255,120,90,.6)');};"
+			"const dT=()=>{if(s.torpedoArc>0)wedge(s.torpedoArc/2,"
+			"s.inArcTorp?'rgba(90,160,255,.30)':'rgba(90,160,255,.12)','rgba(130,185,255,.55)');};"
+			"if(s.phaserArc>=s.torpedoArc){dP();dT();}else{dT();dP();}"
 			"const w2s=(dx,dy)=>{let sx=dy*scale,sy=-dx*scale;const m=Math.hypot(sx,sy);"
 			"if(m>R){sx=sx/m*R;sy=sy/m*R;}return [cx+sx,cy+sy];};"
 			"for(const k of (s.contacts||[])){const[px,py]=w2s(k.x-s.px,k.y-s.py);"
@@ -213,7 +232,7 @@ setInterval(poll,250);poll();
 			"if(s.ammo<=0){tb.textContent='NO TORPEDOES';tb.className='blk';}"
 			"else if(s.target==='none'){tb.textContent='NO TARGET';tb.className='blk';}"
 			"else if(s.torpedoReload<1){tb.textContent='RELOADING '+Math.round(s.torpedoReload*100)+'%';tb.className='blk';}"
-			"else if(!s.inArc){tb.textContent='TURN TO TARGET';tb.className='blk';}"
+			"else if(!s.inArcTorp){tb.textContent='TURN TO TARGET';tb.className='blk';}"
 			"else{tb.textContent='◎ FIRE TORPEDO';tb.className='rdy';}}");
 		return MakePage(TEXT("WEAPONS"), TEXT("#a33"), Body, Script);
 	}
@@ -578,6 +597,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	const FString Json = FString::Printf(TEXT(
 		"{\"phase\":\"%s\",\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
 		"\"charge\":%.3f,\"target\":\"%s\",\"targetRange\":%.1f,\"inRange\":%s,\"inArc\":%s,"
+		"\"inArcTorp\":%s,\"phaserArc\":%.0f,\"torpedoArc\":%.0f,"
 		"\"power\":[%.3f,%.3f,%.3f],\"reactorLoad\":%.3f,\"reactorBudget\":%.3f,"
 		"\"hull\":%.1f,\"maxHull\":%.1f,"
 		"\"ammo\":%d,\"maxAmmo\":%d,\"torpedoReady\":%s,\"torpedoReload\":%.3f,"
@@ -594,6 +614,9 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Weap ? Weap->GetTargetRange() : -1.f,
 		(Weap && Weap->IsTargetInRange()) ? TEXT("true") : TEXT("false"),
 		(Weap && Weap->IsTargetInArc()) ? TEXT("true") : TEXT("false"),
+		(Weap && Torp && Weap->IsTargetWithinArc(Torp->FireArcDeg)) ? TEXT("true") : TEXT("false"),
+		Weap ? Weap->FireArcDeg : 0.f,
+		Torp ? Torp->FireArcDeg : 0.f,
 		P(EShipSystem::Engine), P(EShipSystem::Weapons), P(EShipSystem::Shields),
 		Power ? Power->GetTotalPower() : 0.f,
 		Power ? Power->ReactorBudget : 0.f,

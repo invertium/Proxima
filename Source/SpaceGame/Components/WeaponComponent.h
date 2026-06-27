@@ -51,10 +51,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Weapon")
 	bool IsTargetInRange() const;
 
-	/** True while the current target sits within the forward firing arc (±FireArcDeg/2 off the bow).
-	 *  Both the beam and the torpedo require this — you have to point the ship at the enemy. */
+	/** True while the current target sits within the beam's forward firing arc (±FireArcDeg/2). */
 	UFUNCTION(BlueprintPure, Category = "Ship|Weapon")
 	bool IsTargetInArc() const;
+
+	/** True while the current target sits within an arbitrary forward arc (±ArcDeg/2 off the bow).
+	 *  Lets other weapons (e.g. the torpedo) reuse the geometry with their own arc width. */
+	UFUNCTION(BlueprintPure, Category = "Ship|Weapon")
+	bool IsTargetWithinArc(float ArcDeg) const;
 
 	/** Beam reach (uu). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")

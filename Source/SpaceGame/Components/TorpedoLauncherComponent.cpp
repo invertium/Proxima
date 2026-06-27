@@ -48,7 +48,7 @@ bool UTorpedoLauncherComponent::IsReady() const
 {
 	const UWeaponComponent* Weapon = GetWeapon();
 	return Ammo > 0 && ReloadTimer <= 0.f && Weapon
-		&& Weapon->GetCurrentTarget() != nullptr && Weapon->IsTargetInArc();
+		&& Weapon->GetCurrentTarget() != nullptr && Weapon->IsTargetWithinArc(FireArcDeg);
 }
 
 float UTorpedoLauncherComponent::GetReloadFraction() const
@@ -80,9 +80,9 @@ bool UTorpedoLauncherComponent::Fire()
 		UE_LOG(LogTemp, Log, TEXT("[Torpedo] Fire blocked — no target"));
 		return false;
 	}
-	if (!Weapon->IsTargetInArc())
+	if (!Weapon->IsTargetWithinArc(FireArcDeg))
 	{
-		UE_LOG(LogTemp, Log, TEXT("[Torpedo] Fire blocked — target outside firing arc (turn to face it)"));
+		UE_LOG(LogTemp, Log, TEXT("[Torpedo] Fire blocked — target outside launch arc (turn to face it)"));
 		return false;
 	}
 

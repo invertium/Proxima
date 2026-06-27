@@ -59,6 +59,11 @@ bool UWeaponComponent::IsTargetInRange() const
 
 bool UWeaponComponent::IsTargetInArc() const
 {
+	return IsTargetWithinArc(FireArcDeg);
+}
+
+bool UWeaponComponent::IsTargetWithinArc(float ArcDeg) const
+{
 	const AActor* Owner = GetOwner();
 	if (!Owner || !CurrentTarget)
 	{
@@ -75,7 +80,7 @@ bool UWeaponComponent::IsTargetInArc() const
 		return false;
 	}
 
-	const float CosHalfArc = FMath::Cos(FMath::DegreesToRadians(FireArcDeg * 0.5f));
+	const float CosHalfArc = FMath::Cos(FMath::DegreesToRadians(ArcDeg * 0.5f));
 	return FVector::DotProduct(Forward, ToTarget) >= CosHalfArc;
 }
 

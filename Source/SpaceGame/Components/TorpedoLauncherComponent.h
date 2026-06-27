@@ -54,6 +54,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Torpedo")
 	float ReloadTime = 4.f;
 
+	/** Full forward launch-arc width in degrees. Wider than the beam's — the torpedo homes after
+	 *  launch, so the tube only needs the target roughly ahead, not pinpoint on the bow. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Torpedo")
+	float FireArcDeg = 110.f;
+
 	/** Hull damage delivered on impact (bypasses shield mitigation). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Torpedo")
 	float TorpedoDamage = 60.f;

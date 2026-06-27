@@ -677,3 +677,27 @@ Two combat-feel tweaks from playtest feedback.
 target fell inside flipped `inArc=true` and both fired (enemy shield 20→0, torpedo ammo 3→2). The arc
 field surfaced on `/api/state` and the Weapons page. (Commit: Ships/EnemyShip.{h,cpp} +
 Components/WeaponComponent.{h,cpp} + Components/TorpedoLauncherComponent.cpp + Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-06-27 — 🎯 Firing-arc indicators on the Helm radar
+
+The helm operator can now see, on the tactical map, where each weapon can shoot — so they know which
+way to fly the ship to bring a target into a firing solution.
+
+- **Separate phaser / torpedo arcs** — the torpedo got its own `FireArcDeg` (110°, wider than the
+  beam's 70°: it homes after launch, so the tube only needs the target roughly ahead). `UWeaponComponent`
+  gained `IsTargetWithinArc(ArcDeg)` (generalising the old `IsTargetInArc`), which the torpedo uses with
+  its own width for both `Fire()` and `IsReady()`.
+- **Radar wedges** — `/api/state` now reports `phaserArc`, `torpedoArc` (degrees) and `inArcTorp`
+  (alongside the existing `inArc`). The Helm canvas draws two translucent wedges centred on the heading:
+  red-edged for the phaser, blue for the torpedo, each brightening when the locked target falls inside
+  that weapon's arc. A small **FIRING ARCS** legend sits under the map. The Weapons console's torpedo
+  button now keys off `inArcTorp`.
+
+**Verified (PIE + headless-Firefox render of the Helm page):** with the target locked 35° off the bow,
+`/api/state` reported `inArc=false` but `inArcTorp=true` (inside the 110° torpedo arc, outside the 70°
+phaser arc); the rendered radar showed the narrow phaser wedge and wider torpedo wedge centred on the
+bow arrow, the torpedo wedge highlighted and the target blip sitting in it but at the phaser-wedge edge.
+(Commit: Components/WeaponComponent.{h,cpp} + Components/TorpedoLauncherComponent.{h,cpp} +
+Net/StationServerSubsystem.cpp + docs.)
