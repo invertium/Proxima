@@ -79,6 +79,20 @@ void ABridgePlayerController::BindEnemyDeaths()
 
 void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
 {
+	// Bank this kill's salvage to the campaign wallet (and tally the encounter haul for the
+	// victory screen). Done before the win check so even the last kill pays out.
+	if (const AEnemyShip* Killed = Cast<AEnemyShip>(DeadActor))
+	{
+		const int32 Cr = Killed->GetRewardCredits();
+		const int32 Xp = Killed->GetRewardXP();
+		EarnedCredits += Cr;
+		EarnedXP += Xp;
+		if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>())
+		{
+			GI->AddReward(Cr, Xp);
+		}
+	}
+
 	// Count hostiles still alive (the just-killed one reads hull 0 → not alive).
 	TArray<AActor*> Enemies;
 	UGameplayStatics::GetAllActorsOfClass(this, AEnemyShip::StaticClass(), Enemies);
@@ -128,19 +142,26 @@ void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
 			GI->SaveCampaign();
 		}
 
+		// Salvage haul + current standing, so the crew sees what to spend at the drydock (M19).
+		const int32 Rank = GI ? GI->GetRank() : 1;
+		const int32 Wallet = GI ? GI->GetCredits() : 0;
+		const FString Haul = FString::Printf(
+			TEXT("Salvage: +%d credits, +%d XP  —  %d credits banked, RANK %d."),
+			EarnedCredits, EarnedXP, Wallet, Rank);
+
 		const FLinearColor Green(0.3f, 1.0f, 0.45f, 1.0f);
 		if (bMore)
 		{
 			OutcomeKind = EOutcomeKind::VictoryNext;
 			ShowOutcome(FText::FromString(TEXT("SECTOR CLEARED")), Green,
-				FText::FromString(TEXT("Mission complete. Stand by for the next engagement.")),
+				FText::FromString(Haul),
 				TEXT("NEXT MISSION"), TEXT("MAIN MENU"));
 		}
 		else
 		{
 			OutcomeKind = EOutcomeKind::VictoryComplete;
 			ShowOutcome(FText::FromString(TEXT("CAMPAIGN COMPLETE")), Green,
-				FText::FromString(TEXT("All sectors cleared. Well done, Captain.")),
+				FText::FromString(Haul),
 				TEXT("MAIN MENU"), FString());
 		}
 	}

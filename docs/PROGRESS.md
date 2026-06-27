@@ -721,3 +721,23 @@ Hostiles now go by readable radio callsigns instead of raw actor names like "Ene
 **Verified (PIE + headless-Firefox renders):** mission 0 fielded `WASP-1` (Scout) and `VIPER-1`
 (Gunship); the Helm radar labelled both blips in matching colours, and the Weapons screen read
 `TARGET: WASP-1`. (Commit: Ships/EnemyShip.{h,cpp} + Core/MissionSubsystem.cpp + Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-06-27 — 💰 M19.1 Reward economy (credits + XP / rank)
+
+First slice of the progression loop (M19): missions now pay out, banked across the campaign.
+- **Wallet on the campaign** — `USpaceGameInstance` gained `Credits` + `XP` (mirrored in `USpaceSaveGame`),
+  with `AddReward`, `SpendCredits`, `GetCredits/GetXP`, and `GetRank()` (rank = 1 + XP/400). `ResetCampaign`
+  zeroes the wallet; `SaveCampaign`/`LoadCampaign` round-trip it.
+- **Per-kill payouts** — `AEnemyShip` carries `RewardCredits`/`RewardXP` set per archetype in
+  `ApplyTypePreset` (Scout 40/15, Gunship 80/30, Cruiser 200/80). `ABridgePlayerController::HandleEnemyDeath`
+  banks each kill to the GameInstance *before* the win/defeat guard, so even the killing blow pays out.
+- **Surfaced** — the victory outcome subtitle shows the run haul + banked total + rank; `/api/state` gains
+  `credits`/`xp`/`rank` for the consoles (the M19.3 drydock will spend them).
+
+**Verified (PIE + MCP + web):** killing WASP-1 banked 40cr/15xp, VIPER-1 banked 80cr/30xp; a clean
+double-kill reached `phase:victory` with the wallet at 240/90 and the mission advanced; a load round-trip
+restored exactly 240cr/90xp/mission 1 from disk after dirtying the live values. (Commit:
+Core/SpaceGameInstance.{h,cpp} + Core/SpaceSaveGame.h + Core/BridgePlayerController.{h,cpp} +
+Ships/EnemyShip.{h,cpp} + Net/StationServerSubsystem.cpp + docs.)

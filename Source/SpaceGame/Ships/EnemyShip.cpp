@@ -120,6 +120,7 @@ void AEnemyShip::ApplyTypePreset()
 		Blip = FLinearColor(0.3f, 0.9f, 1.0f, 1.f);
 		MoveSpeed = 1900.f; TurnRateDeg = 80.f; StandoffDistance = 4500.f;
 		EngageRange = 10000.f; FireInterval = 1.6f; EnemyBeamDamage = 5.f;
+		RewardCredits = 40; RewardXP = 15;
 		if (HealthComp) { HealthComp->MaxHull = 50.f;  HealthComp->MaxShield = 20.f; }
 		break;
 
@@ -129,6 +130,7 @@ void AEnemyShip::ApplyTypePreset()
 		Blip = FLinearColor(1.0f, 0.15f, 0.12f, 1.f);
 		MoveSpeed = 700.f; TurnRateDeg = 32.f; StandoffDistance = 7500.f;
 		EngageRange = 14000.f; FireInterval = 3.2f; EnemyBeamDamage = 14.f;
+		RewardCredits = 200; RewardXP = 80;
 		if (HealthComp) { HealthComp->MaxHull = 220.f; HealthComp->MaxShield = 110.f; }
 		break;
 
@@ -136,6 +138,7 @@ void AEnemyShip::ApplyTypePreset()
 	default:
 		MoveSpeed = 1100.f; TurnRateDeg = 50.f; StandoffDistance = 6000.f;
 		EngageRange = 12000.f; FireInterval = 2.5f; EnemyBeamDamage = 8.f;
+		RewardCredits = 80; RewardXP = 30;
 		if (HealthComp) { HealthComp->MaxHull = 100.f; HealthComp->MaxShield = 50.f; }
 		break;
 	}

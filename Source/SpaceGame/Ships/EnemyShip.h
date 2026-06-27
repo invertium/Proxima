@@ -66,6 +66,14 @@ public:
 	/** Build a flavourful callsign for an archetype + per-type ordinal (e.g. Scout #1 -> "WASP-1"). */
 	static FString MakeCallsign(EEnemyType Type, int32 OrdinalOfType);
 
+	/** Salvage paid to the campaign wallet when this ship is destroyed (set per type in BeginPlay). */
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	int32 GetRewardCredits() const { return RewardCredits; }
+
+	/** XP awarded for the kill (drives the campaign Rank; set per type in BeginPlay). */
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	int32 GetRewardXP() const { return RewardXP; }
+
 	/** Archetype, set by the mission spawner before FinishSpawning; applied in BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
 	EEnemyType ShipType = EEnemyType::Gunship;
@@ -125,6 +133,13 @@ protected:
 	/** Raw damage per shot to the player (before the player's shield-power mitigation). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
 	float EnemyBeamDamage = 8.f;
+
+	/** Salvage credits + XP this kill is worth (set per archetype in ApplyTypePreset). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Reward")
+	int32 RewardCredits = 80;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Reward")
+	int32 RewardXP = 30;
 
 	/** Emissive material for the enemy's beam + death explosion (M13 FX). */
 	UPROPERTY()

@@ -604,6 +604,9 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		}
 	}
 
+	// Campaign wallet (M19 progression) — credits/xp/rank, so any console can show standing.
+	const USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr;
+
 	// Hand-built JSON (avoids pulling in the Json module for this flat object).
 	const FString Json = FString::Printf(TEXT(
 		"{\"phase\":\"%s\",\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
@@ -615,6 +618,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciTarget\":\"%s\",\"sciProgress\":%.3f,\"sciScanning\":%s,\"sciScanned\":%s,"
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
+		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -646,6 +650,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Sci ? Sci->GetTargetShield() : -1.f,
 		Sci ? Sci->GetTargetMaxShield() : -1.f,
 		*MissionName, *Comms,
+		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));

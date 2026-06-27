@@ -56,12 +56,43 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Campaign")
 	static int32 GetMissionCount();
 
+	// --- Progression economy (M19): salvage credits + XP-driven rank ---
+
+	/** Spendable salvage credits banked across the campaign. */
+	UFUNCTION(BlueprintPure, Category = "Campaign|Economy")
+	int32 GetCredits() const { return Credits; }
+
+	/** Lifetime XP earned (drives GetRank). */
+	UFUNCTION(BlueprintPure, Category = "Campaign|Economy")
+	int32 GetXP() const { return XP; }
+
+	/** Crew rank derived from XP (1-based; every XpPerRank XP is one rank). Gates upgrade tiers. */
+	UFUNCTION(BlueprintPure, Category = "Campaign|Economy")
+	int32 GetRank() const { return 1 + XP / XpPerRank; }
+
+	/** Bank a kill/mission reward (credits + XP). */
+	UFUNCTION(BlueprintCallable, Category = "Campaign|Economy")
+	void AddReward(int32 InCredits, int32 InXP);
+
+	/** Try to spend credits (returns false if too few; deducts on success). */
+	UFUNCTION(BlueprintCallable, Category = "Campaign|Economy")
+	bool SpendCredits(int32 Amount);
+
 private:
 	UPROPERTY()
 	int32 MissionIndex = 0;
 
 	UPROPERTY()
 	EPlayerShipType PlayerShip = EPlayerShipType::Interceptor;
+
+	UPROPERTY()
+	int32 Credits = 0;
+
+	UPROPERTY()
+	int32 XP = 0;
+
+	/** XP needed per rank step (rank = 1 + XP/XpPerRank). */
+	static constexpr int32 XpPerRank = 400;
 
 	static const TCHAR* SlotName() { return TEXT("campaign"); }
 };

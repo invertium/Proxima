@@ -26,4 +26,12 @@ public:
 	/** Ship the campaign is being played with. */
 	UPROPERTY(VisibleAnywhere, Category = "Campaign")
 	EPlayerShipType PlayerShip = EPlayerShipType::Interceptor;
+
+	/** Banked salvage credits (M19 progression economy). */
+	UPROPERTY(VisibleAnywhere, Category = "Campaign")
+	int32 Credits = 0;
+
+	/** Lifetime XP (drives crew rank). */
+	UPROPERTY(VisibleAnywhere, Category = "Campaign")
+	int32 XP = 0;
 };

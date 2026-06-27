@@ -132,6 +132,10 @@ private:
 
 	EOutcomeKind OutcomeKind = EOutcomeKind::Defeat;
 
+	/** Salvage banked this encounter (per-kill), shown on the victory screen (M19). */
+	int32 EarnedCredits = 0;
+	int32 EarnedXP = 0;
+
 	UPROPERTY()
 	TObjectPtr<UPauseMenuWidget> PauseMenu;
 
