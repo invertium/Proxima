@@ -89,6 +89,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Campaign|Upgrades")
 	bool BuyUpgrade(FName UpgradeId);
 
+	// --- Hangar / ship roster (M19.4) ---
+
+	/** True if the ship type is available to fly (starters are always owned; others must be bought). */
+	UFUNCTION(BlueprintPure, Category = "Campaign|Hangar")
+	bool OwnsShip(EPlayerShipType Ship) const;
+
+	/** Buy an unowned, non-starter ship (checks rank + credits); deducts + persists. */
+	UFUNCTION(BlueprintCallable, Category = "Campaign|Hangar")
+	bool BuyShip(EPlayerShipType Ship);
+
+	/** Switch the active ship to an owned hull; persists. Returns true on success. */
+	UFUNCTION(BlueprintCallable, Category = "Campaign|Hangar")
+	bool SelectShip(EPlayerShipType Ship);
+
 private:
 	UPROPERTY()
 	int32 MissionIndex = 0;
@@ -105,6 +119,10 @@ private:
 	/** Owned upgrade tiers keyed by catalogue id (absent = tier 0). */
 	UPROPERTY()
 	TMap<FName, int32> UpgradeTiers;
+
+	/** Bought non-starter ships (starters are implicitly owned via the catalogue's Cost==0). */
+	UPROPERTY()
+	TArray<EPlayerShipType> OwnedShips;
 
 	/** XP needed per rank step (rank = 1 + XP/XpPerRank). */
 	static constexpr int32 XpPerRank = 400;

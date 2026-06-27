@@ -36,6 +36,8 @@ enum class EGamePhase : uint8
 UENUM(BlueprintType)
 enum class EPlayerShipType : uint8
 {
-	Interceptor UMETA(DisplayName = "Interceptor"), // fast, lighter hull
-	Cruiser     UMETA(DisplayName = "Cruiser")      // slower, tankier, harder-hitting
+	Interceptor UMETA(DisplayName = "Interceptor"), // fast, lighter hull (starter)
+	Cruiser     UMETA(DisplayName = "Cruiser"),     // slower, tankier, harder-hitting (starter)
+	Corvette    UMETA(DisplayName = "Corvette"),    // glass cannon: very fast, fragile (drydock buy)
+	Gunboat     UMETA(DisplayName = "Gunboat")      // heavy hull + big guns, ponderous (drydock buy)
 };

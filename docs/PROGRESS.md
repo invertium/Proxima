@@ -790,3 +790,29 @@ bug) and `BeamDamage` 28; the reactor tier round-tripped from disk; an undocked 
 untouched; the Engineering page rendered the drydock with SALVAGE 1100cr·RANK 5 and per-upgrade buy
 buttons, REACTOR LOAD reading 3.0/4.0. (Commit: Core/UpgradeCatalogue.h + Core/SpaceGameInstance.{h,cpp}
 + Core/SpaceSaveGame.h + Ships/Spaceship.{h,cpp} + Net/StationServerSubsystem.* + docs.)
+
+---
+
+## 2026-06-27 — 🚀 M19.4 Buy new ships (hangar)
+
+The drydock now sells whole ships, completing the M19 progression loop.
+- **Ship roster** (`Core/ShipCatalogue.h`, data-in-code) — `FShipDef` per hull (mesh, material, scale +
+  base stats + price/rank). Two starters (Interceptor, Cruiser, cost 0) plus two buyable hulls: a glass-
+  cannon **Corvette** (1200cr/R2: very fast, fragile) and a heavy **Gunboat** (1800cr/R3: 240 hull, big
+  guns, ponderous), both reusing the existing Insurgent/Imperial meshes recoloured/rescaled.
+- **ApplyShipPreset** now reads the roster (mesh + stats) instead of a hardcoded variant branch, so a
+  ship switch swaps the hull on the live pawn; upgrades still layer on top.
+- **Ownership** — `USpaceGameInstance` gains `OwnedShips` (starters implicitly owned), `OwnsShip`,
+  `BuyShip` (rank/credit-gated), `SelectShip` (persists active hull); mirrored in the save, cleared on reset.
+- **Web** — `/api/ship?action=buy|select&id=` (docked-gated; select re-applies the loadout). `/api/state`
+  carries a `ships` array (owned/active/cost/rankReq/affordable). The Engineering page gains a
+  **HANGAR — SHIPS** panel: ACTIVE / SELECT / BUY-price rows, shown only while docked.
+
+**Verified (PIE + MCP + headless render):** funded to 2000cr/rank5 and docked, buying the Gunboat left
+credits at 200 and selecting it transformed the live pawn (hull 240, beam 42, maxSpeed 1100, 8 torps);
+the hangar rendered Interceptor/Cruiser=SELECT, Corvette=BUY·1200cr (dimmed, unaffordable), Gunboat=ACTIVE;
+Gunboat ownership survived a load round-trip from disk. (Commit: Core/ShipCatalogue.h + Core/StationTypes.h
++ Core/SpaceGameInstance.{h,cpp} + Core/SpaceSaveGame.h + Ships/Spaceship.cpp + Net/StationServerSubsystem.* + docs.)
+
+**M19 complete** — missions pay salvage + XP, you dock at a starbase to repair/restock, and Engineering
+spends the haul on tiered upgrades and new ships. Story mode is the planned M20.

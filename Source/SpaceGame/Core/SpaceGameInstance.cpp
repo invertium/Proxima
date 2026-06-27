@@ -2,6 +2,7 @@
 
 #include "Core/SpaceGameInstance.h"
 
+#include "Core/ShipCatalogue.h"
 #include "Core/SpaceSaveGame.h"
 #include "Core/UpgradeCatalogue.h"
 #include "Kismet/GameplayStatics.h"
@@ -19,7 +20,8 @@ void USpaceGameInstance::ResetCampaign()
 	Credits = 0;
 	XP = 0;
 	UpgradeTiers.Reset();
-	UE_LOG(LogTemp, Log, TEXT("[Campaign] Reset to mission 0 (wallet + upgrades cleared)"));
+	OwnedShips.Reset(); // starters stay owned implicitly via the catalogue
+	UE_LOG(LogTemp, Log, TEXT("[Campaign] Reset to mission 0 (wallet + upgrades + hangar cleared)"));
 }
 
 bool USpaceGameInstance::BuyUpgrade(FName UpgradeId)
@@ -51,6 +53,48 @@ bool USpaceGameInstance::BuyUpgrade(FName UpgradeId)
 	UpgradeTiers.Add(UpgradeId, Tier + 1);
 	SaveCampaign();
 	UE_LOG(LogTemp, Log, TEXT("[Drydock] Bought %s -> tier %d (-%d cr)"), *UpgradeId.ToString(), Tier + 1, Cost);
+	return true;
+}
+
+bool USpaceGameInstance::OwnsShip(EPlayerShipType Ship) const
+{
+	const FShipDef* Def = ShipCatalogue::Find(Ship);
+	if (Def && Def->Cost == 0) { return true; } // starters are always owned
+	return OwnedShips.Contains(Ship);
+}
+
+bool USpaceGameInstance::BuyShip(EPlayerShipType Ship)
+{
+	const FShipDef* Def = ShipCatalogue::Find(Ship);
+	if (!Def || Def->Cost == 0 || OwnsShip(Ship))
+	{
+		return false;
+	}
+	if (GetRank() < Def->RankReq)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Hangar] %s needs rank %d (have %d)"), *Def->Name, Def->RankReq, GetRank());
+		return false;
+	}
+	if (!SpendCredits(Def->Cost))
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Hangar] %s costs %d (have %d)"), *Def->Name, Def->Cost, Credits);
+		return false;
+	}
+	OwnedShips.AddUnique(Ship);
+	SaveCampaign();
+	UE_LOG(LogTemp, Log, TEXT("[Hangar] Bought %s (-%d cr)"), *Def->Name, Def->Cost);
+	return true;
+}
+
+bool USpaceGameInstance::SelectShip(EPlayerShipType Ship)
+{
+	if (!OwnsShip(Ship))
+	{
+		return false;
+	}
+	PlayerShip = Ship;
+	SaveCampaign();
+	UE_LOG(LogTemp, Log, TEXT("[Hangar] Active ship -> %d"), (int32)Ship);
 	return true;
 }
 
@@ -93,6 +137,7 @@ bool USpaceGameInstance::SaveCampaign()
 	Save->Credits = Credits;
 	Save->XP = XP;
 	Save->UpgradeTiers = UpgradeTiers;
+	Save->OwnedShips = OwnedShips;
 	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotName(), 0);
 	UE_LOG(LogTemp, Log, TEXT("[Campaign] Save %s (mission %d, ship %d)"),
 		bOk ? TEXT("OK") : TEXT("FAILED"), MissionIndex, (int32)PlayerShip);
@@ -116,8 +161,9 @@ bool USpaceGameInstance::LoadCampaign()
 	Credits = FMath::Max(0, Save->Credits);
 	XP = FMath::Max(0, Save->XP);
 	UpgradeTiers = Save->UpgradeTiers;
-	UE_LOG(LogTemp, Log, TEXT("[Campaign] Loaded (mission %d, ship %d, %d cr, %d xp, %d upgrades)"),
-		MissionIndex, (int32)PlayerShip, Credits, XP, UpgradeTiers.Num());
+	OwnedShips = Save->OwnedShips;
+	UE_LOG(LogTemp, Log, TEXT("[Campaign] Loaded (mission %d, ship %d, %d cr, %d xp, %d upgrades, %d ships)"),
+		MissionIndex, (int32)PlayerShip, Credits, XP, UpgradeTiers.Num(), OwnedShips.Num());
 	return true;
 }
 

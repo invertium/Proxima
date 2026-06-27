@@ -11,6 +11,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
+#include "Core/ShipCatalogue.h"
 #include "Core/SpaceGameInstance.h"
 #include "Core/UpgradeCatalogue.h"
 #include "Engine/StaticMesh.h"
@@ -132,50 +133,41 @@ void ASpaceship::ApplyShipPreset()
 		Type = GI->GetPlayerShip();
 	}
 
-	const TCHAR* MatPath = TEXT("/Game/Art/Materials/M_Insurgent.M_Insurgent");
-	float Scale = 0.6f;
+	// Base hull stats come from the ship roster (M19.4). Falls back to the Interceptor def.
+	const FShipDef* Def = ShipCatalogue::Find(Type);
+	if (!Def) { Def = ShipCatalogue::Find(EPlayerShipType::Interceptor); }
+	if (!Def) { return; }
 
-	// Reset the stats that the variant branch below doesn't explicitly set, so ApplyUpgrades()
-	// always adds from a clean base — re-applying (drydock RefreshLoadout) stays idempotent.
+	// Reset the stats not carried in FShipDef, so ApplyUpgrades() always adds from a clean base —
+	// re-applying (drydock RefreshLoadout / ship switch) stays idempotent.
 	if (WeaponComp) { WeaponComp->FireArcDeg = 70.f; }
 	if (HealthComp) { HealthComp->MaxShield = 50.f; }
 	if (PowerComp)  { PowerComp->ReactorBudget = 3.0f; }
 
-	if (Type == EPlayerShipType::Cruiser)
-	{
-		// Heavy: slower + less agile, but a much tougher hull and harder-hitting weapons.
-		MatPath = TEXT("/Game/Art/Materials/M_PlayerHull.M_PlayerHull");
-		Scale = 0.95f;
-		if (MovementComp) { MovementComp->MaxSpeed = 1300.f; MovementComp->Acceleration = 900.f; MovementComp->MaxTurnRate = 42.f; }
-		if (HealthComp)   { HealthComp->MaxHull = 160.f; }
-		if (WeaponComp)   { WeaponComp->BeamDamage = 34.f; WeaponComp->BaseRechargeRate = 0.3f; }
-		if (TorpedoComp)  { TorpedoComp->MaxAmmo = 6; }
-	}
-	else
-	{
-		// Interceptor: fast + agile, lighter hull, quicker (lighter) beam.
-		Scale = 0.6f;
-		if (MovementComp) { MovementComp->MaxSpeed = 2100.f; MovementComp->Acceleration = 1500.f; MovementComp->MaxTurnRate = 75.f; }
-		if (HealthComp)   { HealthComp->MaxHull = 80.f; }
-		if (WeaponComp)   { WeaponComp->BeamDamage = 20.f; WeaponComp->BaseRechargeRate = 0.55f; }
-		if (TorpedoComp)  { TorpedoComp->MaxAmmo = 3; }
-	}
+	if (MovementComp) { MovementComp->MaxSpeed = Def->MaxSpeed; MovementComp->Acceleration = Def->Acceleration; MovementComp->MaxTurnRate = Def->TurnRate; }
+	if (HealthComp)   { HealthComp->MaxHull = Def->MaxHull; }
+	if (WeaponComp)   { WeaponComp->BeamDamage = Def->BeamDamage; WeaponComp->BaseRechargeRate = Def->BeamRecharge; }
+	if (TorpedoComp)  { TorpedoComp->MaxAmmo = Def->TorpedoAmmo; }
 
 	if (ShipMesh)
 	{
+		if (UStaticMesh* Hull = Cast<UStaticMesh>(
+			StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *Def->MeshPath)))
+		{
+			ShipMesh->SetStaticMesh(Hull);
+		}
 		if (UMaterialInterface* Mat = Cast<UMaterialInterface>(
-			StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, MatPath)))
+			StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, *Def->MatPath)))
 		{
 			ShipMesh->SetMaterial(0, Mat);
 		}
-		ShipMesh->SetRelativeScale3D(FVector(Scale));
+		ShipMesh->SetRelativeScale3D(FVector(Def->Scale));
 	}
 
-	// Layer purchased drydock upgrades on top of the base variant stats.
+	// Layer purchased drydock upgrades on top of the base hull stats.
 	ApplyUpgrades();
 
-	UE_LOG(LogTemp, Log, TEXT("[Ship] Variant: %s"),
-		Type == EPlayerShipType::Cruiser ? TEXT("Cruiser") : TEXT("Interceptor"));
+	UE_LOG(LogTemp, Log, TEXT("[Ship] Variant: %s"), *Def->Name);
 }
 
 void ASpaceship::ApplyUpgrades()

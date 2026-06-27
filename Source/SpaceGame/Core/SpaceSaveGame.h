@@ -38,4 +38,8 @@ public:
 	/** Owned drydock upgrade tiers keyed by catalogue id (M19.3). */
 	UPROPERTY(VisibleAnywhere, Category = "Campaign")
 	TMap<FName, int32> UpgradeTiers;
+
+	/** Bought non-starter ships (M19.4). */
+	UPROPERTY(VisibleAnywhere, Category = "Campaign")
+	TArray<EPlayerShipType> OwnedShips;
 };

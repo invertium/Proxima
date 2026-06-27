@@ -10,6 +10,7 @@
 #include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Core/MissionSubsystem.h"
+#include "Core/ShipCatalogue.h"
 #include "Core/SpaceGameInstance.h"
 #include "Core/SpaceGameMode.h"
 #include "Core/UpgradeCatalogue.h"
@@ -283,7 +284,9 @@ setInterval(poll,250);poll();
 			     "<div id='drydock' style='margin-top:24px'>"
 			     "<label>DRYDOCK &mdash; UPGRADES</label>"
 			     "<div class='stat'><b>SALVAGE</b><span id='wallet' class='big'>-</span></div>"
-			     "<div id='shop'></div></div>");
+			     "<div id='shop'></div>"
+			     "<label style='margin-top:18px'>HANGAR &mdash; SHIPS</label>"
+			     "<div id='hangar'></div></div>");
 		// The hull bar + numeric readout poll from /api/state; the weld minigame runs entirely
 		// client-side (requestAnimationFrame sweep) and only POSTs a repair when the marker is
 		// inside the green zone — the server still rate-limits + caps the actual hull restore.
@@ -301,7 +304,7 @@ setInterval(poll,250);poll();
 			// Drydock store: wallet + a buy row per upgrade. Active only while docked; otherwise dimmed.
 			"$('#wallet').textContent=s.credits+' cr \\u00b7 RANK '+s.rank;"
 			"const dd=$('#drydock'),shop=$('#shop');dd.style.opacity=s.docked?1:.5;"
-			"if(!s.docked){shop.innerHTML='<div style=\"color:#6f86a8;padding:8px 2px\">Dock at the STARBASE (Helm) to outfit the ship.</div>';}"
+			"if(!s.docked){shop.innerHTML='<div style=\"color:#6f86a8;padding:8px 2px\">Dock at the STARBASE (Helm) to outfit the ship.</div>';$('#hangar').innerHTML='';}"
 			"else{let h='';for(const u of (s.upgrades||[])){"
 			"let lbl=u.name+' '+(u.tier>0?('T'+u.tier):'\\u2014')+'/'+u.maxTier;"
 			"let b;if(u.maxed){b='<span style=\"color:#43ff7a;font-size:.8rem\">MAX</span>';}"
@@ -310,8 +313,19 @@ setInterval(poll,250);poll();
 			"'style=\"width:auto;margin:0;padding:8px 12px;font-size:.82rem;'+(u.affordable?'':'opacity:.4;')+'\">+'"
 			"+u.mag+u.unit+' \\u00b7 '+u.cost+'cr'+lock+'</button>';}"
 			"h+='<div style=\"display:flex;justify-content:space-between;align-items:center;padding:7px 2px;border-bottom:1px solid #15243a\"><span>'+lbl+'</span>'+b+'</div>';}"
-			"shop.innerHTML=h;}}"
+			"shop.innerHTML=h;"
+			// Hangar: a row per ship — ACTIVE / SELECT (owned) or BUY price (unowned, rank-gated).
+			"let hh='';for(const v of (s.ships||[])){"
+			"let b;if(v.active){b='<span style=\"color:#43ff7a;font-size:.8rem\">ACTIVE</span>';}"
+			"else if(v.owned){b='<button onclick=\"selship('+v.id+')\" style=\"width:auto;margin:0;padding:8px 12px;font-size:.82rem\">SELECT</button>';}"
+			"else{let lock=v.rankReq>s.rank?(' \\u00b7 R'+v.rankReq):'';"
+			"b='<button onclick=\"buyship('+v.id+')\" '+(v.affordable?'':'disabled ')+"
+			"'style=\"width:auto;margin:0;padding:8px 12px;font-size:.82rem;'+(v.affordable?'':'opacity:.4;')+'\">BUY \\u00b7 '+v.cost+'cr'+lock+'</button>';}"
+			"hh+='<div style=\"display:flex;justify-content:space-between;align-items:center;padding:7px 2px;border-bottom:1px solid #15243a\"><span title=\"'+v.blurb+'\">'+v.name+'</span>'+b+'</div>';}"
+			"$('#hangar').innerHTML=hh;}}"
 			"function buy(id){post('/api/buy?id='+id);}"
+			"function buyship(id){post('/api/ship?action=buy&id='+id);}"
+			"function selship(id){post('/api/ship?action=select&id='+id);}"
 			"let sp=0,sd=1,lt=0;"
 			"function loop(ts){if(lt){const dt=(ts-lt)/1000;sp+=sd*dt/1.2;"
 			"if(sp>=1){sp=1;sd=-1;}if(sp<=0){sp=0;sd=1;}}lt=ts;"
@@ -466,6 +480,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
 	Bind(TEXT("/api/buy"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleBuy);
+	Bind(TEXT("/api/ship"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleShip);
 	Bind(TEXT("/api/weapons"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWeapons);
 	Bind(TEXT("/api/power"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandlePower);
 	Bind(TEXT("/api/engineering"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleEngineering);
@@ -664,6 +679,29 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		}
 	}
 
+	// Hangar roster (M19.4): per ship — owned, active, price + rank gate, and buyable right now.
+	FString Ships;
+	{
+		const int32 Credits = GI ? GI->GetCredits() : 0;
+		const int32 Rank = GI ? GI->GetRank() : 1;
+		const bool bDocked = Ship && Ship->IsDocked();
+		const EPlayerShipType Active = GI ? GI->GetPlayerShip() : EPlayerShipType::Interceptor;
+		for (const FShipDef& S : ShipCatalogue::Get())
+		{
+			const bool bOwned = GI ? GI->OwnsShip(S.Type) : (S.Cost == 0);
+			const bool bAffordable = bDocked && !bOwned && Rank >= S.RankReq && Credits >= S.Cost;
+			if (!Ships.IsEmpty()) { Ships += TEXT(","); }
+			Ships += FString::Printf(TEXT(
+				"{\"id\":%d,\"name\":\"%s\",\"blurb\":\"%s\",\"owned\":%s,\"active\":%s,"
+				"\"cost\":%d,\"rankReq\":%d,\"affordable\":%s}"),
+				(int32)S.Type, *S.Name, *JsonEscape(S.Blurb),
+				bOwned ? TEXT("true") : TEXT("false"),
+				(S.Type == Active) ? TEXT("true") : TEXT("false"),
+				S.Cost, S.RankReq,
+				bAffordable ? TEXT("true") : TEXT("false"));
+		}
+	}
+
 	// Hand-built JSON (avoids pulling in the Json module for this flat object).
 	const FString Json = FString::Printf(TEXT(
 		"{\"phase\":\"%s\",\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
@@ -676,7 +714,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
-		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,\"upgrades\":[%s],"
+		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,\"upgrades\":[%s],\"ships\":[%s],"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -711,7 +749,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),
-		Ship ? Ship->GetStationRange() : -1.f, *Upgrades,
+		Ship ? Ship->GetStationRange() : -1.f, *Upgrades, *Ships,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
@@ -769,6 +807,31 @@ bool UStationServerSubsystem::HandleBuy(const FHttpServerRequest& Request, const
 			if (GI->BuyUpgrade(FName(**Id)))
 			{
 				Ship->RefreshLoadout();
+			}
+		}
+	}
+	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleShip(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Hangar (M19.4): buy or switch the active ship — only while docked. id = EPlayerShipType value.
+	ASpaceship* Ship = GetShip();
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	const FString* IdStr = Request.QueryParams.Find(TEXT("id"));
+	if (Ship && Ship->IsDocked() && Action && IdStr)
+	{
+		const EPlayerShipType Type = (EPlayerShipType)FCString::Atoi(**IdStr);
+		if (USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr)
+		{
+			if (*Action == TEXT("buy"))
+			{
+				GI->BuyShip(Type);
+			}
+			else if (*Action == TEXT("select"))
+			{
+				if (GI->SelectShip(Type)) { Ship->RefreshLoadout(); }
 			}
 		}
 	}
