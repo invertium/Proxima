@@ -631,3 +631,26 @@ green, mission "First Contact"). (Commit: Core/MissionSubsystem.{h,cpp} + Net/St
 
 **M18 complete** — the vertical slice is now a small campaign: main menu + ship select, in-game pause +
 save/load, three escalating missions of varied enemy ships, and a story told over the Science comms.
+
+---
+
+## 2026-06-27 — 🐞 Bug fixes: reactor budget enforcement + web NEW GAME
+
+Two player-reported issues from the M18 campaign shell.
+
+- **Engineering power had no downside** — every system could be cranked to 200% at once because
+  `ReactorBudget` was only a display readout. `UPowerComponent::SetSystemPower` now treats the budget
+  as a *hard cap on the total*: a system can draw at most the headroom the others leave
+  (`min(MaxPerSystem, ReactorBudget − OthersTotal)`), so power is zero-sum — boosting one system
+  requires taking it from another. `AdjustSystemPower` routes through this, so both the web Engineering
+  page and the local console obey it. The Engineering page tints the REACTOR LOAD readout amber when
+  it's at capacity to surface the trade-off.
+- **Web NEW GAME did nothing meaningful** — it was identical to RESTART (both just reloaded the current
+  mission). `HandleGame` now distinguishes them: `action=new` calls `ResetCampaign()` + `SaveCampaign()`
+  (mission → 0, persisted) before reloading; `action=restart` retries the current mission unchanged.
+
+**Verified (PIE + LAN web API + MCP):** at full reactor (load 3.0/3.0) `engine+0.5` was a no-op; after
+`weapons−0.5` (load 2.5) the same `engine+0.5` lifted engine to 1.5 (load back to 3.0) — load never
+exceeded the budget. With the campaign advanced to mission 2, `action=restart` reloaded "Last Stand"
+(progress kept) while `action=new` reset to "First Contact" with `GetMissionIndex()==0`.
+(Commit: Components/PowerComponent.{h,cpp} + Net/StationServerSubsystem.cpp + docs.)

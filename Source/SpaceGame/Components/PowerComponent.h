@@ -21,8 +21,9 @@ enum class EShipSystem : uint8
  * holds a power level 0..MaxPerSystem (1.0 = nominal 100%). Engineering reallocates
  * power between systems; other subsystems read their level as a multiplier
  * (engine→MaxSpeed now; weapons/shields at M8/M9). State is plain UPROPERTYs so it
- * stays replication-ready (DECISIONS D7). Reactor budget is a soft readout for the
- * slice — levels are clamped per-system, not hard-summed.
+ * stays replication-ready (DECISIONS D7). ReactorBudget is a hard cap on the *total*:
+ * the reactor can only supply so much, so boosting one system requires taking power
+ * from another — power is zero-sum within the budget (no free 200%-everything).
  */
 UCLASS(ClassGroup = (SpaceGame), meta = (BlueprintSpawnableComponent))
 class SPACEGAME_API UPowerComponent : public UActorComponent

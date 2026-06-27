@@ -10,6 +10,7 @@
 #include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Core/MissionSubsystem.h"
+#include "Core/SpaceGameInstance.h"
 #include "Core/SpaceGameMode.h"
 #include "Core/StationTypes.h"
 #include "Engine/World.h"
@@ -249,7 +250,9 @@ setInterval(poll,250);poll();
 			"function render(s){$('#p0').textContent=Math.round(s.power[0]*100)+'%';"
 			"$('#p1').textContent=Math.round(s.power[1]*100)+'%';"
 			"$('#p2').textContent=Math.round(s.power[2]*100)+'%';"
-			"$('#load').textContent=s.reactorLoad.toFixed(1)+' / '+s.reactorBudget.toFixed(1);"
+			"const ld=$('#load');ld.textContent=s.reactorLoad.toFixed(1)+' / '+s.reactorBudget.toFixed(1);"
+			"const cap=s.reactorLoad>=s.reactorBudget-0.001;"
+			"ld.style.color=cap?'#ffb300':'';ld.title=cap?'Reactor at capacity \\u2014 boost one system and another drops':'';"
 			"const f=s.maxHull>0?s.hull/s.maxHull:0;"
 			"$('#hullbar').style.width=Math.round(f*100)+'%';"
 			"$('#hullbar').style.background=f<0.3?'#ff5a4a':(f<0.6?'#e6b800':'#43ff7a');"
@@ -727,11 +730,20 @@ bool UStationServerSubsystem::HandleEngineering(const FHttpServerRequest& Reques
 
 bool UStationServerSubsystem::HandleGame(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	// "new" and "restart" both reload the encounter from scratch (single-encounter slice).
+	// "restart" retries the current mission; "new" restarts the whole campaign from mission 0
+	// (so it's meaningfully different from restart, and persists the reset).
 	const FString* Action = Request.QueryParams.Find(TEXT("action"));
-	if (Action && (*Action == TEXT("restart") || *Action == TEXT("new")))
+	if (UWorld* World = GetWorld())
 	{
-		if (UWorld* World = GetWorld())
+		if (Action && *Action == TEXT("new"))
+		{
+			if (USpaceGameInstance* GI = World->GetGameInstance<USpaceGameInstance>())
+			{
+				GI->ResetCampaign();
+				GI->SaveCampaign();
+			}
+		}
+		if (Action && (*Action == TEXT("restart") || *Action == TEXT("new")))
 		{
 			if (ASpaceGameMode* GM = World->GetAuthGameMode<ASpaceGameMode>())
 			{
