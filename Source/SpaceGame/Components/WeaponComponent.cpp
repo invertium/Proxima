@@ -57,6 +57,28 @@ bool UWeaponComponent::IsTargetInRange() const
 	return Range >= 0.f && Range <= BeamRange;
 }
 
+bool UWeaponComponent::IsTargetInArc() const
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner || !CurrentTarget)
+	{
+		return false;
+	}
+
+	// Yaw-plane check (combat is planar): angle between the bow and the line to the target.
+	FVector Forward = Owner->GetActorForwardVector();
+	FVector ToTarget = CurrentTarget->GetActorLocation() - Owner->GetActorLocation();
+	Forward.Z = 0.f;
+	ToTarget.Z = 0.f;
+	if (!Forward.Normalize() || !ToTarget.Normalize())
+	{
+		return false;
+	}
+
+	const float CosHalfArc = FMath::Cos(FMath::DegreesToRadians(FireArcDeg * 0.5f));
+	return FVector::DotProduct(Forward, ToTarget) >= CosHalfArc;
+}
+
 void UWeaponComponent::CycleTarget()
 {
 	const UWorld* World = GetWorld();
@@ -118,6 +140,11 @@ bool UWeaponComponent::FireBeam()
 	{
 		UE_LOG(LogTemp, Log, TEXT("[Weapon] Fire blocked — target out of range (%.0f > %.0f)"),
 			GetTargetRange(), BeamRange);
+		return false;
+	}
+	if (!IsTargetInArc())
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Weapon] Fire blocked — target outside firing arc (turn to face it)"));
 		return false;
 	}
 

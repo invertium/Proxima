@@ -188,6 +188,7 @@ setInterval(poll,250);poll();
 			"<div class='stat'><b>TARGET</b><span id='tgt'>none</span></div>"
 			"<div class='stat'><b>RANGE</b><span id='rng'>-</span></div>"
 			"<div class='stat'><b>IN RANGE</b><span id='inr'>-</span></div>"
+			"<div class='stat'><b>ON TARGET</b><span id='ina'>-</span></div>"
 			"<div class='stat'><b>TORPEDOES</b><span id='ammo' class='big'>0</span></div>"
 			"<button onclick=\"post('/api/weapons?action=cycle')\">CYCLE TARGET</button>"
 			"<button id='fire' onclick=\"post('/api/weapons?action=fire')\">FIRE BEAM</button>"
@@ -200,16 +201,19 @@ setInterval(poll,250);poll();
 			"$('#tgt').textContent=s.target;"
 			"$('#rng').textContent=s.targetRange<0?'-':Math.round(s.targetRange);"
 			"$('#inr').textContent=s.inRange?'YES':'no';"
+			"$('#ina').textContent=s.inArc?'YES':'no';$('#ina').style.color=s.target!=='none'&&!s.inArc?'#ffb300':'';"
 			"$('#ammo').textContent=s.ammo+' / '+s.maxAmmo;"
 			"const fb=$('#fire');"
 			"if(s.target==='none'){fb.textContent='NO TARGET';fb.className='blk';}"
 			"else if(s.charge<1){fb.textContent='CHARGING '+Math.round(s.charge*100)+'%';fb.className='blk';}"
 			"else if(!s.inRange){fb.textContent='OUT OF RANGE';fb.className='blk';}"
+			"else if(!s.inArc){fb.textContent='TURN TO TARGET';fb.className='blk';}"
 			"else{fb.textContent='● FIRE BEAM';fb.className='rdy';}"
 			"const tb=$('#torp');"
 			"if(s.ammo<=0){tb.textContent='NO TORPEDOES';tb.className='blk';}"
 			"else if(s.target==='none'){tb.textContent='NO TARGET';tb.className='blk';}"
 			"else if(s.torpedoReload<1){tb.textContent='RELOADING '+Math.round(s.torpedoReload*100)+'%';tb.className='blk';}"
+			"else if(!s.inArc){tb.textContent='TURN TO TARGET';tb.className='blk';}"
 			"else{tb.textContent='◎ FIRE TORPEDO';tb.className='rdy';}}");
 		return MakePage(TEXT("WEAPONS"), TEXT("#a33"), Body, Script);
 	}
@@ -573,7 +577,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	// Hand-built JSON (avoids pulling in the Json module for this flat object).
 	const FString Json = FString::Printf(TEXT(
 		"{\"phase\":\"%s\",\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
-		"\"charge\":%.3f,\"target\":\"%s\",\"targetRange\":%.1f,\"inRange\":%s,"
+		"\"charge\":%.3f,\"target\":\"%s\",\"targetRange\":%.1f,\"inRange\":%s,\"inArc\":%s,"
 		"\"power\":[%.3f,%.3f,%.3f],\"reactorLoad\":%.3f,\"reactorBudget\":%.3f,"
 		"\"hull\":%.1f,\"maxHull\":%.1f,"
 		"\"ammo\":%d,\"maxAmmo\":%d,\"torpedoReady\":%s,\"torpedoReload\":%.3f,"
@@ -589,6 +593,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		*TargetName,
 		Weap ? Weap->GetTargetRange() : -1.f,
 		(Weap && Weap->IsTargetInRange()) ? TEXT("true") : TEXT("false"),
+		(Weap && Weap->IsTargetInArc()) ? TEXT("true") : TEXT("false"),
 		P(EShipSystem::Engine), P(EShipSystem::Weapons), P(EShipSystem::Shields),
 		Power ? Power->GetTotalPower() : 0.f,
 		Power ? Power->ReactorBudget : 0.f,

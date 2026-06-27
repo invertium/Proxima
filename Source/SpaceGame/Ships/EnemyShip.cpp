@@ -60,6 +60,7 @@ void AEnemyShip::BeginPlay()
 	ApplyTypePreset();
 
 	FireCooldown = FireInterval;
+	GraceTimer = EngageDelay; // hold fire briefly so the player can get oriented at mission start
 
 	// Despawn + explode when the player's beam drains our hull to zero (M10).
 	if (HealthComp)
@@ -239,8 +240,14 @@ void AEnemyShip::Tick(float DeltaSeconds)
 		SetAIState(EEnemyAIState::Engage);
 	}
 
-	// Fire on a fixed interval while in engage range.
-	if (bInEngageRange)
+	// Spawn grace: close in, but hold fire until it elapses (gives the player a beat at start).
+	if (GraceTimer > 0.f)
+	{
+		GraceTimer = FMath::Max(0.f, GraceTimer - DeltaSeconds);
+	}
+
+	// Fire on a fixed interval while in engage range (once the grace period is over).
+	if (bInEngageRange && GraceTimer <= 0.f)
 	{
 		FireCooldown -= DeltaSeconds;
 		if (FireCooldown <= 0.f)

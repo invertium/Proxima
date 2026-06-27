@@ -51,9 +51,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Weapon")
 	bool IsTargetInRange() const;
 
+	/** True while the current target sits within the forward firing arc (±FireArcDeg/2 off the bow).
+	 *  Both the beam and the torpedo require this — you have to point the ship at the enemy. */
+	UFUNCTION(BlueprintPure, Category = "Ship|Weapon")
+	bool IsTargetInArc() const;
+
 	/** Beam reach (uu). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
 	float BeamRange = 15000.f;
+
+	/** Full forward firing-arc width in degrees (the target must be within ±FireArcDeg/2 of the
+	 *  bow to fire). Forward-mounted weapons can't shoot sideways/behind. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
+	float FireArcDeg = 70.f;
 
 	/** Charge gained per second at nominal (1.0×) weapon power. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")

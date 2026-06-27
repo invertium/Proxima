@@ -654,3 +654,26 @@ Two player-reported issues from the M18 campaign shell.
 exceeded the budget. With the campaign advanced to mission 2, `action=restart` reloaded "Last Stand"
 (progress kept) while `action=new` reset to "First Contact" with `GetMissionIndex()==0`.
 (Commit: Components/PowerComponent.{h,cpp} + Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-06-27 — ⚙️ Engage grace period + forward firing arc
+
+Two combat-feel tweaks from playtest feedback.
+
+- **Enemies hold fire briefly at mission start** — `AEnemyShip` gained an `EngageDelay` (6 s, set in
+  `BeginPlay` as a `GraceTimer`). During the grace the ship still closes in but won't shoot, giving the
+  crew a beat to orient before incoming fire. The Tick fire-gate now also requires `GraceTimer <= 0`.
+- **Phaser + torpedo require pointing at the target** — `UWeaponComponent::IsTargetInArc()` checks the
+  yaw-plane angle between the bow and the line to the locked target against a `FireArcDeg` (70°, i.e.
+  ±35° off the bow). `FireBeam()` and the torpedo's `Fire()`/`IsReady()` both reject a target outside
+  the arc, so forward-mounted weapons can't shoot sideways/behind — you have to fly the ship onto the
+  enemy. `/api/state` gains `inArc`; the Weapons console shows an **ON TARGET** readout and the FIRE
+  buttons display **TURN TO TARGET** when the bow isn't on the enemy.
+
+**Verified (PIE + log + MCP):** both enemies spawned at 09:44:07 and didn't fire until 09:44:14–15
+(~7–8 s, grace + closing). With a target locked 35° off the bow (`inArc=false`), `FireBeam` and
+`Torpedo.Fire` both returned false and dealt no damage / spent no ammo; widening the arc so the same
+target fell inside flipped `inArc=true` and both fired (enemy shield 20→0, torpedo ammo 3→2). The arc
+field surfaced on `/api/state` and the Weapons page. (Commit: Ships/EnemyShip.{h,cpp} +
+Components/WeaponComponent.{h,cpp} + Components/TorpedoLauncherComponent.cpp + Net/StationServerSubsystem.cpp + docs.)
