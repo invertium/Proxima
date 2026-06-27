@@ -32,6 +32,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Movement")
 	void SetTurn(float InTurn);
 
+	/** Lock out helm input and freeze the ship (used while docked, M19). Locking zeroes the
+	 *  current throttle/turn so the ship comes to rest; SetThrottle/SetTurn are ignored until
+	 *  unlocked. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Movement")
+	void SetInputLocked(bool bLocked);
+
+	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
+	bool IsInputLocked() const { return bInputLocked; }
+
 	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
 	float GetSpeed() const { return CurrentSpeed; }
 
@@ -62,6 +71,10 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Movement")
 	float CurrentSpeed = 0.f;
+
+	/** While true, throttle/turn inputs are ignored and held at zero (docked, M19). */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Movement")
+	bool bInputLocked = false;
 
 private:
 	/** Lazily-resolved sibling power component (engine power scales MaxSpeed); may stay null. */

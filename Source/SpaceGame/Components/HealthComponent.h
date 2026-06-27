@@ -60,6 +60,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Health")
 	bool IsAlive() const { return Hull > 0.f; }
 
+	/** Combat-safe toggle: while invulnerable, ApplyDamage is a no-op (used while docked, M19). */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Health")
+	void SetInvulnerable(bool bNewInvulnerable) { bInvulnerable = bNewInvulnerable; }
+
 	/** Current incoming-damage mitigation (0..MaxMitigation) from sibling shield power. */
 	UFUNCTION(BlueprintPure, Category = "Ship|Health")
 	float GetShieldMitigation() const;
@@ -101,6 +105,9 @@ protected:
 private:
 	/** Guards OnDeath against re-broadcast on overkill / repeated hits. */
 	bool bDeathBroadcast = false;
+
+	/** While true, ApplyDamage ignores incoming damage (docked = combat-safe, M19). */
+	bool bInvulnerable = false;
 
 	/** Lazily-resolved sibling power component (for shield-power mitigation); may stay null. */
 	UPROPERTY(Transient)

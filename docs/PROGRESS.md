@@ -741,3 +741,27 @@ double-kill reached `phase:victory` with the wallet at 240/90 and the mission ad
 restored exactly 240cr/90xp/mission 1 from disk after dirtying the live values. (Commit:
 Core/SpaceGameInstance.{h,cpp} + Core/SpaceSaveGame.h + Core/BridgePlayerController.{h,cpp} +
 Ships/EnemyShip.{h,cpp} + Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-06-27 — 🛰️ M19.2 Station actor + docking
+
+The progression loop gets a place: a friendly starbase you fly back to between fights.
+- **`AStation`** (`World/Station.{h,cpp}`) — a passive landmark (Imperial hull scaled 3×, friendly cyan
+  material) carrying a non-targetable `URadarContactComponent` (new `bTargetable` flag) and a `DockRange`.
+  `UMissionSubsystem` spawns one ~5000 uu behind the player's start each encounter.
+- **Docking on `ASpaceship`** — `CanDock()` (a station in range + nearly stopped + not already docked),
+  `Dock()` / `Undock()`. Docking locks helm input (new `UShipMovementComponent::SetInputLocked`), makes
+  the ship combat-safe (new `UHealthComponent::SetInvulnerable` → `ApplyDamage` no-ops), repairs hull/
+  shield (`ResetPools`) and restocks torpedoes (new `Resupply`). Undock reverses it.
+- **Non-targetable base** — weapon + science `CycleTarget` now skip `bTargetable == false` contacts, so
+  you can't lock your own starbase.
+- **Web** — `/api/dock?action=dock|undock`; `/api/state` gains `docked` / `canDock` / `stationRange`. The
+  Helm page draws the STARBASE blip, a status row, and a DOCK/UNDOCK button (enabled only in range).
+
+**Verified (PIE + MCP + headless Helm render):** the starbase spawned and showed as a friendly STARBASE
+blip 5000 uu off; teleporting the ship within range flipped `canDock`; `Dock()` repaired hull 0→80,
+locked input, and made damage a no-op; undock restored both; cycling weapon targets only ever locked
+WASP-1/VIPER-1 (never STARBASE); the Helm page rendered the blip + "DOCKED — repaired & restocked" + an
+UNDOCK button. (Commit: World/Station.{h,cpp} + Ships/Spaceship.{h,cpp} + Components/{Health,ShipMovement,
+TorpedoLauncher,RadarContact,Weapon,Science}* + Core/MissionSubsystem.cpp + Net/StationServerSubsystem.* + docs.)

@@ -18,6 +18,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
+#include "World/Station.h"
 
 ASpaceship::ASpaceship()
 {
@@ -170,6 +171,70 @@ void ASpaceship::ApplyShipPreset()
 void ASpaceship::AddCameraTrauma(float Amount)
 {
 	CameraTrauma = FMath::Clamp(CameraTrauma + Amount, 0.f, 1.f);
+}
+
+AStation* ASpaceship::NearestStation() const
+{
+	const UWorld* World = GetWorld();
+	if (!World) { return nullptr; }
+
+	TArray<AActor*> Stations;
+	UGameplayStatics::GetAllActorsOfClass(World, AStation::StaticClass(), Stations);
+	AStation* Best = nullptr;
+	float BestDistSq = TNumericLimits<float>::Max();
+	const FVector Loc = GetActorLocation();
+	for (AActor* A : Stations)
+	{
+		AStation* S = Cast<AStation>(A);
+		if (!S) { continue; }
+		const float D = FVector::DistSquared(Loc, S->GetActorLocation());
+		if (D < BestDistSq) { BestDistSq = D; Best = S; }
+	}
+	return Best;
+}
+
+float ASpaceship::GetStationRange() const
+{
+	const AStation* S = NearestStation();
+	return S ? FVector::Dist(GetActorLocation(), S->GetActorLocation()) : -1.f;
+}
+
+bool ASpaceship::CanDock() const
+{
+	if (bDocked) { return false; }
+	const AStation* S = NearestStation();
+	if (!S) { return false; }
+	if (FVector::Dist(GetActorLocation(), S->GetActorLocation()) > S->GetDockRange()) { return false; }
+	// Must be nearly stopped to dock (you can't slam into a starbase at full impulse).
+	const float Speed = MovementComp ? FMath::Abs(MovementComp->GetSpeed()) : 0.f;
+	return Speed <= DockMaxSpeed;
+}
+
+bool ASpaceship::Dock()
+{
+	if (!CanDock()) { return false; }
+	bDocked = true;
+
+	// Freeze the ship and hand it nothing to do, become combat-safe, then repair + restock.
+	if (MovementComp) { MovementComp->SetInputLocked(true); }
+	if (HealthComp)
+	{
+		HealthComp->SetInvulnerable(true);
+		HealthComp->ResetPools(); // refill hull + shield
+	}
+	if (TorpedoComp) { TorpedoComp->Resupply(); }
+
+	UE_LOG(LogTemp, Log, TEXT("[Dock] Docked — repaired + restocked, combat-safe"));
+	return true;
+}
+
+void ASpaceship::Undock()
+{
+	if (!bDocked) { return; }
+	bDocked = false;
+	if (MovementComp) { MovementComp->SetInputLocked(false); }
+	if (HealthComp)   { HealthComp->SetInvulnerable(false); }
+	UE_LOG(LogTemp, Log, TEXT("[Dock] Undocked — helm control restored"));
 }
 
 void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)

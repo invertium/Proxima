@@ -30,6 +30,7 @@ float UShipMovementComponent::GetEffectiveMaxSpeed() const
 
 void UShipMovementComponent::SetThrottle(float InThrottle)
 {
+	if (bInputLocked) { return; }
 	ThrottleInput = FMath::Clamp(InThrottle, 0.f, 1.f);
 	UE_LOG(LogTemp, Log, TEXT("[ShipMovement] Throttle set to %.2f (target speed %.0f uu/s)"),
 		ThrottleInput, ThrottleInput * MaxSpeed);
@@ -37,8 +38,20 @@ void UShipMovementComponent::SetThrottle(float InThrottle)
 
 void UShipMovementComponent::SetTurn(float InTurn)
 {
+	if (bInputLocked) { return; }
 	TurnInput = FMath::Clamp(InTurn, -1.f, 1.f);
 	UE_LOG(LogTemp, Log, TEXT("[ShipMovement] Turn set to %.2f"), TurnInput);
+}
+
+void UShipMovementComponent::SetInputLocked(bool bLocked)
+{
+	bInputLocked = bLocked;
+	if (bLocked)
+	{
+		// Cut helm input so the ship coasts to a stop (CurrentSpeed eases down in Tick).
+		ThrottleInput = 0.f;
+		TurnInput = 0.f;
+	}
 }
 
 void UShipMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,

@@ -44,6 +44,7 @@ private:
 	bool HandleStationPage(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete, int32 StationId);
 	bool HandleState(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleHelm(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	bool HandleDock(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleWeapons(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandlePower(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	// Damage-control repair (timing-sweep minigame); rate-limited so it can't be spammed to full.

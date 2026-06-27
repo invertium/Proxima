@@ -21,6 +21,7 @@
 #include "Misc/ConfigCacheIni.h"
 #include "Ships/EnemyShip.h"
 #include "Ships/Spaceship.h"
+#include "World/Station.h"
 #include "SocketSubsystem.h"
 #include "UObject/UObjectIterator.h"
 
@@ -144,6 +145,8 @@ setInterval(poll,250);poll();
 			"<div class='stat'><b>SPEED</b><span id='spd'>0</span></div>"
 			"<div class='stat'><b>THROTTLE</b><span id='thr'>0%</span></div>"
 			"<div class='stat'><b>MAX SPEED</b><span id='mx'>0</span></div>"
+			"<div class='stat'><b>STARBASE</b><span id='dock'>-</span></div>"
+			"<button id='dockbtn' onclick=\"toggleDock()\">DOCK</button>"
 			"<label>THROTTLE</label>"
 			"<input id='t' type='range' min='0' max='100' value='0' "
 			"oninput=\"post('/api/helm?throttle='+(this.value/100))\">"
@@ -161,7 +164,14 @@ setInterval(poll,250);poll();
 			"$('#spd').textContent=Math.round(s.speed);"
 			"$('#thr').textContent=Math.round(s.throttle*100)+'%';"
 			"$('#mx').textContent=Math.round(s.maxSpeed);"
+			"window.dk=s.docked;"
+			"$('#dock').textContent=s.docked?'DOCKED \\u2014 repaired & restocked'"
+			":(s.canDock?'in range \\u2014 ready to dock'"
+			":(s.stationRange<0?'no base':'range '+Math.round(s.stationRange)));"
+			"const db=$('#dockbtn');db.textContent=s.docked?'\\u2191 UNDOCK':'\\u2193 DOCK';"
+			"db.disabled=!s.docked&&!s.canDock;db.className=(s.docked||s.canDock)?'rdy':'blk';"
 			"drawMap(s);}"
+			"function toggleDock(){post('/api/dock?action='+(window.dk?'undock':'dock'));}"
 			"function drawMap(s){const c=$('#map'),x=c.getContext('2d');const W=c.width,H=c.height;"
 			"const cx=W/2,cy=H/2,R=W/2-8;const scale=R/(s.radarRange||20000);"
 			"x.clearRect(0,0,W,H);"
@@ -435,6 +445,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// These are simple idempotent-ish console commands on a LAN, so GET is fine.
 	Bind(TEXT("/api/state"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleState);
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
+	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
 	Bind(TEXT("/api/weapons"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWeapons);
 	Bind(TEXT("/api/power"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandlePower);
 	Bind(TEXT("/api/engineering"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleEngineering);
@@ -538,10 +549,11 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	const UPowerComponent* Power = Ship ? Ship->GetPowerComp() : nullptr;
 	const UHealthComponent* Health = Ship ? Ship->GetHealthComp() : nullptr;
 
-	// Hostiles read out by radio callsign (e.g. "VIPER-2") rather than the raw actor name.
+	// Hostiles read out by radio callsign (e.g. "VIPER-2"); the friendly base by its name.
 	auto DisplayName = [](const AActor* A) -> FString
 	{
 		if (const AEnemyShip* E = Cast<AEnemyShip>(A)) { return E->GetCallsign(); }
+		if (const AStation* S = Cast<AStation>(A)) { return S->GetStationName(); }
 		return A ? A->GetName() : TEXT("none");
 	};
 
@@ -619,6 +631,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
+		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -651,6 +664,9 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Sci ? Sci->GetTargetMaxShield() : -1.f,
 		*MissionName, *Comms,
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
+		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
+		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),
+		Ship ? Ship->GetStationRange() : -1.f,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
@@ -671,6 +687,24 @@ bool UStationServerSubsystem::HandleHelm(const FHttpServerRequest& Request, cons
 			{
 				Move->SetTurn(QueryFloat(Request, TEXT("turn"), 0.f));
 			}
+		}
+	}
+	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleDock(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	if (ASpaceship* Ship = GetShip())
+	{
+		const FString* Action = Request.QueryParams.Find(TEXT("action"));
+		if (Action && *Action == TEXT("undock"))
+		{
+			Ship->Undock();
+		}
+		else // default: dock (no-op if out of range / moving)
+		{
+			Ship->Dock();
 		}
 	}
 	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));

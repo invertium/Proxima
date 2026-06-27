@@ -38,7 +38,7 @@ float UHealthComponent::GetShieldMitigation() const
 
 float UHealthComponent::ApplyDamage(float Amount, bool bBypassShield)
 {
-	if (Amount <= 0.f || Hull <= 0.f)
+	if (Amount <= 0.f || Hull <= 0.f || bInvulnerable)
 	{
 		return Hull;
 	}

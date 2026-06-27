@@ -20,4 +20,9 @@ public:
 	/** Colour of this contact's blip on the radar. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar")
 	FLinearColor BlipColor = FLinearColor(1.0f, 0.25f, 0.2f, 1.0f); // hostile red
+
+	/** Whether weapons/science may lock this contact. Hostiles = true; friendly structures
+	 *  (e.g. the dock station) = false, so you can't target your own base. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar")
+	bool bTargetable = true;
 };

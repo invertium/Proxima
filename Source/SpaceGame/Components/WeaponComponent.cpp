@@ -98,9 +98,9 @@ void UWeaponComponent::CycleTarget()
 	for (TObjectIterator<URadarContactComponent> It; It; ++It)
 	{
 		const URadarContactComponent* C = *It;
-		if (!IsValid(C) || C->GetWorld() != World)
+		if (!IsValid(C) || C->GetWorld() != World || !C->bTargetable)
 		{
-			continue;
+			continue; // skip friendly/non-targetable contacts (e.g. the dock station)
 		}
 		AActor* A = C->GetOwner();
 		if (A && A != Owner)

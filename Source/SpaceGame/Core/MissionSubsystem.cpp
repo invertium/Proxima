@@ -10,6 +10,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Ships/EnemyShip.h"
 #include "TimerManager.h"
+#include "World/Station.h"
 
 namespace
 {
@@ -155,6 +156,19 @@ void UMissionSubsystem::BuildEncounter(UWorld& World)
 	TArray<AActor*> Placed;
 	UGameplayStatics::GetAllActorsOfClass(&World, AEnemyShip::StaticClass(), Placed);
 	for (AActor* A : Placed) { if (A) { A->Destroy(); } }
+
+	// Home starbase (M19): a friendly dock just behind the player's start. The crew flies back to
+	// it to repair, restock, and spend salvage at the Engineering drydock. Spawn one per encounter.
+	{
+		TArray<AActor*> ExistingStations;
+		UGameplayStatics::GetAllActorsOfClass(&World, AStation::StaticClass(), ExistingStations);
+		if (ExistingStations.Num() == 0)
+		{
+			const FVector StationLoc = Anchor - Forward * 5000.f;
+			const FRotator StationRot = Forward.Rotation(); // face the same way as the player
+			World.SpawnActor<AStation>(AStation::StaticClass(), StationLoc, StationRot);
+		}
+	}
 
 	const int32 N = Mission.Enemies.Num();
 	TMap<EEnemyType, int32> TypeCounts; // per-archetype ordinal, so callsigns read WASP-1, HORNET-2, ...

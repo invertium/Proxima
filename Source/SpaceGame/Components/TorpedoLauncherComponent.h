@@ -46,6 +46,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Torpedo")
 	float GetReloadFraction() const;
 
+	/** Refill the magazine to MaxAmmo and clear the reload timer (station resupply, M19). */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Torpedo")
+	void Resupply() { Ammo = MaxAmmo; ReloadTimer = 0.f; }
+
 	/** Rounds carried at spawn (and the magazine cap). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Torpedo")
 	int32 MaxAmmo = 4;

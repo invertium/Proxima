@@ -60,6 +60,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Feel")
 	void AddCameraTrauma(float Amount);
 
+	// --- Docking (M19): dock at a friendly station to upgrade, repair, and restock ---
+
+	/** True while docked to a station. */
+	UFUNCTION(BlueprintPure, Category = "Ship|Dock")
+	bool IsDocked() const { return bDocked; }
+
+	/** Whether the ship may dock right now (a station in range + nearly stationary + not docked). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Dock")
+	bool CanDock() const;
+
+	/** Distance (uu) to the nearest station, or -1 if none. */
+	UFUNCTION(BlueprintPure, Category = "Ship|Dock")
+	float GetStationRange() const;
+
+	/** Dock if CanDock(): freeze the ship, become combat-safe, repair hull + restock torpedoes.
+	 *  Returns true on success. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Dock")
+	bool Dock();
+
+	/** Release from the station and return helm control. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Dock")
+	void Undock();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -148,7 +171,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Feel")
 	float LowHullFraction = 0.3f;
 
+	/** Max speed (uu/s) at which docking is permitted — you must come to a near-stop to dock. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Dock")
+	float DockMaxSpeed = 250.f;
+
 private:
+	/** Find the nearest AStation in the world (or null). */
+	class AStation* NearestStation() const;
+
+	/** True while docked to a station. */
+	bool bDocked = false;
+
 	/** Current shake energy 0..1; squared to drive the offset, decayed each tick. */
 	float CameraTrauma = 0.f;
 
