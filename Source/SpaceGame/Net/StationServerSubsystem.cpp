@@ -12,6 +12,7 @@
 #include "Core/MissionSubsystem.h"
 #include "Core/SpaceGameInstance.h"
 #include "Core/SpaceGameMode.h"
+#include "Core/UpgradeCatalogue.h"
 #include "Core/StationTypes.h"
 #include "Engine/World.h"
 #include "HttpServerModule.h"
@@ -278,7 +279,11 @@ setInterval(poll,250);poll();
 			     "<div id='mark' style='position:absolute;left:0;top:0;bottom:0;width:4px;background:#eaf4ff;"
 			     "box-shadow:0 0 8px #fff'></div></div>"
 			     "<button id='weld' onclick='weld()'>&#9670; WELD</button>"
-			     "<div class='stat' style='margin-top:18px'><b>REACTOR LOAD</b><span id='load'>-</span></div>");
+			     "<div class='stat' style='margin-top:18px'><b>REACTOR LOAD</b><span id='load'>-</span></div>"
+			     "<div id='drydock' style='margin-top:24px'>"
+			     "<label>DRYDOCK &mdash; UPGRADES</label>"
+			     "<div class='stat'><b>SALVAGE</b><span id='wallet' class='big'>-</span></div>"
+			     "<div id='shop'></div></div>");
 		// The hull bar + numeric readout poll from /api/state; the weld minigame runs entirely
 		// client-side (requestAnimationFrame sweep) and only POSTs a repair when the marker is
 		// inside the green zone — the server still rate-limits + caps the actual hull restore.
@@ -292,7 +297,21 @@ setInterval(poll,250);poll();
 			"const f=s.maxHull>0?s.hull/s.maxHull:0;"
 			"$('#hullbar').style.width=Math.round(f*100)+'%';"
 			"$('#hullbar').style.background=f<0.3?'#ff5a4a':(f<0.6?'#e6b800':'#43ff7a');"
-			"$('#hull').textContent=Math.round(s.hull)+' / '+Math.round(s.maxHull);}"
+			"$('#hull').textContent=Math.round(s.hull)+' / '+Math.round(s.maxHull);"
+			// Drydock store: wallet + a buy row per upgrade. Active only while docked; otherwise dimmed.
+			"$('#wallet').textContent=s.credits+' cr \\u00b7 RANK '+s.rank;"
+			"const dd=$('#drydock'),shop=$('#shop');dd.style.opacity=s.docked?1:.5;"
+			"if(!s.docked){shop.innerHTML='<div style=\"color:#6f86a8;padding:8px 2px\">Dock at the STARBASE (Helm) to outfit the ship.</div>';}"
+			"else{let h='';for(const u of (s.upgrades||[])){"
+			"let lbl=u.name+' '+(u.tier>0?('T'+u.tier):'\\u2014')+'/'+u.maxTier;"
+			"let b;if(u.maxed){b='<span style=\"color:#43ff7a;font-size:.8rem\">MAX</span>';}"
+			"else{let lock=u.rankReq>s.rank?(' \\u00b7 R'+u.rankReq):'';"
+			"b='<button onclick=\"buy(\\''+u.id+'\\')\" '+(u.affordable?'':'disabled ')+"
+			"'style=\"width:auto;margin:0;padding:8px 12px;font-size:.82rem;'+(u.affordable?'':'opacity:.4;')+'\">+'"
+			"+u.mag+u.unit+' \\u00b7 '+u.cost+'cr'+lock+'</button>';}"
+			"h+='<div style=\"display:flex;justify-content:space-between;align-items:center;padding:7px 2px;border-bottom:1px solid #15243a\"><span>'+lbl+'</span>'+b+'</div>';}"
+			"shop.innerHTML=h;}}"
+			"function buy(id){post('/api/buy?id='+id);}"
 			"let sp=0,sd=1,lt=0;"
 			"function loop(ts){if(lt){const dt=(ts-lt)/1000;sp+=sd*dt/1.2;"
 			"if(sp>=1){sp=1;sd=-1;}if(sp<=0){sp=0;sd=1;}}lt=ts;"
@@ -446,6 +465,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/state"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleState);
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
+	Bind(TEXT("/api/buy"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleBuy);
 	Bind(TEXT("/api/weapons"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWeapons);
 	Bind(TEXT("/api/power"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandlePower);
 	Bind(TEXT("/api/engineering"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleEngineering);
@@ -619,6 +639,31 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	// Campaign wallet (M19 progression) — credits/xp/rank, so any console can show standing.
 	const USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr;
 
+	// Drydock catalogue state (M19.3): per upgrade — owned tier, next cost + rank gate, and whether
+	// it's buyable right now (docked + enough rank + credits + not maxed). Drives the Engineering store.
+	FString Upgrades;
+	{
+		const int32 Credits = GI ? GI->GetCredits() : 0;
+		const int32 Rank = GI ? GI->GetRank() : 1;
+		const bool bDocked = Ship && Ship->IsDocked();
+		for (const FUpgradeDef& U : UpgradeCatalogue::Get())
+		{
+			const int32 Tier = GI ? GI->GetUpgradeTier(U.Id) : 0;
+			const bool bMaxed = Tier >= U.MaxTier;
+			const int32 Cost = bMaxed ? 0 : UpgradeCatalogue::NextCost(U, Tier);
+			const int32 RankReq = bMaxed ? 0 : UpgradeCatalogue::NextRankReq(U, Tier);
+			const bool bAffordable = bDocked && !bMaxed && Rank >= RankReq && Credits >= Cost;
+			if (!Upgrades.IsEmpty()) { Upgrades += TEXT(","); }
+			Upgrades += FString::Printf(TEXT(
+				"{\"id\":\"%s\",\"name\":\"%s\",\"unit\":\"%s\",\"tier\":%d,\"maxTier\":%d,"
+				"\"mag\":%g,\"cost\":%d,\"rankReq\":%d,\"maxed\":%s,\"affordable\":%s}"),
+				*U.Id.ToString(), *U.DisplayName, *U.Unit, Tier, U.MaxTier,
+				U.MagnitudePerTier, Cost, RankReq,
+				bMaxed ? TEXT("true") : TEXT("false"),
+				bAffordable ? TEXT("true") : TEXT("false"));
+		}
+	}
+
 	// Hand-built JSON (avoids pulling in the Json module for this flat object).
 	const FString Json = FString::Printf(TEXT(
 		"{\"phase\":\"%s\",\"speed\":%.1f,\"throttle\":%.3f,\"maxSpeed\":%.1f,"
@@ -631,7 +676,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
-		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,"
+		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,\"upgrades\":[%s],"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -666,7 +711,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),
-		Ship ? Ship->GetStationRange() : -1.f,
+		Ship ? Ship->GetStationRange() : -1.f, *Upgrades,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
@@ -705,6 +750,26 @@ bool UStationServerSubsystem::HandleDock(const FHttpServerRequest& Request, cons
 		else // default: dock (no-op if out of range / moving)
 		{
 			Ship->Dock();
+		}
+	}
+	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleBuy(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Drydock purchase (M19.3): only while docked. BuyUpgrade validates rank/credits/max + persists;
+	// on success re-apply the loadout to the live ship so the upgrade takes effect immediately.
+	ASpaceship* Ship = GetShip();
+	const FString* Id = Request.QueryParams.Find(TEXT("id"));
+	if (Ship && Ship->IsDocked() && Id)
+	{
+		if (USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr)
+		{
+			if (GI->BuyUpgrade(FName(**Id)))
+			{
+				Ship->RefreshLoadout();
+			}
 		}
 	}
 	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));

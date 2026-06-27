@@ -83,13 +83,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Dock")
 	void Undock();
 
+	/** Re-apply the ship preset + owned drydock upgrades to the live ship and refill its pools.
+	 *  Called after a drydock purchase so a bought upgrade takes effect immediately. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Dock")
+	void RefreshLoadout();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 
 	/** Apply the campaign's chosen ship variant (from the game instance): mesh/scale + movement,
-	 *  health and weapon stat trade-offs. Interceptor = fast/agile/light; Cruiser = slow/tanky. */
+	 *  health and weapon stat trade-offs. Interceptor = fast/agile/light; Cruiser = slow/tanky.
+	 *  Then layers on any owned drydock upgrades (M19.3). */
 	void ApplyShipPreset();
+
+	/** Add owned drydock upgrade magnitudes on top of the base variant stats (M19.3). */
+	void ApplyUpgrades();
 
 	/** Bound to HealthComp->OnDamaged: convert a hit into camera trauma. */
 	UFUNCTION()

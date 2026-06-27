@@ -765,3 +765,28 @@ locked input, and made damage a no-op; undock restored both; cycling weapon targ
 WASP-1/VIPER-1 (never STARBASE); the Helm page rendered the blip + "DOCKED — repaired & restocked" + an
 UNDOCK button. (Commit: World/Station.{h,cpp} + Ships/Spaceship.{h,cpp} + Components/{Health,ShipMovement,
 TorpedoLauncher,RadarContact,Weapon,Science}* + Core/MissionSubsystem.cpp + Net/StationServerSubsystem.* + docs.)
+
+---
+
+## 2026-06-27 — 🔧 M19.3 Engineering drydock store
+
+The payoff of the loop: spend salvage on ship upgrades, run by Engineering while docked.
+- **Upgrade catalogue** (`Core/UpgradeCatalogue.h`, data-in-code) — seven tiered paths (Beam Damage,
+  Beam Recharge, Targeting Arc, Hull Plating, Shield Capacity, Torpedo Tubes, Reactor Output), each tier
+  adding a magnitude to a component field, with escalating cost (`BaseCost*(tier+1)`) and a rank gate
+  (`tier+1`). Owned tiers live in `USpaceGameInstance::UpgradeTiers` (mirrored in the save, cleared on reset).
+- **Buy + apply** — `USpaceGameInstance::BuyUpgrade` validates max-tier/rank/credits, deducts, bumps the
+  tier, and persists. `ASpaceship::ApplyUpgrades` (run at the end of `ApplyShipPreset`) layers owned tiers
+  onto the base stats; `RefreshLoadout()` re-applies + tops up pools after a purchase. ApplyShipPreset now
+  resets FireArc/MaxShield/ReactorBudget to base first so re-application is idempotent.
+- **Web** — `/api/buy?id=` (docked-gated) buys + refreshes the live ship; `/api/state` carries an
+  `upgrades` array (tier, next cost, rank req, maxed, affordable). The Engineering page gained a
+  **DRYDOCK — UPGRADES** panel: wallet + rank, and a buy row per path (disabled when unaffordable),
+  active only while docked.
+
+**Verified (PIE + MCP + headless Engineering render):** funded to 2000cr/rank5 and docked, buying reactor
+×2 + beam damage ×1 left credits at 1100 (250+500+150) with `reactorBudget` exactly 4.0 (no accumulation
+bug) and `BeamDamage` 28; the reactor tier round-tripped from disk; an undocked `/api/buy` left credits
+untouched; the Engineering page rendered the drydock with SALVAGE 1100cr·RANK 5 and per-upgrade buy
+buttons, REACTOR LOAD reading 3.0/4.0. (Commit: Core/UpgradeCatalogue.h + Core/SpaceGameInstance.{h,cpp}
++ Core/SpaceSaveGame.h + Ships/Spaceship.{h,cpp} + Net/StationServerSubsystem.* + docs.)

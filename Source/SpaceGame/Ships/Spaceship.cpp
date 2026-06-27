@@ -12,6 +12,7 @@
 #include "Components/TorpedoLauncherComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Core/SpaceGameInstance.h"
+#include "Core/UpgradeCatalogue.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -134,6 +135,12 @@ void ASpaceship::ApplyShipPreset()
 	const TCHAR* MatPath = TEXT("/Game/Art/Materials/M_Insurgent.M_Insurgent");
 	float Scale = 0.6f;
 
+	// Reset the stats that the variant branch below doesn't explicitly set, so ApplyUpgrades()
+	// always adds from a clean base — re-applying (drydock RefreshLoadout) stays idempotent.
+	if (WeaponComp) { WeaponComp->FireArcDeg = 70.f; }
+	if (HealthComp) { HealthComp->MaxShield = 50.f; }
+	if (PowerComp)  { PowerComp->ReactorBudget = 3.0f; }
+
 	if (Type == EPlayerShipType::Cruiser)
 	{
 		// Heavy: slower + less agile, but a much tougher hull and harder-hitting weapons.
@@ -164,8 +171,43 @@ void ASpaceship::ApplyShipPreset()
 		ShipMesh->SetRelativeScale3D(FVector(Scale));
 	}
 
+	// Layer purchased drydock upgrades on top of the base variant stats.
+	ApplyUpgrades();
+
 	UE_LOG(LogTemp, Log, TEXT("[Ship] Variant: %s"),
 		Type == EPlayerShipType::Cruiser ? TEXT("Cruiser") : TEXT("Interceptor"));
+}
+
+void ASpaceship::ApplyUpgrades()
+{
+	const USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>();
+	if (!GI) { return; }
+
+	for (const FUpgradeDef& U : UpgradeCatalogue::Get())
+	{
+		const int32 Tier = GI->GetUpgradeTier(U.Id);
+		if (Tier <= 0) { continue; }
+		const float Add = U.MagnitudePerTier * Tier;
+		switch (U.Stat)
+		{
+		case EUpgradeStat::BeamDamage:    if (WeaponComp)  { WeaponComp->BeamDamage += Add; } break;
+		case EUpgradeStat::BeamRecharge:  if (WeaponComp)  { WeaponComp->BaseRechargeRate += Add; } break;
+		case EUpgradeStat::FireArc:       if (WeaponComp)  { WeaponComp->FireArcDeg += Add; } break;
+		case EUpgradeStat::MaxHull:       if (HealthComp)  { HealthComp->MaxHull += Add; } break;
+		case EUpgradeStat::MaxShield:     if (HealthComp)  { HealthComp->MaxShield += Add; } break;
+		case EUpgradeStat::TorpedoAmmo:   if (TorpedoComp) { TorpedoComp->MaxAmmo += FMath::RoundToInt(Add); } break;
+		case EUpgradeStat::ReactorBudget: if (PowerComp)   { PowerComp->ReactorBudget += Add; } break;
+		}
+	}
+}
+
+void ASpaceship::RefreshLoadout()
+{
+	// Re-derive base variant + upgrades, then top the pools up to the new maxima (drydock is safe).
+	ApplyShipPreset();
+	if (HealthComp)  { HealthComp->ResetPools(); }
+	if (TorpedoComp) { TorpedoComp->Resupply(); }
+	UE_LOG(LogTemp, Log, TEXT("[Ship] Loadout refreshed from drydock upgrades"));
 }
 
 void ASpaceship::AddCameraTrauma(float Amount)

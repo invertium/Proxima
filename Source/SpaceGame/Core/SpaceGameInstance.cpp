@@ -3,6 +3,7 @@
 #include "Core/SpaceGameInstance.h"
 
 #include "Core/SpaceSaveGame.h"
+#include "Core/UpgradeCatalogue.h"
 #include "Kismet/GameplayStatics.h"
 
 namespace
@@ -17,7 +18,40 @@ void USpaceGameInstance::ResetCampaign()
 	MissionIndex = 0;
 	Credits = 0;
 	XP = 0;
-	UE_LOG(LogTemp, Log, TEXT("[Campaign] Reset to mission 0 (wallet cleared)"));
+	UpgradeTiers.Reset();
+	UE_LOG(LogTemp, Log, TEXT("[Campaign] Reset to mission 0 (wallet + upgrades cleared)"));
+}
+
+bool USpaceGameInstance::BuyUpgrade(FName UpgradeId)
+{
+	const FUpgradeDef* Def = UpgradeCatalogue::Find(UpgradeId);
+	if (!Def)
+	{
+		return false;
+	}
+	const int32 Tier = GetUpgradeTier(UpgradeId);
+	if (Tier >= Def->MaxTier)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Drydock] %s already maxed (tier %d)"), *UpgradeId.ToString(), Tier);
+		return false;
+	}
+	if (GetRank() < UpgradeCatalogue::NextRankReq(*Def, Tier))
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Drydock] %s tier %d needs rank %d (have %d)"),
+			*UpgradeId.ToString(), Tier + 1, UpgradeCatalogue::NextRankReq(*Def, Tier), GetRank());
+		return false;
+	}
+	const int32 Cost = UpgradeCatalogue::NextCost(*Def, Tier);
+	if (!SpendCredits(Cost))
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Drydock] %s tier %d costs %d (have %d)"),
+			*UpgradeId.ToString(), Tier + 1, Cost, Credits);
+		return false;
+	}
+	UpgradeTiers.Add(UpgradeId, Tier + 1);
+	SaveCampaign();
+	UE_LOG(LogTemp, Log, TEXT("[Drydock] Bought %s -> tier %d (-%d cr)"), *UpgradeId.ToString(), Tier + 1, Cost);
+	return true;
 }
 
 void USpaceGameInstance::AddReward(int32 InCredits, int32 InXP)
@@ -58,6 +92,7 @@ bool USpaceGameInstance::SaveCampaign()
 	Save->PlayerShip = PlayerShip;
 	Save->Credits = Credits;
 	Save->XP = XP;
+	Save->UpgradeTiers = UpgradeTiers;
 	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotName(), 0);
 	UE_LOG(LogTemp, Log, TEXT("[Campaign] Save %s (mission %d, ship %d)"),
 		bOk ? TEXT("OK") : TEXT("FAILED"), MissionIndex, (int32)PlayerShip);
@@ -80,8 +115,9 @@ bool USpaceGameInstance::LoadCampaign()
 	PlayerShip = Save->PlayerShip;
 	Credits = FMath::Max(0, Save->Credits);
 	XP = FMath::Max(0, Save->XP);
-	UE_LOG(LogTemp, Log, TEXT("[Campaign] Loaded (mission %d, ship %d, %d cr, %d xp)"),
-		MissionIndex, (int32)PlayerShip, Credits, XP);
+	UpgradeTiers = Save->UpgradeTiers;
+	UE_LOG(LogTemp, Log, TEXT("[Campaign] Loaded (mission %d, ship %d, %d cr, %d xp, %d upgrades)"),
+		MissionIndex, (int32)PlayerShip, Credits, XP, UpgradeTiers.Num());
 	return true;
 }
 

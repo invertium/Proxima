@@ -78,6 +78,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Campaign|Economy")
 	bool SpendCredits(int32 Amount);
 
+	// --- Drydock upgrades (M19.3) ---
+
+	/** Owned tier (0 = none) for a catalogue upgrade id. */
+	UFUNCTION(BlueprintPure, Category = "Campaign|Upgrades")
+	int32 GetUpgradeTier(FName UpgradeId) const { return UpgradeTiers.FindRef(UpgradeId); }
+
+	/** Attempt to buy the next tier of an upgrade: checks the catalogue, max tier, rank, and credits;
+	 *  on success deducts credits, bumps the tier, and persists. Returns true if bought. */
+	UFUNCTION(BlueprintCallable, Category = "Campaign|Upgrades")
+	bool BuyUpgrade(FName UpgradeId);
+
 private:
 	UPROPERTY()
 	int32 MissionIndex = 0;
@@ -90,6 +101,10 @@ private:
 
 	UPROPERTY()
 	int32 XP = 0;
+
+	/** Owned upgrade tiers keyed by catalogue id (absent = tier 0). */
+	UPROPERTY()
+	TMap<FName, int32> UpgradeTiers;
 
 	/** XP needed per rank step (rank = 1 + XP/XpPerRank). */
 	static constexpr int32 XpPerRank = 400;

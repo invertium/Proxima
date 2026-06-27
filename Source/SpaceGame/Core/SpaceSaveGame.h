@@ -34,4 +34,8 @@ public:
 	/** Lifetime XP (drives crew rank). */
 	UPROPERTY(VisibleAnywhere, Category = "Campaign")
 	int32 XP = 0;
+
+	/** Owned drydock upgrade tiers keyed by catalogue id (M19.3). */
+	UPROPERTY(VisibleAnywhere, Category = "Campaign")
+	TMap<FName, int32> UpgradeTiers;
 };
