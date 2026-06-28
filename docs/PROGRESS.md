@@ -929,3 +929,21 @@ A charged FTL jump for the helm officer.
 exactly 7000 uu along its heading and reset the charge to 0 (the Helm's STARBASE range jumped 5000→12000
 afterward); the Helm rendered the READY state + WARP JUMP button. (Commit: Ships/Spaceship.{h,cpp} +
 Net/StationServerSubsystem.{h,cpp} + docs.)
+
+---
+
+## 2026-06-28 — 💥 M22 Collision (ramming) mechanics
+
+Ships now collide: flying — or warping — into an enemy hull damages both.
+- `ASpaceship::HandleCollisions` (per Tick) checks each living enemy against `CollisionRadius` (900 uu).
+  On first contact it deals ram damage scaled by closing speed (`RamDamage` × 0.5→1.5 with impulse) to the
+  enemy and `RamSelfFraction` (0.6) of it to the player, knocks both ships apart along the contact normal,
+  jolts the camera, and flashes an impact spark. Contacts are debounced via a touching-set so one collision
+  only hurts once. Skipped while docked.
+- Ramming routes through the normal `UHealthComponent::ApplyDamage`, so shields absorb first and a hard
+  enough ram can destroy an enemy (counting as a kill — rewards + comms).
+
+**Verified (PIE + MCP):** teleporting the ship 400 uu from the tutorial drone triggered a ram next tick —
+the drone's shield dropped 20→9 (11 dmg at standstill), the player took 7 (absorbed by shields), and the
+two ships were flung 400→1400 uu apart; the log recorded a single "Rammed … 11 dmg (self 7)" event (no
+per-frame spam). (Commit: Ships/Spaceship.{h,cpp} + docs.)

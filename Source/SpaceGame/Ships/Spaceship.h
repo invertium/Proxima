@@ -206,7 +206,23 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Warp")
 	float WarpChargeRate = 0.16f;
 
+	// --- Collision / ramming (M22) ---
+
+	/** Centre-to-centre distance (uu) at which the ship counts as colliding with an enemy hull. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
+	float CollisionRadius = 900.f;
+
+	/** Ram damage at a standstill; scales up toward 2x at full impulse. Applied to the enemy; the
+	 *  player takes RamSelfFraction of it (ramming hurts you too). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
+	float RamDamage = 22.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
+	float RamSelfFraction = 0.6f;
+
 private:
+	/** Per-tick ram detection: damage + knock apart on first contact (debounced via TouchingActors). */
+	void HandleCollisions(float DeltaSeconds);
 	/** Find the nearest AStation in the world (or null). */
 	class AStation* NearestStation() const;
 
@@ -215,6 +231,9 @@ private:
 
 	/** Warp drive charge 0..1 (built in Tick, scaled by engine power). */
 	float WarpCharge = 0.f;
+
+	/** Enemies currently in contact this frame, so a single collision only damages once. */
+	TSet<TWeakObjectPtr<AActor>> TouchingActors;
 
 	/** Emissive material for the warp flash FX (cyan), loaded in the constructor. */
 	UPROPERTY()

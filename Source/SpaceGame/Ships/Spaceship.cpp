@@ -16,6 +16,7 @@
 #include "Core/UpgradeCatalogue.h"
 #include "Engine/StaticMesh.h"
 #include "FX/ExplosionFx.h"
+#include "Ships/EnemyShip.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
@@ -276,6 +277,51 @@ void ASpaceship::Undock()
 	UE_LOG(LogTemp, Log, TEXT("[Dock] Undocked — helm control restored"));
 }
 
+void ASpaceship::HandleCollisions(float DeltaSeconds)
+{
+	UWorld* World = GetWorld();
+	if (!World || bDocked) { return; } // no ramming while docked at the starbase
+
+	const FVector MyLoc = GetActorLocation();
+	const float Speed = MovementComp ? FMath::Abs(MovementComp->GetSpeed()) : 0.f;
+	const float MaxSpeed = MovementComp ? FMath::Max(1.f, MovementComp->MaxSpeed) : 2100.f;
+	// Ram damage scales from RamDamage (standstill nudge) up to ~2x at full impulse.
+	const float Impact = RamDamage * (0.5f + FMath::Clamp(Speed / MaxSpeed, 0.f, 1.f));
+
+	TArray<AActor*> Enemies;
+	UGameplayStatics::GetAllActorsOfClass(World, AEnemyShip::StaticClass(), Enemies);
+
+	TSet<TWeakObjectPtr<AActor>> StillTouching;
+	for (AActor* A : Enemies)
+	{
+		AEnemyShip* Enemy = Cast<AEnemyShip>(A);
+		UHealthComponent* EnemyHealth = Enemy ? Enemy->GetHealthComp() : nullptr;
+		if (!EnemyHealth || !EnemyHealth->IsAlive()) { continue; }
+
+		FVector ToEnemy = Enemy->GetActorLocation() - MyLoc;
+		const float Dist = ToEnemy.Size();
+		if (Dist >= CollisionRadius || Dist < 1.f) { continue; }
+
+		StillTouching.Add(Enemy);
+		if (TouchingActors.Contains(Enemy)) { continue; } // already counted this contact
+
+		// New contact: both hulls take ram damage (the player a fraction of it), then knock apart.
+		EnemyHealth->ApplyDamage(Impact);
+		if (HealthComp) { HealthComp->ApplyDamage(Impact * RamSelfFraction); }
+		AddCameraTrauma(0.65f);
+
+		const FVector Normal = ToEnemy / Dist;
+		const float Push = (CollisionRadius - Dist) * 0.5f + 250.f;
+		AddActorWorldOffset(-Normal * Push, false, nullptr, ETeleportType::TeleportPhysics);
+		Enemy->AddActorWorldOffset(Normal * Push, false, nullptr, ETeleportType::TeleportPhysics);
+
+		AExplosionFx::Spawn(World, MyLoc + Normal * (Dist * 0.5f), 450.f, WarpFxMaterial, 0.3f, false);
+		UE_LOG(LogTemp, Log, TEXT("[Collision] Rammed %s — %.0f dmg (self %.0f) at %.0f uu/s"),
+			*Enemy->GetName(), Impact, Impact * RamSelfFraction, Speed);
+	}
+	TouchingActors = MoveTemp(StillTouching);
+}
+
 bool ASpaceship::Warp()
 {
 	if (!IsWarpReady())
@@ -350,6 +396,8 @@ void ASpaceship::Tick(float DeltaSeconds)
 		const float EnginePower = PowerComp ? PowerComp->GetSystemPower(EShipSystem::Engine) : 1.f;
 		WarpCharge = FMath::Clamp(WarpCharge + WarpChargeRate * EnginePower * DeltaSeconds, 0.f, 1.f);
 	}
+
+	HandleCollisions(DeltaSeconds);
 
 	if (!FollowCamera)
 	{
