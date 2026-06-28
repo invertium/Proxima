@@ -118,6 +118,7 @@ function post(path){fetch(path);}
 function renderFooter(s){const f=$('#gs'),l=$('#gsl');
  if(s.phase==='victory'){l.textContent='✔ VICTORY';f.className='gs win';}
  else if(s.phase==='defeat'){l.textContent='✖ DEFEAT';f.className='gs lose';}
+ else if(s.staged){l.textContent='◇ STANDING BY';f.className='gs live';}
  else{l.textContent='● ENCOUNTER LIVE';f.className='gs live';}}
 async function poll(){try{const r=await fetch('/api/state');const s=await r.json();render(s);renderFooter(s);}catch(e){}}
 {SCRIPT}
