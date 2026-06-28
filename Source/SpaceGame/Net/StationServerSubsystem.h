@@ -43,6 +43,7 @@ private:
 	// matched routes don't carry the path in Request.RelativePath.
 	bool HandleStationPage(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete, int32 StationId);
 	bool HandleState(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	bool HandleStarmap(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleHelm(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleDock(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleBuy(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);

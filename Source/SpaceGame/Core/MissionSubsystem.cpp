@@ -28,6 +28,7 @@ namespace
 		Tut.Enemies = { EEnemyType::Scout };
 		Tut.EngageDelayOverride = 100000.f; // the drone holds fire all mission — a safe target
 		Tut.bAutoLaunch = true;             // tutorial skips staging: the (passive) drone is up at once
+		Tut.MapX = 0.16f; Tut.MapY = 0.52f; // home space, near the friendly core of the sector
 		{
 			FCommsBeat B; B.Sender = TEXT("CMDR VOSS"); B.AtSeconds = 1.5f;
 			B.Text = TEXT("Welcome to the bridge, Captain. Before real orders, a shakedown. HELM (console 1): ease the throttle up and bring her around."); Tut.Comms.Add(B);
@@ -57,6 +58,7 @@ namespace
 		M0.Enemies = { EEnemyType::Scout, EEnemyType::Gunship };
 		M0.BriefSender = TEXT("CMDR VOSS");
 		M0.BriefText = TEXT("Captain — long-range sensors caught raiders probing the Veil frontier: a scout and a gunship squatting on the trade lane. Identify them and drive them off. We need to know who we're dealing with.");
+		M0.MapX = 0.40f; M0.MapY = 0.36f; // the trade lane, out from home
 		{
 			FCommsBeat B; B.Sender = TEXT("TACTICAL"); B.AtSeconds = 1.5f;
 			B.Text = TEXT("Contacts confirmed — those are Crimson Pact markings. They're not answering hails. Weapons free."); M0.Comms.Add(B);
@@ -72,6 +74,7 @@ namespace
 		M1.Enemies = { EEnemyType::Gunship, EEnemyType::Gunship, EEnemyType::Cruiser };
 		M1.BriefSender = TEXT("CMDR VOSS");
 		M1.BriefText = TEXT("That first contact wasn't a probe — it was bait, and you took it. A Pact patrol with a cruiser escort is waiting where that scout's signal led. Go in heavy, Captain.");
+		M1.MapX = 0.62f; M1.MapY = 0.60f; // deeper into contested space
 		{
 			FCommsBeat B; B.Sender = TEXT("TACTICAL"); B.AtSeconds = 1.5f;
 			B.Text = TEXT("Ambush! Two gunships and a cruiser just powered up around us. Should've seen it coming."); M1.Comms.Add(B);
@@ -87,6 +90,7 @@ namespace
 		M2.Enemies = { EEnemyType::Scout, EEnemyType::Scout, EEnemyType::Gunship, EEnemyType::Cruiser };
 		M2.BriefSender = TEXT("CMDR VOSS");
 		M2.BriefText = TEXT("We back-traced the patrol to the Pact's staging point. Their warlord's flagship is here with everything she has left. Break this fleet and the Crimson Pact is finished in the Veil. This is the one that matters.");
+		M2.MapX = 0.86f; M2.MapY = 0.40f; // the Pact staging point, edge of the sector
 		{
 			FCommsBeat B; B.Sender = TEXT("CMDR VOSS"); B.AtSeconds = 1.5f;
 			B.Text = TEXT("All hands, battle stations. Whatever happens out there — it's been an honour flying with this crew. For the frontier."); M2.Comms.Add(B);

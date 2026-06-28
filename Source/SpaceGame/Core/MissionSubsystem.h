@@ -35,6 +35,10 @@ struct FMissionDef
 	UPROPERTY() FString BriefSender;
 	UPROPERTY() FString BriefText;
 
+	/** Position of this system on the sector starmap (M21), normalised 0..1 in each axis. */
+	UPROPERTY() float MapX = 0.5f;
+	UPROPERTY() float MapY = 0.5f;
+
 	/** If >= 0, every spawned hostile holds fire this many seconds (tutorial uses a huge value to
 	 *  field a passive target drone). -1 keeps each archetype's own EngageDelay. */
 	UPROPERTY() float EngageDelayOverride = -1.f;

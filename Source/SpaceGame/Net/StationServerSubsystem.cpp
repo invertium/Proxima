@@ -111,6 +111,11 @@ setInterval(poll,500);poll();
 </style></head><body>
 <header><span>{TITLE}</span><a href="/stations">&larr; stations</a></header>
 <div class="wrap">{BODY}</div>
+<div id="smap" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(4,7,14,.95);
+ flex-direction:column;align-items:center;justify-content:center;padding:16px">
+<div id="smaptitle" style="letter-spacing:3px;color:#8fb8e6;margin-bottom:6px;font-weight:600">SECTOR MAP</div>
+<canvas id="smapc" width="560" height="380" style="max-width:94vw;max-height:62vh;background:#060b14;border:1px solid #20406a;border-radius:12px"></canvas>
+<button onclick="closeStarmap()" style="width:auto;margin-top:16px;padding:12px 30px">&times; CLOSE</button></div>
 <footer id="gs" class="gs live"><span id="gsl">●</span>
 <button onclick="if(confirm('Restart the encounter for everyone?'))post('/api/game?action=restart')">&#8635; RESTART</button></footer>
 <script>
@@ -122,6 +127,23 @@ function renderFooter(s){const f=$('#gs'),l=$('#gsl');
  else if(s.staged){l.textContent='◇ STANDING BY';f.className='gs live';}
  else{l.textContent='● ENCOUNTER LIVE';f.className='gs live';}}
 async function poll(){try{const r=await fetch('/api/state');const s=await r.json();render(s);renderFooter(s);}catch(e){}}
+async function openStarmap(){try{const d=await(await fetch('/api/starmap')).json();drawStarmap(d);$('#smap').style.display='flex';}catch(e){}}
+function closeStarmap(){$('#smap').style.display='none';}
+function drawStarmap(d){const c=$('#smapc'),x=c.getContext('2d'),W=c.width,H=c.height,pad=48;
+ $('#smaptitle').textContent=(d.sector||'SECTOR MAP');
+ const X=v=>pad+v*(W-2*pad),Y=v=>pad+v*(H-2*pad),sys=d.systems||[];
+ x.clearRect(0,0,W,H);
+ x.fillStyle='#0a1322';for(let i=0;i<70;i++){x.fillRect((i*97)%W,(i*53)%H,1,1);}
+ x.strokeStyle='rgba(90,140,210,.45)';x.lineWidth=2;x.setLineDash([7,7]);x.beginPath();
+ for(let i=0;i<sys.length;i++){const px=X(sys[i].x),py=Y(sys[i].y);i?x.lineTo(px,py):x.moveTo(px,py);}
+ x.stroke();x.setLineDash([]);
+ for(const s of sys){const px=X(s.x),py=Y(s.y);
+  const col=s.status==='cleared'?'#43ff7a':(s.status==='current'?'#ffd24a':'#5b6b82');
+  if(s.status==='current'){x.strokeStyle='rgba(255,210,74,.55)';x.lineWidth=2;x.beginPath();x.arc(px,py,15,0,7);x.stroke();}
+  x.fillStyle=col;x.beginPath();x.arc(px,py,7,0,7);x.fill();
+  x.fillStyle=s.status==='locked'?'#7184a0':'#e6eefb';x.font='600 14px system-ui';x.textAlign='center';
+  x.fillText(s.name,px,py-22);
+  x.fillStyle='#6f86a8';x.font='10px system-ui';x.fillText(s.status.toUpperCase(),px,py+28);}}
 {SCRIPT}
 setInterval(poll,250);poll();
 </script></body></html>)HTML");
@@ -149,6 +171,8 @@ setInterval(poll,250);poll();
 			"<div style='text-align:center;font-size:.8rem;letter-spacing:1px;margin-top:6px;color:#8fb8e6'>"
 			"FIRING ARCS &nbsp; <span style='color:#ff7a5a'>&#9632; PHASER</span> &nbsp; "
 			"<span style='color:#78b4ff'>&#9632; TORPEDO</span></div>"
+			"<button onclick='openStarmap()' style='width:auto;margin:10px auto 0;display:block;"
+			"padding:8px 18px;font-size:.9rem'>&#9678; SECTOR MAP</button>"
 			"<div class='stat'><b>HEADING</b><span id='hdg' class='big'>0&deg;</span></div>"
 			"<div class='stat'><b>SPEED</b><span id='spd'>0</span></div>"
 			"<div class='stat'><b>THROTTLE</b><span id='thr'>0%</span></div>"
@@ -351,6 +375,8 @@ setInterval(poll,250);poll();
 		// Cycle to a contact, run a timed scan, then read its hull/shield live off the target.
 		const FString Body = TEXT(
 			"<div class='stat'><b>MISSION</b><span id='msn'>&mdash;</span></div>"
+			"<button onclick='openStarmap()' style='width:auto;margin:10px auto 0;display:block;"
+			"padding:8px 18px;font-size:.9rem'>&#9678; SECTOR MAP</button>"
 			"<label>COMMS</label>"
 			"<div id='comms' style='height:150px;overflow-y:auto;background:#0b1220;border:1px solid #15243a;"
 			"border-radius:8px;padding:8px;text-align:left;font-size:.92rem;line-height:1.3'>"
@@ -487,6 +513,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// lack a Content-Length header, which empty browser fetch() POSTs don't reliably send.
 	// These are simple idempotent-ish console commands on a LAN, so GET is fine.
 	Bind(TEXT("/api/state"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleState);
+	Bind(TEXT("/api/starmap"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleStarmap);
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
 	Bind(TEXT("/api/buy"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleBuy);
@@ -765,6 +792,36 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		*Upgrades, *Ships,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
+	OnComplete(MakeResponse(Json, TEXT("application/json")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Sector starmap (M21): the campaign's systems laid out across the Veil frontier, with each marked
+	// cleared / current / locked relative to the mission the crew is on.
+	int32 Current = 0;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+		{
+			Current = MS->GetMissionIndex();
+		}
+	}
+
+	FString Systems;
+	const int32 Count = UMissionSubsystem::MissionCount();
+	for (int32 i = 0; i < Count; ++i)
+	{
+		const FMissionDef Def = UMissionSubsystem::GetMissionDef(i);
+		const TCHAR* Status = i < Current ? TEXT("cleared") : (i == Current ? TEXT("current") : TEXT("locked"));
+		if (!Systems.IsEmpty()) { Systems += TEXT(","); }
+		Systems += FString::Printf(TEXT("{\"name\":\"%s\",\"x\":%.3f,\"y\":%.3f,\"status\":\"%s\"}"),
+			*JsonEscape(Def.Name), Def.MapX, Def.MapY, Status);
+	}
+
+	const FString Json = FString::Printf(
+		TEXT("{\"sector\":\"THE VEIL FRONTIER\",\"current\":%d,\"systems\":[%s]}"), Current, *Systems);
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
 	return true;
 }

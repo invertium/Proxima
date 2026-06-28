@@ -895,3 +895,19 @@ the wrapped "THE VEIL IS SECURE" epilogue + "Salvage: +360 credits, +140 XP — 
 
 **M20 story mode complete** — shakedown tutorial, between-mission staging/briefings, a connected
 three-mission Crimson Pact arc, and a victory epilogue.
+
+---
+
+## 2026-06-28 — 🗺️ M21.1 Sector starmap
+
+A strategic view of the campaign, openable from Helm or Science.
+- `FMissionDef` gains normalised `MapX`/`MapY`; each mission is placed across "THE VEIL FRONTIER" sector.
+- New `/api/starmap` returns the systems (name, x, y) with each marked cleared / current / locked from the
+  live mission index.
+- A **SECTOR MAP** button on the Helm and Science consoles opens a shared full-screen modal (added to the
+  page shell) that draws the sector: a dashed route through the systems, green=cleared, amber-ringed=
+  current, grey=locked, with labels. Scales to mobile.
+
+**Verified (PIE + Playwright desktop + iPhone):** on First Contact, `/api/starmap` reported Shakedown
+cleared / First Contact current / the rest locked; the overlay rendered the route + nodes correctly on
+both viewports. (Commit: Core/MissionSubsystem.{h,cpp} + Net/StationServerSubsystem.{h,cpp} + docs.)
