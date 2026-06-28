@@ -20,6 +20,14 @@ struct FCommsBeat
 	bool bFired = false;
 };
 
+/** Visual archetype for a system's landmark on the open sector map (M23). */
+UENUM(BlueprintType)
+enum class ELandmarkKind : uint8
+{
+	Planet UMETA(DisplayName = "Planet"), // a modest coloured world
+	Sun    UMETA(DisplayName = "Sun")     // a huge bright star
+};
+
 /** One campaign mission: a name, the enemy fleet to field, and its comms script. */
 USTRUCT()
 struct FMissionDef
@@ -38,6 +46,12 @@ struct FMissionDef
 	/** Position of this system on the sector starmap (M21), normalised 0..1 in each axis. */
 	UPROPERTY() float MapX = 0.5f;
 	UPROPERTY() float MapY = 0.5f;
+
+	/** The system's landmark on the open sector (M23): a distinct body the crew flies to. */
+	UPROPERTY() FString LandmarkName;
+	UPROPERTY() ELandmarkKind LandmarkKind = ELandmarkKind::Planet;
+	UPROPERTY() FLinearColor LandmarkColor = FLinearColor(0.4f, 0.7f, 1.0f, 1.0f);
+	UPROPERTY() float LandmarkScale = 1.0f;
 
 	/** If >= 0, every spawned hostile holds fire this many seconds (tutorial uses a huge value to
 	 *  field a passive target drone). -1 keeps each archetype's own EngageDelay. */
@@ -89,6 +103,11 @@ public:
 	/** Look up a mission definition by index (clamped to the table). */
 	static FMissionDef GetMissionDef(int32 Index);
 
+	/** World location of a system's landmark in the open sector (M23): the home system sits at the
+	 *  sector anchor (player start) and the rest spread out by MapX/MapY. */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	FVector GetSystemLocation(int32 Index) const;
+
 	/** True while the encounter is staged: the sector is clear (no fleet yet) so the crew can dock,
 	 *  repair, and outfit before the fight. Launch spawns the fleet and clears this. */
 	UFUNCTION(BlueprintPure, Category = "Mission")
@@ -102,6 +121,9 @@ public:
 private:
 	/** Spawn the friendly starbase just behind the player's start (once per encounter). */
 	void SpawnStation(UWorld& World);
+
+	/** Spawn every system's landmark body across the open sector (M23). */
+	void SpawnLandmarks(UWorld& World);
 
 	/** Destroy level-placed hostiles and spawn this mission's fleet ahead of the player. */
 	void SpawnFleet(UWorld& World);
@@ -118,6 +140,9 @@ private:
 
 	int32 MissionIndex = 0;
 	FMissionDef Mission;
+
+	/** Sector origin = the player's begin-play location; the home system sits here (M23). */
+	FVector SectorAnchor = FVector::ZeroVector;
 
 	TArray<FCommsMessage> CommsLog;
 	float StartTime = 0.f;

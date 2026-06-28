@@ -24,6 +24,7 @@
 #include "Ships/EnemyShip.h"
 #include "Ships/Spaceship.h"
 #include "World/Station.h"
+#include "World/WorldLandmark.h"
 #include "SocketSubsystem.h"
 #include "UObject/UObjectIterator.h"
 
@@ -633,6 +634,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	{
 		if (const AEnemyShip* E = Cast<AEnemyShip>(A)) { return E->GetCallsign(); }
 		if (const AStation* S = Cast<AStation>(A)) { return S->GetStationName(); }
+		if (const AWorldLandmark* L = Cast<AWorldLandmark>(A)) { return L->GetLandmarkName(); }
 		return A ? A->GetName() : TEXT("none");
 	};
 

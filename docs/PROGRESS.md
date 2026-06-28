@@ -968,3 +968,24 @@ Feedback pass on the new ramming.
 shielded-bubble ram triggered at 1000 uu with the `[shield]` tag; destroying a Scout spawned 5 `ADebris`
 chunks (jagged non-uniform scale, drifting), visible as Debris0–4 in the world. (Commit:
 Ships/Spaceship.{h,cpp} + Ships/EnemyShip.cpp + FX/Debris.{h,cpp} + docs.)
+
+---
+
+## 2026-06-28 — 🪐 M23.1 Sector landmarks (open-world foundation)
+
+First slice of the open sector (M23): the campaign's systems become distinct bodies laid out in space.
+- New `AWorldLandmark` (`World/WorldLandmark.{h,cpp}`): a big sphere with a non-targetable radar blip + a
+  display name. Planets use LIT materials (M_Earth for the blue home world, M_Insurgent/M_PlayerHull for
+  others) so they read as shaded worlds up close; the sun uses the emissive glow — clearly different bodies,
+  all from the existing palette (no imports).
+- `FMissionDef` gains `LandmarkName/Kind/Color/Scale` (+ `ELandmarkKind{Planet,Sun}`). `UMissionSubsystem`
+  maps each system's `MapX/MapY` to a world position over a `SectorSpan` (120 k uu), anchored on the player
+  start (home offset so the ship isn't inside the home body), and spawns a landmark at each — Haven (home),
+  Tarsis, Korrin Belt, and the **Ember** sun at the Pact staging point.
+- Landmark names resolve on the consoles (the `/api/state` contact `DisplayName` now handles
+  `AWorldLandmark`).
+
+**Verified (PIE + MCP + OS capture):** four landmarks spawned at the right spread (Haven at home → Ember
+~85 k uu out); they show as named, colour-tinted neutral blips on the Helm radar; up close Tarsis renders
+as a lit, textured moon (not a white blob). (Commit: World/WorldLandmark.{h,cpp} + Core/MissionSubsystem.{h,cpp}
++ Net/StationServerSubsystem.cpp + docs.)
