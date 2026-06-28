@@ -83,7 +83,8 @@ setInterval(poll,500);poll();
 <title>{TITLE}</title>
 <style>
  body{margin:0;background:#05080f;color:#cfe6ff;font-family:system-ui,sans-serif;
-   -webkit-user-select:none;user-select:none;overflow:hidden}
+   -webkit-user-select:none;user-select:none;
+   overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
  header{padding:12px 16px;font-weight:600;letter-spacing:3px;border-bottom:1px solid {ACCENT};
    display:flex;justify-content:space-between;align-items:center}
  header a{color:#6f86a8;text-decoration:none;font-size:.8rem;letter-spacing:1px}
