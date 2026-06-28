@@ -50,42 +50,50 @@ namespace
 		}
 		C.Add(Tut);
 
+		// --- Story arc: the Crimson Pact incursion into the Veil frontier ---
+
 		FMissionDef M0;
 		M0.Name = TEXT("First Contact");
 		M0.Enemies = { EEnemyType::Scout, EEnemyType::Gunship };
+		M0.BriefSender = TEXT("CMDR VOSS");
+		M0.BriefText = TEXT("Captain — long-range sensors caught raiders probing the Veil frontier: a scout and a gunship squatting on the trade lane. Identify them and drive them off. We need to know who we're dealing with.");
 		{
-			FCommsBeat B; B.Sender = TEXT("COMMAND"); B.AtSeconds = 1.0f;
-			B.Text = TEXT("Bridge, two unknowns just dropped in. Identify and engage."); M0.Comms.Add(B);
+			FCommsBeat B; B.Sender = TEXT("TACTICAL"); B.AtSeconds = 1.5f;
+			B.Text = TEXT("Contacts confirmed — those are Crimson Pact markings. They're not answering hails. Weapons free."); M0.Comms.Add(B);
 		}
 		{
-			FCommsBeat B; B.Sender = TEXT("SCOUT-7"); B.OnKill = 1;
-			B.Text = TEXT("They're hostile — the scout is down. Watch the gunship's beam."); M0.Comms.Add(B);
+			FCommsBeat B; B.Sender = TEXT("CMDR VOSS"); B.OnKill = 1;
+			B.Text = TEXT("Scout's down — but it got a transmission off before it died. The gunship's the real threat now; mind its beam."); M0.Comms.Add(B);
 		}
 		C.Add(M0);
 
 		FMissionDef M1;
 		M1.Name = TEXT("Patrol Ambush");
 		M1.Enemies = { EEnemyType::Gunship, EEnemyType::Gunship, EEnemyType::Cruiser };
+		M1.BriefSender = TEXT("CMDR VOSS");
+		M1.BriefText = TEXT("That first contact wasn't a probe — it was bait, and you took it. A Pact patrol with a cruiser escort is waiting where that scout's signal led. Go in heavy, Captain.");
 		{
-			FCommsBeat B; B.Sender = TEXT("COMMAND"); B.AtSeconds = 1.0f;
-			B.Text = TEXT("It was a trap — a cruiser escort just lit up. Hold the line."); M1.Comms.Add(B);
+			FCommsBeat B; B.Sender = TEXT("TACTICAL"); B.AtSeconds = 1.5f;
+			B.Text = TEXT("Ambush! Two gunships and a cruiser just powered up around us. Should've seen it coming."); M1.Comms.Add(B);
 		}
 		{
-			FCommsBeat B; B.Sender = TEXT("ENGINEER"); B.OnKill = 2;
-			B.Text = TEXT("Escorts clear. The cruiser's shields are heavy — torpedoes will punch through."); M1.Comms.Add(B);
+			FCommsBeat B; B.Sender = TEXT("ENGINEER KANE"); B.OnKill = 2;
+			B.Text = TEXT("Escorts are scrap. That cruiser's shields are layered thick — route power to weapons and let the torpedoes punch through."); M1.Comms.Add(B);
 		}
 		C.Add(M1);
 
 		FMissionDef M2;
-		M2.Name = TEXT("Last Stand");
+		M2.Name = TEXT("Warlord's Reach");
 		M2.Enemies = { EEnemyType::Scout, EEnemyType::Scout, EEnemyType::Gunship, EEnemyType::Cruiser };
+		M2.BriefSender = TEXT("CMDR VOSS");
+		M2.BriefText = TEXT("We back-traced the patrol to the Pact's staging point. Their warlord's flagship is here with everything she has left. Break this fleet and the Crimson Pact is finished in the Veil. This is the one that matters.");
 		{
-			FCommsBeat B; B.Sender = TEXT("COMMAND"); B.AtSeconds = 1.0f;
-			B.Text = TEXT("This is the last of them. Clear this sector and we're done. Good luck."); M2.Comms.Add(B);
+			FCommsBeat B; B.Sender = TEXT("CMDR VOSS"); B.AtSeconds = 1.5f;
+			B.Text = TEXT("All hands, battle stations. Whatever happens out there — it's been an honour flying with this crew. For the frontier."); M2.Comms.Add(B);
 		}
 		{
-			FCommsBeat B; B.Sender = TEXT("COMMAND"); B.OnKill = 3;
-			B.Text = TEXT("Just the cruiser left. Finish it, Captain."); M2.Comms.Add(B);
+			FCommsBeat B; B.Sender = TEXT("TACTICAL"); B.OnKill = 3;
+			B.Text = TEXT("Screen's down — just the flagship left. She's wounded and she knows it. Finish it, Captain."); M2.Comms.Add(B);
 		}
 		C.Add(M2);
 
@@ -146,11 +154,14 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	else
 	{
 		// Staging phase (M20): sector is clear. Let the crew dock + outfit, then launch when ready.
+		// Show the mission's story briefing here (falling back to a generic prompt).
 		bStaged = true;
-		FCommsMessage Prompt;
-		Prompt.Sender = TEXT("CMDR VOSS");
-		Prompt.Text = TEXT("Sector's clear, Captain. Dock at the starbase to repair and outfit the ship, then hit LAUNCH on the Helm when you're ready to engage.");
-		CommsLog.Add(Prompt);
+		FCommsMessage Brief;
+		Brief.Sender = Mission.BriefSender.IsEmpty() ? TEXT("CMDR VOSS") : Mission.BriefSender;
+		Brief.Text = Mission.BriefText.IsEmpty()
+			? TEXT("Sector's clear, Captain. Dock at the starbase to repair and outfit the ship, then hit LAUNCH on the Helm when you're ready.")
+			: Mission.BriefText + TEXT("  Dock to repair and outfit, then LAUNCH on the Helm when you're ready.");
+		CommsLog.Add(Brief);
 		UE_LOG(LogTemp, Log, TEXT("[Mission] Staged '%s' — awaiting launch"), *Mission.Name);
 	}
 }

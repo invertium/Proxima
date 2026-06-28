@@ -30,6 +30,11 @@ struct FMissionDef
 	UPROPERTY() TArray<EEnemyType> Enemies;
 	UPROPERTY() TArray<FCommsBeat> Comms;
 
+	/** Pre-fight briefing shown on the comms log during the staging phase (before launch). Empty =
+	 *  fall back to the generic "sector clear, resupply + launch" prompt. */
+	UPROPERTY() FString BriefSender;
+	UPROPERTY() FString BriefText;
+
 	/** If >= 0, every spawned hostile holds fire this many seconds (tutorial uses a huge value to
 	 *  field a passive target drone). -1 keeps each archetype's own EngageDelay. */
 	UPROPERTY() float EngageDelayOverride = -1.f;

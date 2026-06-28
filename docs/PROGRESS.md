@@ -859,3 +859,22 @@ STARBASE on radar (the previously-leaking level-placed enemy is now cleared at b
 rendered the clear sector + LAUNCH button; `action=launch` flipped `staged:false`, spawned WASP-1 +
 VIPER-1, and fired the COMMAND briefing; a second launch was a no-op. The tutorial still auto-launches.
 (Commit: Core/MissionSubsystem.{h,cpp} + Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-06-28 — 📖 M20.3 Story arc for the campaign (the Crimson Pact)
+
+The three combat missions now tell a connected story instead of issuing terse combat prompts.
+- **Per-mission briefing** — `FMissionDef` gains `BriefSender`/`BriefText`, shown on the comms log during
+  the staging phase (with the generic "dock + LAUNCH" reminder appended). Missions without one fall back
+  to the old generic prompt.
+- **The arc** — First Contact (raiders probing the Veil → "Crimson Pact markings"; a scout escapes a
+  transmission), Patrol Ambush ("that wasn't a probe — it was bait"), and Warlord's Reach (renamed from
+  Last Stand — the Pact warlord's flagship, a last stand for the frontier). The recurring cast (CMDR VOSS,
+  TACTICAL, ENGINEER KANE — seeded by the tutorial) carries through, with launch + on-kill beats per
+  mission.
+
+**Verified (PIE + MCP + headless Science render):** First Contact staged with the VOSS briefing, launch
+fired the TACTICAL "Crimson Pact" beat, the first kill fired VOSS's "it got a transmission off" line;
+Patrol Ambush and Warlord's Reach showed their briefings; the Science console rendered the Warlord's Reach
+briefing cleanly. (Commit: Core/MissionSubsystem.{h,cpp} + docs.)
