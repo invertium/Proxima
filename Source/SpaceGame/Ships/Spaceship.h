@@ -208,21 +208,29 @@ protected:
 
 	// --- Collision / ramming (M22) ---
 
-	/** Centre-to-centre distance (uu) at which the ship counts as colliding with an enemy hull. */
+	/** Hull-to-hull contact distance (uu) when neither ship has shields up. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
-	float CollisionRadius = 900.f;
+	float CollisionRadius = 650.f;
 
-	/** Ram damage at a standstill; scales up toward 2x at full impulse. Applied to the enemy; the
-	 *  player takes RamSelfFraction of it (ramming hurts you too). */
+	/** Extra contact distance added per ship that has its shields up — the shield bubble juts past the
+	 *  hull, so a shielded ship has a bigger hitbox (and the impact lands on the shield, not the hull). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
-	float RamDamage = 22.f;
+	float ShieldRadiusBonus = 320.f;
+
+	/** Ram damage at a standstill; scales toward 1.5x at full impulse. Applied to the enemy; the player
+	 *  takes RamSelfFraction of it — a hard, mutual hit, not a free kill. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
+	float RamDamage = 48.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
-	float RamSelfFraction = 0.6f;
+	float RamSelfFraction = 1.0f;
 
 private:
 	/** Per-tick ram detection: damage + knock apart on first contact (debounced via TouchingActors). */
 	void HandleCollisions(float DeltaSeconds);
+
+	/** Spawn a short burst of spark streaks at an impact point (orange for hull, cyan for a shield hit). */
+	void SpawnImpactSparks(const FVector& Location, bool bShieldHit);
 	/** Find the nearest AStation in the world (or null). */
 	class AStation* NearestStation() const;
 
@@ -235,9 +243,13 @@ private:
 	/** Enemies currently in contact this frame, so a single collision only damages once. */
 	TSet<TWeakObjectPtr<AActor>> TouchingActors;
 
-	/** Emissive material for the warp flash FX (cyan), loaded in the constructor. */
+	/** Emissive material for the warp flash + shield-impact sparks (cyan), loaded in the constructor. */
 	UPROPERTY()
 	TObjectPtr<class UMaterialInterface> WarpFxMaterial;
+
+	/** Emissive material for hull-impact sparks (orange), loaded in the constructor. */
+	UPROPERTY()
+	TObjectPtr<class UMaterialInterface> HullSparkMaterial;
 
 	/** Current shake energy 0..1; squared to drive the offset, decayed each tick. */
 	float CameraTrauma = 0.f;

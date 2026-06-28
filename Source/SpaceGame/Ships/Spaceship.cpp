@@ -15,6 +15,7 @@
 #include "Core/SpaceGameInstance.h"
 #include "Core/UpgradeCatalogue.h"
 #include "Engine/StaticMesh.h"
+#include "FX/BeamFx.h"
 #include "FX/ExplosionFx.h"
 #include "Ships/EnemyShip.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -36,9 +37,13 @@ ASpaceship::ASpaceship()
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> HullMesh(TEXT("/Game/Art/Meshes/Insurgent.Insurgent"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> HullMat(TEXT("/Game/Art/Materials/M_Insurgent.M_Insurgent"));
 
-	// Cyan flash for the warp-jump FX (M21).
+	// Cyan flash for the warp-jump FX + shield-impact sparks (M21/M22).
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WarpFx(TEXT("/Game/Art/Materials/M_GlowCyan.M_GlowCyan"));
 	if (WarpFx.Succeeded()) { WarpFxMaterial = WarpFx.Object; }
+
+	// Orange sparks for hull-on-hull collisions (M22).
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Spark(TEXT("/Game/Art/Materials/M_GlowOrange.M_GlowOrange"));
+	if (Spark.Succeeded()) { HullSparkMaterial = Spark.Object; }
 
 	// Main hull. The model's length runs along its local Y; yaw -90 swings the nose to
 	// the actor's +X (forward). Scaled down from the asset's ~1100uu length.
@@ -285,8 +290,9 @@ void ASpaceship::HandleCollisions(float DeltaSeconds)
 	const FVector MyLoc = GetActorLocation();
 	const float Speed = MovementComp ? FMath::Abs(MovementComp->GetSpeed()) : 0.f;
 	const float MaxSpeed = MovementComp ? FMath::Max(1.f, MovementComp->MaxSpeed) : 2100.f;
-	// Ram damage scales from RamDamage (standstill nudge) up to ~2x at full impulse.
+	// Ram damage scales from 0.5x (standstill nudge) up to 1.5x at full impulse.
 	const float Impact = RamDamage * (0.5f + FMath::Clamp(Speed / MaxSpeed, 0.f, 1.f));
+	const bool bMyShield = HealthComp && HealthComp->GetShield() > 0.f;
 
 	TArray<AActor*> Enemies;
 	UGameplayStatics::GetAllActorsOfClass(World, AEnemyShip::StaticClass(), Enemies);
@@ -298,28 +304,54 @@ void ASpaceship::HandleCollisions(float DeltaSeconds)
 		UHealthComponent* EnemyHealth = Enemy ? Enemy->GetHealthComp() : nullptr;
 		if (!EnemyHealth || !EnemyHealth->IsAlive()) { continue; }
 
+		// Shields enlarge the hitbox: each shielded ship's bubble juts past the hull, so contact
+		// happens sooner and the impact is read as a shield flare rather than a hull spark.
+		const bool bEnemyShield = EnemyHealth->GetShield() > 0.f;
+		const float ContactDist = CollisionRadius
+			+ (bMyShield ? ShieldRadiusBonus : 0.f)
+			+ (bEnemyShield ? ShieldRadiusBonus : 0.f);
+
 		FVector ToEnemy = Enemy->GetActorLocation() - MyLoc;
 		const float Dist = ToEnemy.Size();
-		if (Dist >= CollisionRadius || Dist < 1.f) { continue; }
+		if (Dist >= ContactDist || Dist < 1.f) { continue; }
 
 		StillTouching.Add(Enemy);
 		if (TouchingActors.Contains(Enemy)) { continue; } // already counted this contact
 
-		// New contact: both hulls take ram damage (the player a fraction of it), then knock apart.
+		// New contact: both hulls take ram damage (a hard, mutual hit), then knock apart.
 		EnemyHealth->ApplyDamage(Impact);
 		if (HealthComp) { HealthComp->ApplyDamage(Impact * RamSelfFraction); }
-		AddCameraTrauma(0.65f);
+		AddCameraTrauma(0.7f);
 
 		const FVector Normal = ToEnemy / Dist;
-		const float Push = (CollisionRadius - Dist) * 0.5f + 250.f;
+		const float Push = (ContactDist - Dist) * 0.5f + 250.f;
 		AddActorWorldOffset(-Normal * Push, false, nullptr, ETeleportType::TeleportPhysics);
 		Enemy->AddActorWorldOffset(Normal * Push, false, nullptr, ETeleportType::TeleportPhysics);
 
-		AExplosionFx::Spawn(World, MyLoc + Normal * (Dist * 0.5f), 450.f, WarpFxMaterial, 0.3f, false);
-		UE_LOG(LogTemp, Log, TEXT("[Collision] Rammed %s — %.0f dmg (self %.0f) at %.0f uu/s"),
-			*Enemy->GetName(), Impact, Impact * RamSelfFraction, Speed);
+		// Sparks on the shield bubble (cyan) or bare hull (orange), not an explosion.
+		const bool bShieldHit = bEnemyShield || bMyShield;
+		SpawnImpactSparks(MyLoc + Normal * (Dist * 0.5f), bShieldHit);
+		UE_LOG(LogTemp, Log, TEXT("[Collision] Rammed %s — %.0f dmg (self %.0f) at %.0f uu/s%s"),
+			*Enemy->GetName(), Impact, Impact * RamSelfFraction, Speed, bShieldHit ? TEXT(" [shield]") : TEXT(""));
 	}
 	TouchingActors = MoveTemp(StillTouching);
+}
+
+void ASpaceship::SpawnImpactSparks(const FVector& Location, bool bShieldHit)
+{
+	UWorld* World = GetWorld();
+	if (!World) { return; }
+	UMaterialInterface* Mat = bShieldHit ? WarpFxMaterial : HullSparkMaterial;
+
+	// A short shower of streaks radiating from the contact point — reads as an impact, not a blast.
+	const int32 Count = bShieldHit ? 10 : 7;
+	for (int32 i = 0; i < Count; ++i)
+	{
+		const FVector Dir = FMath::VRand();
+		const float Len = FMath::FRandRange(180.f, 420.f);
+		ABeamFx::Spawn(World, Location, Location + Dir * Len, Mat,
+			FMath::FRandRange(7.f, 13.f), FMath::FRandRange(0.12f, 0.22f));
+	}
 }
 
 bool ASpaceship::Warp()

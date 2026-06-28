@@ -7,6 +7,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "FX/BeamFx.h"
+#include "FX/Debris.h"
 #include "FX/ExplosionFx.h"
 #include "Materials/MaterialInterface.h"
 #include "Sound/SoundBase.h"
@@ -172,7 +173,18 @@ void AEnemyShip::HandleDeath(AActor* DeadActor)
 			FxMaterial, FMath::FRandRange(0.3f, 0.5f), false);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s destroyed -> despawning"), *GetName());
+	// Blow the hull apart into drifting wreckage — chunks sized to the ship, tinted its colour,
+	// flung outward to linger and tumble after the blast.
+	const float ShipScale = ShipMesh ? ShipMesh->GetRelativeScale3D().X : 0.6f;
+	const int32 ChunkCount = 5 + (ShipType == EEnemyType::Cruiser ? 3 : 0);
+	for (int32 i = 0; i < ChunkCount; ++i)
+	{
+		const FVector Vel = FMath::VRand() * FMath::FRandRange(350.f, 950.f);
+		ADebris::Spawn(World, Loc + Vel.GetSafeNormal() * 120.f, Vel, FxMaterial,
+			ShipScale * 0.7f, FMath::FRandRange(8.f, 14.f));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s destroyed -> %d debris, despawning"), *GetName(), ChunkCount);
 	Destroy();
 }
 

@@ -947,3 +947,24 @@ Ships now collide: flying — or warping — into an enemy hull damages both.
 the drone's shield dropped 20→9 (11 dmg at standstill), the player took 7 (absorbed by shields), and the
 two ships were flung 400→1400 uu apart; the log recorded a single "Rammed … 11 dmg (self 7)" event (no
 per-frame spam). (Commit: Ships/Spaceship.{h,cpp} + docs.)
+
+---
+
+## 2026-06-28 — 💥 M22.1 Collision polish: heavier rams, shield hitbox, sparks, debris
+
+Feedback pass on the new ramming.
+- **Heavier, mutual rams** — `RamDamage` 22→48 and `RamSelfFraction` 0.6→1.0, so a ram is a hard hit that
+  costs the attacker as much as the target (no more cheap ramming). Still scales 0.5→1.5x with impulse.
+- **Shield hitbox** — shields now enlarge the collision bubble: `CollisionRadius` is the hull-to-hull
+  base (650), and each ship with shields up adds `ShieldRadiusBonus` (320). A shielded ship is hit
+  sooner, on the shield rather than the hull (verified: a ram landed at 1000 uu, beyond the 650 hull
+  radius, tagged `[shield]`).
+- **Impact sparks, not a blast** — collisions now spawn a short shower of `ABeamFx` spark streaks
+  (orange for a hull hit, cyan for a shield hit) instead of the explosion sphere.
+- **Debris** — new `ADebris` actor: a destroyed ship throws 5 (cruisers 8) jagged, tinted hull chunks
+  that drift with drag, tumble, and shrink away over ~8–14 s. Spawned from `AEnemyShip::HandleDeath`.
+
+**Verified (PIE + MCP + OS capture):** a standstill ram now reads 24 dmg / 24 self (was 11/7); the
+shielded-bubble ram triggered at 1000 uu with the `[shield]` tag; destroying a Scout spawned 5 `ADebris`
+chunks (jagged non-uniform scale, drifting), visible as Debris0–4 in the world. (Commit:
+Ships/Spaceship.{h,cpp} + Ships/EnemyShip.cpp + FX/Debris.{h,cpp} + docs.)
