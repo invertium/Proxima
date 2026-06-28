@@ -159,9 +159,14 @@ void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
 		}
 		else
 		{
+			// Campaign finale: a story epilogue closing the Crimson Pact arc, then the run's standing.
 			OutcomeKind = EOutcomeKind::VictoryComplete;
-			ShowOutcome(FText::FromString(TEXT("CAMPAIGN COMPLETE")), Green,
-				FText::FromString(Haul),
+			const FString Epilogue = FString::Printf(TEXT(
+				"The warlord's flagship is gone — and with it the Crimson Pact's grip on the Veil. "
+				"For the first time in months the frontier is quiet, because of this crew. "
+				"Stand down, Captain. You've earned the calm.\n\n%s"), *Haul);
+			ShowOutcome(FText::FromString(TEXT("THE VEIL IS SECURE")), Green,
+				FText::FromString(Epilogue),
 				TEXT("MAIN MENU"), FString());
 		}
 	}

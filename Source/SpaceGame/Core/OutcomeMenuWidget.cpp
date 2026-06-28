@@ -48,8 +48,10 @@ void UOutcomeMenuWidget::BuildUI()
 	{
 		S->SetHorizontalAlignment(HAlign_Center);
 	}
-	if (UVerticalBoxSlot* S = Box->AddChildToVerticalBox(
-		MakeText(WidgetTree, CfgSubtitle, 18, FLinearColor(0.65f, 0.75f, 0.9f, 1.f))))
+	UTextBlock* Sub = MakeText(WidgetTree, CfgSubtitle, 18, FLinearColor(0.65f, 0.75f, 0.9f, 1.f));
+	Sub->SetAutoWrapText(true);          // let a longer story epilogue wrap instead of overflowing
+	Sub->SetWrapTextAt(760.f);
+	if (UVerticalBoxSlot* S = Box->AddChildToVerticalBox(Sub))
 	{
 		S->SetPadding(FMargin(0.f, 6.f, 0.f, 30.f));
 		S->SetHorizontalAlignment(HAlign_Center);

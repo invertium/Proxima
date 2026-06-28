@@ -878,3 +878,20 @@ The three combat missions now tell a connected story instead of issuing terse co
 fired the TACTICAL "Crimson Pact" beat, the first kill fired VOSS's "it got a transmission off" line;
 Patrol Ambush and Warlord's Reach showed their briefings; the Science console rendered the Warlord's Reach
 briefing cleanly. (Commit: Core/MissionSubsystem.{h,cpp} + docs.)
+
+---
+
+## 2026-06-28 — 🏆 M20.4 Campaign epilogue (close the Crimson Pact arc)
+
+Beating the warlord now lands a proper story ending instead of a generic "CAMPAIGN COMPLETE".
+- The final victory shows **"THE VEIL IS SECURE"** with a CMDR VOSS-style epilogue closing the arc, then
+  the run's salvage/standing. `UOutcomeMenuWidget` now auto-wraps its subtitle (`SetAutoWrapText` +
+  `SetWrapTextAt(760)`) so the multi-line epilogue lays out instead of overflowing.
+- Mid-campaign victories are unchanged ("SECTOR CLEARED" + NEXT MISSION).
+
+**Verified (PIE + OS capture of the host overlay):** winning Warlord's Reach (the last mission) rendered
+the wrapped "THE VEIL IS SECURE" epilogue + "Salvage: +360 credits, +140 XP — RANK 1" + MAIN MENU.
+(Commit: Core/BridgePlayerController.cpp + Core/OutcomeMenuWidget.cpp + docs.)
+
+**M20 story mode complete** — shakedown tutorial, between-mission staging/briefings, a connected
+three-mission Crimson Pact arc, and a victory epilogue.
