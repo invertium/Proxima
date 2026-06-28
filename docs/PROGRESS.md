@@ -837,3 +837,25 @@ one Scout + the starbase; the four timed beats fired in order (VOSS → KANE →
 ship took zero fire (log: 0 enemy FIRE) and hull stayed 80/80; destroying the drone fired the final VOSS
 beat, banked 40cr, reached victory, and advanced MissionIndex to 1; the Science console rendered the
 narration log. (Commit: Core/MissionSubsystem.{h,cpp} + Core/SpaceGameInstance.cpp + Ships/EnemyShip.h + docs.)
+
+---
+
+## 2026-06-28 — ⏸️ M20.2 Between-mission staging (resupply before the fight)
+
+Combat missions no longer drop you straight into a firefight — each opens in a **staging phase** so the
+crew can dock, repair, outfit, and buy ships before engaging.
+- **Staged start** — `UMissionSubsystem` now splits `OnWorldBeginPlay` into always-on setup (clear
+  level-placed hostiles, spawn the starbase) and a deferred `LaunchEncounter` that spawns the fleet +
+  starts the comms clock. Combat missions begin `bStaged` with no enemies; a CMDR VOSS prompt invites
+  the crew to resupply and launch when ready. The tutorial sets `FMissionDef::bAutoLaunch` to skip
+  staging (its passive drone is up immediately).
+- **Launch control** — `/api/game?action=launch` calls `LaunchEncounter` (idempotent via `bLaunched`).
+  `/api/state` exposes `staged`; the Helm page shows a green **LAUNCH MISSION** button only while staged,
+  and the landing page reads "STANDING BY — resupply, then LAUNCH".
+- Briefing beats now time from launch (not level load), so they land as the fight opens.
+
+**Verified (PIE + MCP + headless Helm render):** loading First Contact showed `staged:true` with only the
+STARBASE on radar (the previously-leaking level-placed enemy is now cleared at begin play); the Helm
+rendered the clear sector + LAUNCH button; `action=launch` flipped `staged:false`, spawned WASP-1 +
+VIPER-1, and fired the COMMAND briefing; a second launch was a no-op. The tutorial still auto-launches.
+(Commit: Core/MissionSubsystem.{h,cpp} + Net/StationServerSubsystem.cpp + docs.)

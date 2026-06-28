@@ -27,6 +27,7 @@ namespace
 		Tut.Name = TEXT("Shakedown Cruise");
 		Tut.Enemies = { EEnemyType::Scout };
 		Tut.EngageDelayOverride = 100000.f; // the drone holds fire all mission — a safe target
+		Tut.bAutoLaunch = true;             // tutorial skips staging: the (passive) drone is up at once
 		{
 			FCommsBeat B; B.Sender = TEXT("CMDR VOSS"); B.AtSeconds = 1.5f;
 			B.Text = TEXT("Welcome to the bridge, Captain. Before real orders, a shakedown. HELM (console 1): ease the throttle up and bring her around."); Tut.Comms.Add(B);
@@ -123,14 +124,52 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	UE_LOG(LogTemp, Log, TEXT("[Mission] Building mission %d '%s' — %d hostile(s)"),
 		MissionIndex, *Mission.Name, Mission.Enemies.Num());
 
-	BuildEncounter(InWorld);
-
-	// Run the mission's comms script: timed beats off a repeating timer (paused with the game),
-	// kill-triggered beats off the hostiles' deaths (bound in BuildEncounter).
 	CommsLog.Reset();
 	KillCount = 0;
-	StartTime = InWorld.GetTimeSeconds();
-	InWorld.GetTimerManager().SetTimer(BeatTimer, this, &UMissionSubsystem::CheckTimedBeats, 0.25f, true);
+	bLaunched = false;
+
+	// Clear any level-placed hostiles up front so the staged sector starts genuinely empty (the
+	// mission owns its fleet, spawned on launch). Non-destructive to the saved map.
+	TArray<AActor*> Placed;
+	UGameplayStatics::GetAllActorsOfClass(&InWorld, AEnemyShip::StaticClass(), Placed);
+	for (AActor* A : Placed) { if (A) { A->Destroy(); } }
+
+	// The starbase is always present so the crew can dock from the moment they arrive.
+	SpawnStation(InWorld);
+
+	if (Mission.bAutoLaunch)
+	{
+		// Tutorial-style: no staging, the (passive) fleet is up immediately.
+		bStaged = false;
+		LaunchEncounter();
+	}
+	else
+	{
+		// Staging phase (M20): sector is clear. Let the crew dock + outfit, then launch when ready.
+		bStaged = true;
+		FCommsMessage Prompt;
+		Prompt.Sender = TEXT("CMDR VOSS");
+		Prompt.Text = TEXT("Sector's clear, Captain. Dock at the starbase to repair and outfit the ship, then hit LAUNCH on the Helm when you're ready to engage.");
+		CommsLog.Add(Prompt);
+		UE_LOG(LogTemp, Log, TEXT("[Mission] Staged '%s' — awaiting launch"), *Mission.Name);
+	}
+}
+
+void UMissionSubsystem::LaunchEncounter()
+{
+	if (bLaunched) { return; }
+	UWorld* World = GetWorld();
+	if (!World) { return; }
+
+	bLaunched = true;
+	bStaged = false;
+
+	SpawnFleet(*World);
+
+	// Time the mission's briefing beats from launch, so they land as the fight opens.
+	StartTime = World->GetTimeSeconds();
+	World->GetTimerManager().SetTimer(BeatTimer, this, &UMissionSubsystem::CheckTimedBeats, 0.25f, true);
+	UE_LOG(LogTemp, Log, TEXT("[Mission] LAUNCH '%s' — %d hostile(s) inbound"), *Mission.Name, Mission.Enemies.Num());
 }
 
 void UMissionSubsystem::CheckTimedBeats()
@@ -169,9 +208,10 @@ void UMissionSubsystem::FireBeat(FCommsBeat& Beat)
 	UE_LOG(LogTemp, Log, TEXT("[Comms] %s: %s"), *Beat.Sender, *Beat.Text);
 }
 
-void UMissionSubsystem::BuildEncounter(UWorld& World)
+void UMissionSubsystem::SpawnStation(UWorld& World)
 {
-	// Anchor the fleet on the player: spawn in a fan ahead of the ship's nose.
+	// Home starbase (M19): a friendly dock just behind the player's start. The crew flies back to
+	// it to repair, restock, and spend salvage at the Engineering drydock. Spawn one per encounter.
 	FVector Anchor = FVector::ZeroVector;
 	FVector Forward = FVector::ForwardVector;
 	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(&World, 0))
@@ -180,22 +220,25 @@ void UMissionSubsystem::BuildEncounter(UWorld& World)
 		Forward = Player->GetActorForwardVector();
 	}
 
-	// Clear any level-placed hostiles so the mission owns the encounter (non-destructive to the map).
-	TArray<AActor*> Placed;
-	UGameplayStatics::GetAllActorsOfClass(&World, AEnemyShip::StaticClass(), Placed);
-	for (AActor* A : Placed) { if (A) { A->Destroy(); } }
-
-	// Home starbase (M19): a friendly dock just behind the player's start. The crew flies back to
-	// it to repair, restock, and spend salvage at the Engineering drydock. Spawn one per encounter.
+	TArray<AActor*> ExistingStations;
+	UGameplayStatics::GetAllActorsOfClass(&World, AStation::StaticClass(), ExistingStations);
+	if (ExistingStations.Num() == 0)
 	{
-		TArray<AActor*> ExistingStations;
-		UGameplayStatics::GetAllActorsOfClass(&World, AStation::StaticClass(), ExistingStations);
-		if (ExistingStations.Num() == 0)
-		{
-			const FVector StationLoc = Anchor - Forward * 5000.f;
-			const FRotator StationRot = Forward.Rotation(); // face the same way as the player
-			World.SpawnActor<AStation>(AStation::StaticClass(), StationLoc, StationRot);
-		}
+		const FVector StationLoc = Anchor - Forward * 5000.f;
+		const FRotator StationRot = Forward.Rotation(); // face the same way as the player
+		World.SpawnActor<AStation>(AStation::StaticClass(), StationLoc, StationRot);
+	}
+}
+
+void UMissionSubsystem::SpawnFleet(UWorld& World)
+{
+	// Anchor the fleet on the player: spawn in a fan ahead of the ship's nose.
+	FVector Anchor = FVector::ZeroVector;
+	FVector Forward = FVector::ForwardVector;
+	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(&World, 0))
+	{
+		Anchor = Player->GetActorLocation();
+		Forward = Player->GetActorForwardVector();
 	}
 
 	const int32 N = Mission.Enemies.Num();

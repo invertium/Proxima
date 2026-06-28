@@ -71,6 +71,7 @@ function game(a){fetch('/api/game?action='+a);}
 async function poll(){try{const s=await(await fetch('/api/state')).json();const e=document.getElementById('state');
  if(s.phase==='victory'){e.textContent='✔ VICTORY — all hostiles destroyed';e.className='win';}
  else if(s.phase==='defeat'){e.textContent='✖ DEFEAT — ship destroyed';e.className='lose';}
+ else if(s.staged){e.textContent='◇ STANDING BY — resupply, then LAUNCH at the Helm';e.className='live';}
  else{e.textContent='● ENCOUNTER LIVE';e.className='live';}}catch(e){}}
 setInterval(poll,500);poll();
 </script>
@@ -149,6 +150,9 @@ setInterval(poll,250);poll();
 			"<div class='stat'><b>MAX SPEED</b><span id='mx'>0</span></div>"
 			"<div class='stat'><b>STARBASE</b><span id='dock'>-</span></div>"
 			"<button id='dockbtn' onclick=\"toggleDock()\">DOCK</button>"
+			"<button id='launchbtn' onclick=\"post('/api/game?action=launch')\" "
+			"style='display:none;background:#1c2e16;border-color:#43ff7a;color:#cd"
+			"ffd9'>&#9654; LAUNCH MISSION</button>"
 			"<label>THROTTLE</label>"
 			"<input id='t' type='range' min='0' max='100' value='0' "
 			"oninput=\"post('/api/helm?throttle='+(this.value/100))\">"
@@ -172,6 +176,7 @@ setInterval(poll,250);poll();
 			":(s.stationRange<0?'no base':'range '+Math.round(s.stationRange)));"
 			"const db=$('#dockbtn');db.textContent=s.docked?'\\u2191 UNDOCK':'\\u2193 DOCK';"
 			"db.disabled=!s.docked&&!s.canDock;db.className=(s.docked||s.canDock)?'rdy':'blk';"
+			"$('#launchbtn').style.display=s.staged?'block':'none';"
 			"drawMap(s);}"
 			"function toggleDock(){post('/api/dock?action='+(window.dk?'undock':'dock'));}"
 			"function drawMap(s){const c=$('#map'),x=c.getContext('2d');const W=c.width,H=c.height;"
@@ -637,11 +642,13 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	// Mission name + story comms log (Science console) from the mission subsystem.
 	FString MissionName;
 	FString Comms;
+	bool bStaged = false;
 	if (const UWorld* World = GetWorld())
 	{
 		if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
 		{
 			MissionName = MS->GetMissionName();
+			bStaged = MS->IsStaged();
 			for (const FCommsMessage& M : MS->GetComms())
 			{
 				if (!Comms.IsEmpty()) { Comms += TEXT(","); }
@@ -714,7 +721,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
-		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,\"upgrades\":[%s],\"ships\":[%s],"
+		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,\"staged\":%s,\"upgrades\":[%s],\"ships\":[%s],"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -749,7 +756,8 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),
-		Ship ? Ship->GetStationRange() : -1.f, *Upgrades, *Ships,
+		Ship ? Ship->GetStationRange() : -1.f, bStaged ? TEXT("true") : TEXT("false"),
+		*Upgrades, *Ships,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
@@ -954,6 +962,14 @@ bool UStationServerSubsystem::HandleGame(const FHttpServerRequest& Request, cons
 			if (ASpaceGameMode* GM = World->GetAuthGameMode<ASpaceGameMode>())
 			{
 				GM->RestartEncounter();
+			}
+		}
+		// "launch" ends the staging phase and spawns the mission's fleet (the crew starts the fight).
+		if (Action && *Action == TEXT("launch"))
+		{
+			if (UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+			{
+				MS->LaunchEncounter();
 			}
 		}
 	}

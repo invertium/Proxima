@@ -33,6 +33,10 @@ struct FMissionDef
 	/** If >= 0, every spawned hostile holds fire this many seconds (tutorial uses a huge value to
 	 *  field a passive target drone). -1 keeps each archetype's own EngageDelay. */
 	UPROPERTY() float EngageDelayOverride = -1.f;
+
+	/** When true the fleet spawns immediately (no staging) — used by the tutorial. Combat missions
+	 *  leave this false so they open in a staging phase: dock + outfit, then launch when ready. */
+	UPROPERTY() bool bAutoLaunch = false;
 };
 
 /** A transmission shown on the Science comms log. */
@@ -76,9 +80,22 @@ public:
 	/** Look up a mission definition by index (clamped to the table). */
 	static FMissionDef GetMissionDef(int32 Index);
 
+	/** True while the encounter is staged: the sector is clear (no fleet yet) so the crew can dock,
+	 *  repair, and outfit before the fight. Launch spawns the fleet and clears this. */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	bool IsStaged() const { return bStaged; }
+
+	/** Begin the engagement: spawn the mission's fleet and start its comms script. No-op once launched
+	 *  (or while already fighting). Triggered from the Helm "LAUNCH" control. */
+	UFUNCTION(BlueprintCallable, Category = "Mission")
+	void LaunchEncounter();
+
 private:
+	/** Spawn the friendly starbase just behind the player's start (once per encounter). */
+	void SpawnStation(UWorld& World);
+
 	/** Destroy level-placed hostiles and spawn this mission's fleet ahead of the player. */
-	void BuildEncounter(UWorld& World);
+	void SpawnFleet(UWorld& World);
 
 	/** Poll for time-triggered comms beats (repeating timer; paused with the game). */
 	void CheckTimedBeats();
@@ -96,5 +113,7 @@ private:
 	TArray<FCommsMessage> CommsLog;
 	float StartTime = 0.f;
 	int32 KillCount = 0;
+	bool bStaged = false;
+	bool bLaunched = false;
 	FTimerHandle BeatTimer;
 };
