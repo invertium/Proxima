@@ -141,8 +141,11 @@ setInterval(poll,250);poll();
 		// Top-down tactical map (north-up, player-centred) mirroring URadarWidget, drawn on a
 		// canvas, plus a numeric heading readout and the throttle/turn controls.
 		const FString Body = TEXT(
+			// Native 320x320 buffer (drawMap maths off c.width/height); CSS scales the *display* size so
+			// the radar shrinks on short screens, keeping the flight controls within easy reach.
 			"<canvas id='map' width='320' height='320' "
-			"style='display:block;margin:6px auto 0;background:#070d16;border-radius:50%;border:1px solid #15243a'></canvas>"
+			"style='display:block;margin:6px auto 0;background:#070d16;border-radius:50%;border:1px solid #15243a;"
+			"width:min(320px,86vw,40vh);height:min(320px,86vw,40vh)'></canvas>"
 			"<div style='text-align:center;font-size:.8rem;letter-spacing:1px;margin-top:6px;color:#8fb8e6'>"
 			"FIRING ARCS &nbsp; <span style='color:#ff7a5a'>&#9632; PHASER</span> &nbsp; "
 			"<span style='color:#78b4ff'>&#9632; TORPEDO</span></div>"
