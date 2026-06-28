@@ -88,6 +88,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Dock")
 	void RefreshLoadout();
 
+	// --- Warp drive (M21): a charged FTL jump along the bow ---
+
+	/** Warp charge 0..1 (builds over time, faster with engine power; 1 = ready). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Warp")
+	float GetWarpCharge() const { return WarpCharge; }
+
+	/** True when a warp can be triggered (fully charged, not docked). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Warp")
+	bool IsWarpReady() const { return !bDocked && WarpCharge >= 1.f; }
+
+	/** Jump WarpDistance along the bow if charged; spends the charge. Returns true if it jumped. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Warp")
+	bool Warp();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -184,12 +198,27 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Dock")
 	float DockMaxSpeed = 250.f;
 
+	/** Distance (uu) a warp jump covers along the bow. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Warp")
+	float WarpDistance = 7000.f;
+
+	/** Warp charge gained per second at nominal (1.0x) engine power. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Warp")
+	float WarpChargeRate = 0.16f;
+
 private:
 	/** Find the nearest AStation in the world (or null). */
 	class AStation* NearestStation() const;
 
 	/** True while docked to a station. */
 	bool bDocked = false;
+
+	/** Warp drive charge 0..1 (built in Tick, scaled by engine power). */
+	float WarpCharge = 0.f;
+
+	/** Emissive material for the warp flash FX (cyan), loaded in the constructor. */
+	UPROPERTY()
+	TObjectPtr<class UMaterialInterface> WarpFxMaterial;
 
 	/** Current shake energy 0..1; squared to drive the offset, decayed each tick. */
 	float CameraTrauma = 0.f;

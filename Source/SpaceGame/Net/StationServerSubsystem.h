@@ -46,6 +46,7 @@ private:
 	bool HandleStarmap(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleHelm(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleDock(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	bool HandleWarp(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleBuy(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleShip(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleWeapons(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);

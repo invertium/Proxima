@@ -182,6 +182,8 @@ setInterval(poll,250);poll();
 			"<button id='launchbtn' onclick=\"post('/api/game?action=launch')\" "
 			"style='display:none;background:#1c2e16;border-color:#43ff7a;color:#cd"
 			"ffd9'>&#9654; LAUNCH MISSION</button>"
+			"<div class='stat'><b>WARP DRIVE</b><span id='warp'>-</span></div>"
+			"<button id='warpbtn' onclick=\"post('/api/warp')\">WARP</button>"
 			"<label>THROTTLE</label>"
 			"<input id='t' type='range' min='0' max='100' value='0' "
 			"oninput=\"post('/api/helm?throttle='+(this.value/100))\">"
@@ -206,6 +208,10 @@ setInterval(poll,250);poll();
 			"const db=$('#dockbtn');db.textContent=s.docked?'\\u2191 UNDOCK':'\\u2193 DOCK';"
 			"db.disabled=!s.docked&&!s.canDock;db.className=(s.docked||s.canDock)?'rdy':'blk';"
 			"$('#launchbtn').style.display=s.staged?'block':'none';"
+			"const wc=Math.round((s.warpCharge||0)*100),wb=$('#warpbtn');"
+			"$('#warp').textContent=s.docked?'offline (docked)':(s.warpReady?'READY':wc+'%');"
+			"wb.textContent=s.warpReady?'\\u27a4 WARP JUMP':'CHARGING '+wc+'%';"
+			"wb.disabled=!s.warpReady;wb.className=s.warpReady?'rdy':'blk';"
 			"drawMap(s);}"
 			"function toggleDock(){post('/api/dock?action='+(window.dk?'undock':'dock'));}"
 			"function drawMap(s){const c=$('#map'),x=c.getContext('2d');const W=c.width,H=c.height;"
@@ -516,6 +522,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/starmap"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleStarmap);
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
+	Bind(TEXT("/api/warp"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWarp);
 	Bind(TEXT("/api/buy"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleBuy);
 	Bind(TEXT("/api/ship"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleShip);
 	Bind(TEXT("/api/weapons"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWeapons);
@@ -753,7 +760,8 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
-		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,\"staged\":%s,\"upgrades\":[%s],\"ships\":[%s],"
+		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,\"staged\":%s,"
+		"\"warpCharge\":%.3f,\"warpReady\":%s,\"upgrades\":[%s],\"ships\":[%s],"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -789,6 +797,8 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),
 		Ship ? Ship->GetStationRange() : -1.f, bStaged ? TEXT("true") : TEXT("false"),
+		Ship ? Ship->GetWarpCharge() : 0.f,
+		(Ship && Ship->IsWarpReady()) ? TEXT("true") : TEXT("false"),
 		*Upgrades, *Ships,
 		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
@@ -859,6 +869,17 @@ bool UStationServerSubsystem::HandleDock(const FHttpServerRequest& Request, cons
 		{
 			Ship->Dock();
 		}
+	}
+	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleWarp(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Warp drive (M21): a charged FTL jump along the bow, triggered from the Helm.
+	if (ASpaceship* Ship = GetShip())
+	{
+		Ship->Warp();
 	}
 	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
 	return true;

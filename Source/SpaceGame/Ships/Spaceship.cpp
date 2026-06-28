@@ -15,6 +15,7 @@
 #include "Core/SpaceGameInstance.h"
 #include "Core/UpgradeCatalogue.h"
 #include "Engine/StaticMesh.h"
+#include "FX/ExplosionFx.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
@@ -33,6 +34,10 @@ ASpaceship::ASpaceship()
 	// Imported player hull: Quaternius "Insurgent" fighter (CC0), blue palette (M13/assets).
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> HullMesh(TEXT("/Game/Art/Meshes/Insurgent.Insurgent"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> HullMat(TEXT("/Game/Art/Materials/M_Insurgent.M_Insurgent"));
+
+	// Cyan flash for the warp-jump FX (M21).
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WarpFx(TEXT("/Game/Art/Materials/M_GlowCyan.M_GlowCyan"));
+	if (WarpFx.Succeeded()) { WarpFxMaterial = WarpFx.Object; }
 
 	// Main hull. The model's length runs along its local Y; yaw -90 swings the nose to
 	// the actor's +X (forward). Scaled down from the asset's ~1100uu length.
@@ -271,6 +276,29 @@ void ASpaceship::Undock()
 	UE_LOG(LogTemp, Log, TEXT("[Dock] Undocked — helm control restored"));
 }
 
+bool ASpaceship::Warp()
+{
+	if (!IsWarpReady())
+	{
+		return false;
+	}
+
+	const FVector From = GetActorLocation();
+	const FVector Delta = GetActorForwardVector() * WarpDistance;
+	AddActorWorldOffset(Delta, /*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
+	WarpCharge = 0.f;
+	AddCameraTrauma(0.75f);
+
+	// Warp flash at the departure and arrival points.
+	if (WarpFxMaterial)
+	{
+		AExplosionFx::Spawn(GetWorld(), From, 600.f, WarpFxMaterial, 0.45f, false);
+		AExplosionFx::Spawn(GetWorld(), GetActorLocation(), 600.f, WarpFxMaterial, 0.45f, false);
+	}
+	UE_LOG(LogTemp, Log, TEXT("[Warp] Jumped %.0f uu along bow"), WarpDistance);
+	return true;
+}
+
 void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)
 {
 	AddCameraTrauma(EffectiveDamage * HitTraumaPerDamage);
@@ -315,6 +343,13 @@ void ASpaceship::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	UpdateAmbientAudio();
+
+	// Warp drive trickle-charges over time, faster with engine power routed (Engineering synergy).
+	if (!bDocked)
+	{
+		const float EnginePower = PowerComp ? PowerComp->GetSystemPower(EShipSystem::Engine) : 1.f;
+		WarpCharge = FMath::Clamp(WarpCharge + WarpChargeRate * EnginePower * DeltaSeconds, 0.f, 1.f);
+	}
 
 	if (!FollowCamera)
 	{

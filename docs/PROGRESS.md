@@ -911,3 +911,21 @@ A strategic view of the campaign, openable from Helm or Science.
 **Verified (PIE + Playwright desktop + iPhone):** on First Contact, `/api/starmap` reported Shakedown
 cleared / First Contact current / the rest locked; the overlay rendered the route + nodes correctly on
 both viewports. (Commit: Core/MissionSubsystem.{h,cpp} + Net/StationServerSubsystem.{h,cpp} + docs.)
+
+---
+
+## 2026-06-28 — 🌀 M21.2 Warp drive (Helm)
+
+A charged FTL jump for the helm officer.
+- `ASpaceship` gains a warp drive: `WarpCharge` trickle-builds in Tick (scaled by engine power, so routing
+  power to engines charges it faster), `IsWarpReady()` (full charge + not docked), and `Warp()` which
+  jumps `WarpDistance` (7000 uu) along the bow, spends the charge, jolts the camera, and flashes cyan
+  warp FX at departure + arrival.
+- Web: `/api/warp` triggers it; `/api/state` carries `warpCharge` + `warpReady`. The Helm page shows a
+  **WARP DRIVE** readout (CHARGING %/READY/offline-when-docked) and a **WARP JUMP** button that arms
+  green when ready.
+
+**Verified (PIE + MCP):** the charge built to 1.0 and `warpReady` flipped true; `Warp()` moved the ship
+exactly 7000 uu along its heading and reset the charge to 0 (the Helm's STARBASE range jumped 5000→12000
+afterward); the Helm rendered the READY state + WARP JUMP button. (Commit: Ships/Spaceship.{h,cpp} +
+Net/StationServerSubsystem.{h,cpp} + docs.)
