@@ -21,6 +21,34 @@ namespace
 	{
 		TArray<FMissionDef> C;
 
+		// Mission 0 — Shakedown: the story-mode tutorial. A narrated walk through the four stations,
+		// then a single passive target drone (EngageDelayOverride huge → never fires) to drill weapons.
+		FMissionDef Tut;
+		Tut.Name = TEXT("Shakedown Cruise");
+		Tut.Enemies = { EEnemyType::Scout };
+		Tut.EngageDelayOverride = 100000.f; // the drone holds fire all mission — a safe target
+		{
+			FCommsBeat B; B.Sender = TEXT("CMDR VOSS"); B.AtSeconds = 1.5f;
+			B.Text = TEXT("Welcome to the bridge, Captain. Before real orders, a shakedown. HELM (console 1): ease the throttle up and bring her around."); Tut.Comms.Add(B);
+		}
+		{
+			FCommsBeat B; B.Sender = TEXT("ENGINEER KANE"); B.AtSeconds = 11.f;
+			B.Text = TEXT("ENGINEERING (console 3): reactor power is a balance — feed one system and another starves. Give it a try, then weld any hull damage."); Tut.Comms.Add(B);
+		}
+		{
+			FCommsBeat B; B.Sender = TEXT("CMDR VOSS"); B.AtSeconds = 22.f;
+			B.Text = TEXT("See the STARBASE on your scope? Fly back and DOCK to repair, rearm, and outfit the ship at the drydock. You'll lean on it out there."); Tut.Comms.Add(B);
+		}
+		{
+			FCommsBeat B; B.Sender = TEXT("TACTICAL"); B.AtSeconds = 33.f;
+			B.Text = TEXT("Sensors tag a derelict raider — reactor cold, no threat. WEAPONS (console 2): lock it, point your bow to bring it into the firing arc, and fire."); Tut.Comms.Add(B);
+		}
+		{
+			FCommsBeat B; B.Sender = TEXT("CMDR VOSS"); B.OnKill = 1;
+			B.Text = TEXT("Clean kill. You're cleared for active duty, Captain — real orders are inbound. Stay sharp out there."); Tut.Comms.Add(B);
+		}
+		C.Add(Tut);
+
 		FMissionDef M0;
 		M0.Name = TEXT("First Contact");
 		M0.Enemies = { EEnemyType::Scout, EEnemyType::Gunship };
@@ -191,6 +219,10 @@ void UMissionSubsystem::BuildEncounter(UWorld& World)
 			const EEnemyType Type = Mission.Enemies[i];
 			Enemy->ShipType = Type;
 			Enemy->Callsign = AEnemyShip::MakeCallsign(Type, TypeCounts.FindOrAdd(Type)++);
+			if (Mission.EngageDelayOverride >= 0.f)
+			{
+				Enemy->SetEngageDelay(Mission.EngageDelayOverride); // passive target drone (tutorial)
+			}
 			UGameplayStatics::FinishSpawningActor(Enemy, Xform);
 			// Drive kill-triggered comms beats off each hostile's death.
 			if (UHealthComponent* H = Enemy->GetHealthComp())

@@ -9,9 +9,9 @@
 
 namespace
 {
-	// Mission count for the campaign. The mission table itself lands in M18.4
-	// (UMissionSubsystem); this is the single source of truth for clamping until then.
-	constexpr int32 CampaignMissionCount = 3;
+	// Mission count for the campaign — must match UMissionSubsystem's table size (BuildCampaign):
+	// the Shakedown tutorial (M20) + three combat missions.
+	constexpr int32 CampaignMissionCount = 4;
 }
 
 void USpaceGameInstance::ResetCampaign()

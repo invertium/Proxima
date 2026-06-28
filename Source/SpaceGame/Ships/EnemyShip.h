@@ -74,6 +74,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Enemy")
 	int32 GetRewardXP() const { return RewardXP; }
 
+	/** Override the post-spawn fire-hold (seconds) before BeginPlay reads it into GraceTimer. The
+	 *  mission spawner uses this to field a passive target drone for the tutorial (huge delay). */
+	UFUNCTION(BlueprintCallable, Category = "Enemy|AI")
+	void SetEngageDelay(float Seconds) { EngageDelay = Seconds; }
+
 	/** Archetype, set by the mission spawner before FinishSpawning; applied in BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
 	EEnemyType ShipType = EEnemyType::Gunship;

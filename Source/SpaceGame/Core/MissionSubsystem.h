@@ -29,6 +29,10 @@ struct FMissionDef
 	UPROPERTY() FString Name;
 	UPROPERTY() TArray<EEnemyType> Enemies;
 	UPROPERTY() TArray<FCommsBeat> Comms;
+
+	/** If >= 0, every spawned hostile holds fire this many seconds (tutorial uses a huge value to
+	 *  field a passive target drone). -1 keeps each archetype's own EngageDelay. */
+	UPROPERTY() float EngageDelayOverride = -1.f;
 };
 
 /** A transmission shown on the Science comms log. */

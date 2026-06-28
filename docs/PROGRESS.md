@@ -816,3 +816,24 @@ Gunboat ownership survived a load round-trip from disk. (Commit: Core/ShipCatalo
 
 **M19 complete** — missions pay salvage + XP, you dock at a starbase to repair/restock, and Engineering
 spends the haul on tiered upgrades and new ships. Story mode is the planned M20.
+
+---
+
+## 2026-06-28 — 📖 M20.1 Story mode: Shakedown tutorial mission
+
+Story mode opens with a gentle, narrated tutorial as the new campaign mission 0.
+- **Shakedown Cruise** (`UMissionSubsystem::BuildCampaign`) — prepended before First Contact, so the
+  campaign is now four missions (`USpaceGameInstance` CampaignMissionCount 3→4). Five scripted comms beats
+  (a new recurring cast: CMDR VOSS, ENGINEER KANE, TACTICAL) walk the crew through Helm, Engineering,
+  docking at the starbase, and Weapons, then a final on-kill sign-off.
+- **Passive target drone** — `FMissionDef::EngageDelayOverride` (new) makes every spawned hostile hold
+  fire for N seconds; the tutorial sets a huge value so its lone Scout never shoots. Wired via a new
+  `AEnemyShip::SetEngageDelay`, applied in the spawner before `FinishSpawning`.
+- Killing the drone completes the drill → victory → advance to First Contact (the real campaign), paying
+  out the normal salvage so the player can try the drydock immediately.
+
+**Verified (PIE + MCP + headless Science render):** resetting the campaign loaded "Shakedown Cruise" with
+one Scout + the starbase; the four timed beats fired in order (VOSS → KANE → VOSS → TACTICAL) while the
+ship took zero fire (log: 0 enemy FIRE) and hull stayed 80/80; destroying the drone fired the final VOSS
+beat, banked 40cr, reached victory, and advanced MissionIndex to 1; the Science console rendered the
+narration log. (Commit: Core/MissionSubsystem.{h,cpp} + Core/SpaceGameInstance.cpp + Ships/EnemyShip.h + docs.)
