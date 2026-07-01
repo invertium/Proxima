@@ -73,11 +73,14 @@ struct FCommsMessage
 };
 
 /**
- * UMissionSubsystem — builds the encounter for the current campaign mission. On world begin
- * play it reads the mission index from the game instance, clears any level-placed hostiles,
- * and spawns the mission's fleet in a fan ahead of the player (so missions are data, not maps).
- * It also re-binds the controller's win condition to the freshly spawned ships. Holds the
- * mission's comms script for the Science console (driven in M18.6).
+ * UMissionSubsystem — the open-sector director (M23). The sector level loads once; the director
+ * spawns every system's landmark and the home starbase at begin play, then drives the campaign
+ * *in place* with no per-mission level reloads: on a short timer it watches the player, and when
+ * the ship flies within TriggerRadius of the active objective's landmark it spawns that mission's
+ * fleet around the body and opens its comms script. When the fleet is wiped it advances the
+ * campaign, fires a "next objective" beat, and re-arms for the next system — seamlessly. The final
+ * clear hands off to the controller for the campaign epilogue. Holds the running comms log for the
+ * Science console.
  */
 UCLASS()
 class SPACEGAME_API UMissionSubsystem : public UWorldSubsystem
@@ -94,7 +97,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mission")
 	FString GetMissionName() const { return Mission.Name; }
 
-	/** The scripted transmissions fired so far this mission (oldest first), for the Science console. */
+	/** The scripted transmissions fired so far this campaign (oldest first), for the Science console. */
 	const TArray<FCommsMessage>& GetComms() const { return CommsLog; }
 
 	/** The campaign table size (kept in sync with USpaceGameInstance::GetMissionCount). */
@@ -108,15 +111,29 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mission")
 	FVector GetSystemLocation(int32 Index) const;
 
-	/** True while the encounter is staged: the sector is clear (no fleet yet) so the crew can dock,
-	 *  repair, and outfit before the fight. Launch spawns the fleet and clears this. */
+	/** True once an active mission's fleet is spawned and the fight is on (proximity-triggered). */
 	UFUNCTION(BlueprintPure, Category = "Mission")
-	bool IsStaged() const { return bStaged; }
+	bool IsEncounterLive() const { return bEncounterLive; }
 
-	/** Begin the engagement: spawn the mission's fleet and start its comms script. No-op once launched
-	 *  (or while already fighting). Triggered from the Helm "LAUNCH" control. */
+	/** True once the final system has been cleared (the campaign is won). */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	bool IsSectorComplete() const { return bSectorComplete; }
+
+	/** Display name of the current objective (its landmark, falling back to the mission name). */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	FString GetObjectiveName() const;
+
+	/** World location of the active objective's landmark — where the crew must fly to trigger it. */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	FVector GetActiveObjectiveLocation() const { return GetSystemLocation(MissionIndex); }
+
+	/** Planar distance (uu) from the player to the active objective (-1 if unknown / complete). */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	float GetObjectiveDistance() const;
+
+	/** Force the active objective's fleet to spawn now, ignoring proximity (debug / skip-ahead). */
 	UFUNCTION(BlueprintCallable, Category = "Mission")
-	void LaunchEncounter();
+	void ForceTriggerObjective();
 
 private:
 	/** Spawn the friendly starbase just behind the player's start (once per encounter). */
@@ -125,8 +142,23 @@ private:
 	/** Spawn every system's landmark body across the open sector (M23). */
 	void SpawnLandmarks(UWorld& World);
 
-	/** Destroy level-placed hostiles and spawn this mission's fleet ahead of the player. */
+	/** Load the objective's def, reset its script, and fire its briefing (where to fly + why). */
+	void BeginObjective(int32 Index);
+
+	/** Director tick (repeating timer): trigger the active fleet once the player enters its zone. */
+	void CheckDirector();
+
+	/** Spawn the active mission's fleet around its landmark and open the fight. */
+	void TriggerActiveEncounter();
+
+	/** Called when the live fleet is wiped: advance + save, fire the clear beat, re-arm or finish. */
+	void OnFleetCleared();
+
+	/** Destroy level-placed hostiles and spawn the active fleet around its landmark, facing the player. */
 	void SpawnFleet(UWorld& World);
+
+	/** How many of the currently-tracked fleet are still alive. */
+	int32 CountLiveFleet() const;
 
 	/** Poll for time-triggered comms beats (repeating timer; paused with the game). */
 	void CheckTimedBeats();
@@ -138,16 +170,24 @@ private:
 	/** Append a beat to the comms log (once). */
 	void FireBeat(FCommsBeat& Beat);
 
-	int32 MissionIndex = 0;
-	FMissionDef Mission;
+	int32 MissionIndex = 0;   // the active objective index (== USpaceGameInstance::GetMissionIndex).
+	FMissionDef Mission;      // the active objective's definition.
 
 	/** Sector origin = the player's begin-play location; the home system sits here (M23). */
 	FVector SectorAnchor = FVector::ZeroVector;
 
+	/** The fleet spawned for the live encounter (tracked to detect a clear). */
+	TArray<TWeakObjectPtr<AEnemyShip>> LiveFleet;
+
 	TArray<FCommsMessage> CommsLog;
 	float StartTime = 0.f;
 	int32 KillCount = 0;
-	bool bStaged = false;
-	bool bLaunched = false;
+	bool bEncounterLive = false;   // an active fleet is up and the fight is on.
+	bool bSectorComplete = false;  // the final system has been cleared.
 	FTimerHandle BeatTimer;
+	FTimerHandle DirectorTimer;
+
+	/** Planar range (uu) from the objective's landmark at which its fleet triggers. First-pass tunable. */
+	UPROPERTY(EditAnywhere, Category = "Mission")
+	float TriggerRadius = 18000.f;
 };

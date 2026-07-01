@@ -147,17 +147,14 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	{
 		MissionIndex = GI->GetMissionIndex();
 	}
-	Mission = GetMissionDef(MissionIndex);
-
-	UE_LOG(LogTemp, Log, TEXT("[Mission] Building mission %d '%s' — %d hostile(s)"),
-		MissionIndex, *Mission.Name, Mission.Enemies.Num());
 
 	CommsLog.Reset();
-	KillCount = 0;
-	bLaunched = false;
+	bEncounterLive = false;
+	bSectorComplete = false;
+	LiveFleet.Reset();
 
-	// Clear any level-placed hostiles up front so the staged sector starts genuinely empty (the
-	// mission owns its fleet, spawned on launch). Non-destructive to the saved map.
+	// Clear any level-placed hostiles up front so the open sector starts genuinely empty — each
+	// objective's fleet is spawned on proximity. Non-destructive to the saved map.
 	TArray<AActor*> Placed;
 	UGameplayStatics::GetAllActorsOfClass(&InWorld, AEnemyShip::StaticClass(), Placed);
 	for (AActor* A : Placed) { if (A) { A->Destroy(); } }
@@ -168,46 +165,147 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		SectorAnchor = Player->GetActorLocation();
 	}
 
-	// The starbase is always present so the crew can dock from the moment they arrive.
+	// The starbase + every system's landmark are present from the start — the crew flies the open sector.
 	SpawnStation(InWorld);
 	SpawnLandmarks(InWorld);
 
-	if (Mission.bAutoLaunch)
+	// Arm the active objective (fire its briefing) and start the director watching for proximity.
+	BeginObjective(MissionIndex);
+	InWorld.GetTimerManager().SetTimer(DirectorTimer, this, &UMissionSubsystem::CheckDirector, 0.25f, true);
+	UE_LOG(LogTemp, Log, TEXT("[Sector] Director online — objective %d '%s' at '%s'"),
+		MissionIndex, *Mission.Name, *Mission.LandmarkName);
+}
+
+void UMissionSubsystem::BeginObjective(int32 Index)
+{
+	MissionIndex = Index;
+	Mission = GetMissionDef(Index);   // a fresh copy, so its comms beats start un-fired.
+	KillCount = 0;
+	bEncounterLive = false;
+	LiveFleet.Reset();
+
+	// Fire the objective's briefing (combat missions carry orders; the tutorial's timed comms cover it).
+	if (!Mission.BriefText.IsEmpty())
 	{
-		// Tutorial-style: no staging, the (passive) fleet is up immediately.
-		bStaged = false;
-		LaunchEncounter();
-	}
-	else
-	{
-		// Staging phase (M20): sector is clear. Let the crew dock + outfit, then launch when ready.
-		// Show the mission's story briefing here (falling back to a generic prompt).
-		bStaged = true;
 		FCommsMessage Brief;
 		Brief.Sender = Mission.BriefSender.IsEmpty() ? TEXT("CMDR VOSS") : Mission.BriefSender;
-		Brief.Text = Mission.BriefText.IsEmpty()
-			? TEXT("Sector's clear, Captain. Dock at the starbase to repair and outfit the ship, then hit LAUNCH on the Helm when you're ready.")
-			: Mission.BriefText + TEXT("  Dock to repair and outfit, then LAUNCH on the Helm when you're ready.");
+		Brief.Text = Mission.BriefText;
+		if (!Mission.LandmarkName.IsEmpty())
+		{
+			Brief.Text += FString::Printf(TEXT("  Set course for %s and engage."), *Mission.LandmarkName);
+		}
 		CommsLog.Add(Brief);
-		UE_LOG(LogTemp, Log, TEXT("[Mission] Staged '%s' — awaiting launch"), *Mission.Name);
+	}
+	UE_LOG(LogTemp, Log, TEXT("[Sector] Objective armed: %d '%s' (fly to '%s')"),
+		Index, *Mission.Name, *Mission.LandmarkName);
+}
+
+void UMissionSubsystem::CheckDirector()
+{
+	if (bEncounterLive || bSectorComplete) { return; }
+	const UWorld* World = GetWorld();
+	if (!World) { return; }
+
+	const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0);
+	if (!Player) { return; }
+
+	// Planar range to the active objective's landmark — enter the zone and the fleet powers up.
+	FVector Delta = Player->GetActorLocation() - GetActiveObjectiveLocation();
+	Delta.Z = 0.f;
+	if (Delta.SizeSquared() <= TriggerRadius * TriggerRadius)
+	{
+		TriggerActiveEncounter();
 	}
 }
 
-void UMissionSubsystem::LaunchEncounter()
+void UMissionSubsystem::TriggerActiveEncounter()
 {
-	if (bLaunched) { return; }
+	if (bEncounterLive) { return; }
 	UWorld* World = GetWorld();
 	if (!World) { return; }
 
-	bLaunched = true;
-	bStaged = false;
-
+	bEncounterLive = true;
 	SpawnFleet(*World);
 
-	// Time the mission's briefing beats from launch, so they land as the fight opens.
+	// Time the mission's comms beats from the moment the fight opens.
 	StartTime = World->GetTimeSeconds();
 	World->GetTimerManager().SetTimer(BeatTimer, this, &UMissionSubsystem::CheckTimedBeats, 0.25f, true);
-	UE_LOG(LogTemp, Log, TEXT("[Mission] LAUNCH '%s' — %d hostile(s) inbound"), *Mission.Name, Mission.Enemies.Num());
+	UE_LOG(LogTemp, Log, TEXT("[Sector] ENCOUNTER at '%s' — %d hostile(s) inbound"),
+		*Mission.LandmarkName, Mission.Enemies.Num());
+}
+
+void UMissionSubsystem::ForceTriggerObjective()
+{
+	TriggerActiveEncounter();
+}
+
+void UMissionSubsystem::OnFleetCleared()
+{
+	UWorld* World = GetWorld();
+	bEncounterLive = false;
+	LiveFleet.Reset();
+	if (World) { World->GetTimerManager().ClearTimer(BeatTimer); }
+
+	const bool bWasFinal = MissionIndex >= MissionCount() - 1;
+
+	// Advance + persist the campaign so the next objective is hot (and a retry resumes here).
+	if (USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr)
+	{
+		GI->AdvanceMission();
+		GI->SaveCampaign();
+	}
+
+	if (bWasFinal)
+	{
+		bSectorComplete = true;
+		UE_LOG(LogTemp, Log, TEXT("[Sector] FINAL objective cleared — campaign complete"));
+		// Hand off to the controller for the campaign epilogue outcome screen.
+		if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(
+			UGameplayStatics::GetPlayerController(World, 0)))
+		{
+			PC->OnCampaignComplete();
+		}
+		return;
+	}
+
+	// Seamless clear: a short comms beat, then arm the next objective (no reload, no overlay).
+	const FMissionDef Next = GetMissionDef(MissionIndex + 1);
+	FCommsMessage Clear;
+	Clear.Sender = TEXT("TACTICAL");
+	Clear.Text = FString::Printf(
+		TEXT("Sector cleared, Captain. Next objective: %s. Lay in a course."),
+		Next.LandmarkName.IsEmpty() ? *Next.Name : *Next.LandmarkName);
+	CommsLog.Add(Clear);
+	UE_LOG(LogTemp, Log, TEXT("[Sector] Cleared '%s' — advancing to '%s'"), *Mission.Name, *Next.Name);
+
+	BeginObjective(MissionIndex + 1);
+}
+
+int32 UMissionSubsystem::CountLiveFleet() const
+{
+	int32 Alive = 0;
+	for (const TWeakObjectPtr<AEnemyShip>& Ptr : LiveFleet)
+	{
+		const AEnemyShip* Enemy = Ptr.Get();
+		const UHealthComponent* Health = Enemy ? Enemy->GetHealthComp() : nullptr;
+		if (Health && Health->IsAlive()) { ++Alive; }
+	}
+	return Alive;
+}
+
+FString UMissionSubsystem::GetObjectiveName() const
+{
+	return Mission.LandmarkName.IsEmpty() ? Mission.Name : Mission.LandmarkName;
+}
+
+float UMissionSubsystem::GetObjectiveDistance() const
+{
+	const UWorld* World = GetWorld();
+	const APawn* Player = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr;
+	if (!Player) { return -1.f; }
+	FVector Delta = Player->GetActorLocation() - GetActiveObjectiveLocation();
+	Delta.Z = 0.f;
+	return Delta.Size();
 }
 
 void UMissionSubsystem::CheckTimedBeats()
@@ -233,6 +331,12 @@ void UMissionSubsystem::HandleEnemyKilled(AActor* DeadActor)
 		{
 			FireBeat(B);
 		}
+	}
+
+	// The just-killed ship reads hull 0 (not alive); when the whole fleet is down, the sector clears.
+	if (bEncounterLive && CountLiveFleet() == 0)
+	{
+		OnFleetCleared();
 	}
 }
 
@@ -301,26 +405,30 @@ void UMissionSubsystem::SpawnStation(UWorld& World)
 
 void UMissionSubsystem::SpawnFleet(UWorld& World)
 {
-	// Anchor the fleet on the player: spawn in a fan ahead of the ship's nose.
-	FVector Anchor = FVector::ZeroVector;
-	FVector Forward = FVector::ForwardVector;
+	// Open sector (M23): the fleet powers up *around its landmark*, clustered on the side the player
+	// is arriving from and facing the incoming ship.
+	const FVector Center = GetActiveObjectiveLocation();
+	FVector PlayerLoc = Center + FVector::ForwardVector * 12000.f;
 	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(&World, 0))
 	{
-		Anchor = Player->GetActorLocation();
-		Forward = Player->GetActorForwardVector();
+		PlayerLoc = Player->GetActorLocation();
 	}
+	FVector ToPlayer = PlayerLoc - Center;
+	ToPlayer.Z = 0.f;
+	const FVector FaceDir = ToPlayer.IsNearlyZero() ? FVector::ForwardVector : ToPlayer.GetSafeNormal();
 
+	LiveFleet.Reset();
 	const int32 N = Mission.Enemies.Num();
 	TMap<EEnemyType, int32> TypeCounts; // per-archetype ordinal, so callsigns read WASP-1, HORNET-2, ...
 	for (int32 i = 0; i < N; ++i)
 	{
-		// Spread across ±35° and stagger the range so they don't stack.
+		// Fan across ±35° on the player-facing side of the landmark, staggering range so they don't stack.
 		const float T = (N <= 1) ? 0.f : ((float)i / (float)(N - 1) - 0.5f);
 		const float AngleDeg = T * 70.f;
-		const float Dist = 9000.f + (i % 2) * 2600.f;
-		const FVector Dir = Forward.RotateAngleAxis(AngleDeg, FVector::UpVector);
-		const FVector Loc = Anchor + Dir * Dist;
-		const FRotator Rot = (Anchor - Loc).Rotation(); // face back toward the player
+		const float Dist = 6000.f + (i % 2) * 2600.f;
+		const FVector Dir = FaceDir.RotateAngleAxis(AngleDeg, FVector::UpVector);
+		const FVector Loc = Center + Dir * Dist;
+		const FRotator Rot = (PlayerLoc - Loc).Rotation(); // face the incoming player
 
 		FTransform Xform(Rot, Loc);
 		AEnemyShip* Enemy = World.SpawnActorDeferred<AEnemyShip>(
@@ -336,7 +444,8 @@ void UMissionSubsystem::SpawnFleet(UWorld& World)
 				Enemy->SetEngageDelay(Mission.EngageDelayOverride); // passive target drone (tutorial)
 			}
 			UGameplayStatics::FinishSpawningActor(Enemy, Xform);
-			// Drive kill-triggered comms beats off each hostile's death.
+			LiveFleet.Add(Enemy);
+			// Drive kill-triggered comms beats + the clear check off each hostile's death.
 			if (UHealthComponent* H = Enemy->GetHealthComp())
 			{
 				H->OnDeath.AddUniqueDynamic(this, &UMissionSubsystem::HandleEnemyKilled);

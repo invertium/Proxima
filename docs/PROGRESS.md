@@ -989,3 +989,31 @@ First slice of the open sector (M23): the campaign's systems become distinct bod
 ~85 k uu out); they show as named, colour-tinted neutral blips on the Helm radar; up close Tarsis renders
 as a lit, textured moon (not a white blob). (Commit: World/WorldLandmark.{h,cpp} + Core/MissionSubsystem.{h,cpp}
 + Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-07-01 — 🌌 M23.2 Open-world flow: proximity triggers + seamless clears
+
+The campaign stops being a chain of level reloads and becomes one continuous open sector.
+`UMissionSubsystem` is now the **sector director**: the level loads once; on a 0.25 s timer it watches
+the player and, when the ship flies within `TriggerRadius` (18 k uu) of the active objective's landmark,
+spawns that mission's fleet **around the body** (facing the incoming ship) and opens its comms — no more
+staging phase or LAUNCH button.
+- **Seamless clears** — when the live fleet is wiped, the director advances + saves the campaign, fires a
+  "Sector cleared — next objective: <system>. Lay in a course." beat, and arms the next objective (its
+  briefing appends "Set course for <landmark> and engage"). No pause, no overlay, no reload. Only the
+  **final** clear hands off to `ABridgePlayerController::OnCampaignComplete()` for the "THE VEIL IS SECURE"
+  epilogue. Defeat/retry unchanged.
+- The controller's `HandleEnemyDeath` no longer ends the encounter — it only banks salvage + camera trauma;
+  the director owns clear detection (it tracks the spawned `LiveFleet`).
+- **Warp** bumped 7 k → **18 k uu** so a jump meaningfully shortens the long sector hops.
+- Consoles: dropped `staged`/LAUNCH; `/api/state` now carries `objective`, `engaged`, `objectiveDist`; the
+  Helm shows an OBJECTIVE readout (name + range, or "ENGAGED") and the footer reads "◇ EN ROUTE — <system>"
+  until a fight opens. `/api/game?action=launch` repurposed to a debug force-trigger.
+
+**Verified (PIE + MCP + web /api/state):** spawned at home → the tutorial drone triggered by proximity
+(`engaged:true` at 14 k); killing it advanced Shakedown→First Contact **with `phase:playing`** (no reload,
+comms beat fired), objective flipped to Tarsis at 29 k; teleporting the ship to Tarsis proximity-triggered
+its Scout+Gunship fleet (WASP-1 + VIPER-1) — all four landmarks present throughout the single world; warp
+distance read 18 000. (Commit: Core/MissionSubsystem.{h,cpp} + Core/BridgePlayerController.{h,cpp} +
+Ships/Spaceship.h + Net/StationServerSubsystem.cpp + docs.)

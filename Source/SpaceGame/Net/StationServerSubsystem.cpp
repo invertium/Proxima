@@ -72,8 +72,8 @@ function game(a){fetch('/api/game?action='+a);}
 async function poll(){try{const s=await(await fetch('/api/state')).json();const e=document.getElementById('state');
  if(s.phase==='victory'){e.textContent='✔ VICTORY — all hostiles destroyed';e.className='win';}
  else if(s.phase==='defeat'){e.textContent='✖ DEFEAT — ship destroyed';e.className='lose';}
- else if(s.staged){e.textContent='◇ STANDING BY — resupply, then LAUNCH at the Helm';e.className='live';}
- else{e.textContent='● ENCOUNTER LIVE';e.className='live';}}catch(e){}}
+ else if(s.engaged){e.textContent='● ENCOUNTER LIVE';e.className='live';}
+ else{e.textContent='◇ EN ROUTE — '+(s.objective||'objective');e.className='live';}}catch(e){}}
 setInterval(poll,500);poll();
 </script>
 </body></html>)HTML");
@@ -125,8 +125,8 @@ function post(path){fetch(path);}
 function renderFooter(s){const f=$('#gs'),l=$('#gsl');
  if(s.phase==='victory'){l.textContent='✔ VICTORY';f.className='gs win';}
  else if(s.phase==='defeat'){l.textContent='✖ DEFEAT';f.className='gs lose';}
- else if(s.staged){l.textContent='◇ STANDING BY';f.className='gs live';}
- else{l.textContent='● ENCOUNTER LIVE';f.className='gs live';}}
+ else if(s.engaged){l.textContent='● ENCOUNTER LIVE';f.className='gs live';}
+ else{l.textContent='◇ EN ROUTE — '+(s.objective||'objective');f.className='gs live';}}
 async function poll(){try{const r=await fetch('/api/state');const s=await r.json();render(s);renderFooter(s);}catch(e){}}
 async function openStarmap(){try{const d=await(await fetch('/api/starmap')).json();drawStarmap(d);$('#smap').style.display='flex';}catch(e){}}
 function closeStarmap(){$('#smap').style.display='none';}
@@ -178,11 +178,9 @@ setInterval(poll,250);poll();
 			"<div class='stat'><b>SPEED</b><span id='spd'>0</span></div>"
 			"<div class='stat'><b>THROTTLE</b><span id='thr'>0%</span></div>"
 			"<div class='stat'><b>MAX SPEED</b><span id='mx'>0</span></div>"
+			"<div class='stat'><b>OBJECTIVE</b><span id='obj'>-</span></div>"
 			"<div class='stat'><b>STARBASE</b><span id='dock'>-</span></div>"
 			"<button id='dockbtn' onclick=\"toggleDock()\">DOCK</button>"
-			"<button id='launchbtn' onclick=\"post('/api/game?action=launch')\" "
-			"style='display:none;background:#1c2e16;border-color:#43ff7a;color:#cd"
-			"ffd9'>&#9654; LAUNCH MISSION</button>"
 			"<div class='stat'><b>WARP DRIVE</b><span id='warp'>-</span></div>"
 			"<button id='warpbtn' onclick=\"post('/api/warp')\">WARP</button>"
 			"<label>THROTTLE</label>"
@@ -208,7 +206,8 @@ setInterval(poll,250);poll();
 			":(s.stationRange<0?'no base':'range '+Math.round(s.stationRange)));"
 			"const db=$('#dockbtn');db.textContent=s.docked?'\\u2191 UNDOCK':'\\u2193 DOCK';"
 			"db.disabled=!s.docked&&!s.canDock;db.className=(s.docked||s.canDock)?'rdy':'blk';"
-			"$('#launchbtn').style.display=s.staged?'block':'none';"
+			"$('#obj').textContent=s.engaged?(s.objective||'')+' \\u2014 ENGAGED'"
+			":(s.objective||'')+(s.objectiveDist>=0?' \\u2014 '+Math.round(s.objectiveDist/100)/10+'k uu':'');"
 			"const wc=Math.round((s.warpCharge||0)*100),wb=$('#warpbtn');"
 			"$('#warp').textContent=s.docked?'offline (docked)':(s.warpReady?'READY':wc+'%');"
 			"wb.textContent=s.warpReady?'\\u27a4 WARP JUMP':'CHARGING '+wc+'%';"
@@ -680,16 +679,20 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		}
 	}
 
-	// Mission name + story comms log (Science console) from the mission subsystem.
+	// Mission name + story comms log (Science console) from the open-sector director.
 	FString MissionName;
+	FString ObjectiveName;
 	FString Comms;
-	bool bStaged = false;
+	bool bEngaged = false;      // an active fleet is up (proximity-triggered).
+	float ObjectiveDist = -1.f; // planar range to the objective landmark.
 	if (const UWorld* World = GetWorld())
 	{
 		if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
 		{
 			MissionName = MS->GetMissionName();
-			bStaged = MS->IsStaged();
+			ObjectiveName = MS->GetObjectiveName();
+			bEngaged = MS->IsEncounterLive();
+			ObjectiveDist = MS->GetObjectiveDistance();
 			for (const FCommsMessage& M : MS->GetComms())
 			{
 				if (!Comms.IsEmpty()) { Comms += TEXT(","); }
@@ -761,8 +764,9 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciTarget\":\"%s\",\"sciProgress\":%.3f,\"sciScanning\":%s,\"sciScanned\":%s,"
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
+		"\"objective\":\"%s\",\"engaged\":%s,\"objectiveDist\":%.0f,"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
-		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,\"staged\":%s,"
+		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,"
 		"\"warpCharge\":%.3f,\"warpReady\":%s,\"upgrades\":[%s],\"ships\":[%s],"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
@@ -795,10 +799,11 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Sci ? Sci->GetTargetShield() : -1.f,
 		Sci ? Sci->GetTargetMaxShield() : -1.f,
 		*MissionName, *Comms,
+		*JsonEscape(ObjectiveName), bEngaged ? TEXT("true") : TEXT("false"), ObjectiveDist,
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),
-		Ship ? Ship->GetStationRange() : -1.f, bStaged ? TEXT("true") : TEXT("false"),
+		Ship ? Ship->GetStationRange() : -1.f,
 		Ship ? Ship->GetWarpCharge() : 0.f,
 		(Ship && Ship->IsWarpReady()) ? TEXT("true") : TEXT("false"),
 		*Upgrades, *Ships,
@@ -1049,12 +1054,13 @@ bool UStationServerSubsystem::HandleGame(const FHttpServerRequest& Request, cons
 				GM->RestartEncounter();
 			}
 		}
-		// "launch" ends the staging phase and spawns the mission's fleet (the crew starts the fight).
+		// "launch" force-triggers the active objective's fleet now, ignoring proximity (debug / skip).
+		// Normal play spawns it by flying into the objective's zone (the open-sector director).
 		if (Action && *Action == TEXT("launch"))
 		{
 			if (UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
 			{
-				MS->LaunchEncounter();
+				MS->ForceTriggerObjective();
 			}
 		}
 	}

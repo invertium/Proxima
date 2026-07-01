@@ -198,9 +198,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Dock")
 	float DockMaxSpeed = 250.f;
 
-	/** Distance (uu) a warp jump covers along the bow. */
+	/** Distance (uu) a warp jump covers along the bow. Sized for the open sector (M23) so a jump
+	 *  meaningfully shortens the long hops between systems. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Warp")
-	float WarpDistance = 7000.f;
+	float WarpDistance = 18000.f;
 
 	/** Warp charge gained per second at nominal (1.0x) engine power. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Warp")

@@ -121,55 +121,39 @@ void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
 		Ship->AddCameraTrauma(Trauma);
 	}
 
-	if (Alive == 0)
+	// Clearing a fleet no longer ends the encounter here — the open-sector director (UMissionSubsystem)
+	// owns clears: it advances/saves the campaign, fires the "next objective" comms beat with no reload,
+	// and calls OnCampaignComplete() on the *final* clear. This handler only banks salvage + game-feel.
+}
+
+void ABridgePlayerController::OnCampaignComplete()
+{
+	// If the player died on the same beat (defeat overlay already up), don't also bank a win.
+	if (Outcome) { return; }
+
+	UE_LOG(LogTemp, Log, TEXT("[Bridge] VICTORY — campaign complete"));
+	if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
 	{
-		// If the player died on the same beat (defeat overlay already up), don't also bank a win.
-		if (Outcome) { return; }
-
-		UE_LOG(LogTemp, Log, TEXT("[Bridge] VICTORY — all hostiles destroyed"));
-		if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
-		{
-			GM->SetPhase(EGamePhase::Victory);
-		}
-
-		// Advance + persist the campaign, then offer the next mission (or wrap the campaign).
-		USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>();
-		const int32 Current = GI ? GI->GetMissionIndex() : 0;
-		const bool bMore = Current < USpaceGameInstance::GetMissionCount() - 1;
-		if (GI)
-		{
-			GI->AdvanceMission();
-			GI->SaveCampaign();
-		}
-
-		// Salvage haul + current standing, so the crew sees what to spend at the drydock (M19).
-		const int32 Rank = GI ? GI->GetRank() : 1;
-		const int32 Wallet = GI ? GI->GetCredits() : 0;
-		const FString Haul = FString::Printf(
-			TEXT("Salvage: +%d credits, +%d XP  —  %d credits banked, RANK %d."),
-			EarnedCredits, EarnedXP, Wallet, Rank);
-
-		const FLinearColor Green(0.3f, 1.0f, 0.45f, 1.0f);
-		if (bMore)
-		{
-			OutcomeKind = EOutcomeKind::VictoryNext;
-			ShowOutcome(FText::FromString(TEXT("SECTOR CLEARED")), Green,
-				FText::FromString(Haul),
-				TEXT("NEXT MISSION"), TEXT("MAIN MENU"));
-		}
-		else
-		{
-			// Campaign finale: a story epilogue closing the Crimson Pact arc, then the run's standing.
-			OutcomeKind = EOutcomeKind::VictoryComplete;
-			const FString Epilogue = FString::Printf(TEXT(
-				"The warlord's flagship is gone — and with it the Crimson Pact's grip on the Veil. "
-				"For the first time in months the frontier is quiet, because of this crew. "
-				"Stand down, Captain. You've earned the calm.\n\n%s"), *Haul);
-			ShowOutcome(FText::FromString(TEXT("THE VEIL IS SECURE")), Green,
-				FText::FromString(Epilogue),
-				TEXT("MAIN MENU"), FString());
-		}
+		GM->SetPhase(EGamePhase::Victory);
 	}
+
+	// Salvage standing for the epilogue (the director already advanced + saved the campaign).
+	const USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>();
+	const int32 Rank = GI ? GI->GetRank() : 1;
+	const int32 Wallet = GI ? GI->GetCredits() : 0;
+	const FString Haul = FString::Printf(
+		TEXT("Salvage this run: +%d credits, +%d XP  —  %d credits banked, RANK %d."),
+		EarnedCredits, EarnedXP, Wallet, Rank);
+
+	OutcomeKind = EOutcomeKind::VictoryComplete;
+	const FLinearColor Green(0.3f, 1.0f, 0.45f, 1.0f);
+	const FString Epilogue = FString::Printf(TEXT(
+		"The warlord's flagship is gone — and with it the Crimson Pact's grip on the Veil. "
+		"For the first time in months the frontier is quiet, because of this crew. "
+		"Stand down, Captain. You've earned the calm.\n\n%s"), *Haul);
+	ShowOutcome(FText::FromString(TEXT("THE VEIL IS SECURE")), Green,
+		FText::FromString(Epilogue),
+		TEXT("MAIN MENU"), FString());
 }
 
 void ABridgePlayerController::SetupInputComponent()

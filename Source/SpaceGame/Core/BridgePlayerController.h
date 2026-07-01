@@ -44,6 +44,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Bridge")
 	void BindEnemyDeaths();
 
+	/** Called by the open-sector director (UMissionSubsystem) when the final system is cleared:
+	 *  raises the campaign epilogue outcome screen. Per-mission clears are seamless (no overlay). */
+	void OnCampaignComplete();
+
 	// --- Pause menu actions (called by UPauseMenuWidget's buttons, M18) ---
 	void PauseResume();
 	void PauseSave();
