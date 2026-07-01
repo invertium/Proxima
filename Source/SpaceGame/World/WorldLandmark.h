@@ -30,6 +30,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Landmark")
 	const FString& GetLandmarkName() const { return LandmarkName; }
 
+	/** World-space radius (uu) of the body — used by the ship to treat it as a solid obstacle. */
+	float GetBodyRadius() const;
+
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "Landmark")
 	TObjectPtr<USceneComponent> Root;
@@ -41,4 +44,7 @@ protected:
 	TObjectPtr<URadarContactComponent> RadarContact;
 
 	FString LandmarkName;
+
+	/** World-space radius (uu) of the body, cached from the mesh bounds × scale in Setup. */
+	float BodyRadius = 0.f;
 };

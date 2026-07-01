@@ -48,9 +48,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Station")
 	TObjectPtr<URadarContactComponent> RadarContact;
 
-	/** Dock radius (uu). */
+	/** Dock radius (uu) — the ship must be this close to the hub to dock. Kept snug to the structure. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Station")
-	float DockRange = 3000.f;
+	float DockRange = 1600.f;
 
 	/** Display callsign. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Station")

@@ -231,6 +231,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
 	float RamSelfFraction = 1.0f;
 
+	/** Ship's own radius (uu) kept clear of a solid celestial body — the ship halts this far off a
+	 *  planet/sun surface instead of flying through it (M23.5). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Collision")
+	float BodyClearance = 500.f;
+
 private:
 	/** Per-tick ram detection: damage + knock apart on first contact (debounced via TouchingActors). */
 	void HandleCollisions(float DeltaSeconds);

@@ -1067,3 +1067,20 @@ home area shows a single Earth beside the new hub-and-beacon station; Tarsis ren
 with cloud mottling (not a white blob, not an Earth); the Ember sun reads as a bright star (far out at the
 final objective). (Commit: World/WorldLandmark.cpp + World/Station.{h,cpp} + Net/StationServerSubsystem.cpp
 + Content/Art/Materials/M_Planet.uasset + Content/Maps/VSlice_Arena.umap + docs.)
+
+---
+
+## 2026-07-01 — 🛰️ M23.5 Solid planets + tighter dock range (user fixes)
+
+Two feel fixes off user feedback.
+- **Planets/suns are solid.** `AWorldLandmark` caches its world radius (mesh bounds × scale, exposed via
+  `GetBodyRadius`); the ship's per-tick `HandleCollisions` now also clamps the ship to `radius +
+  BodyClearance(500)` of any celestial body — flying full-throttle into a planet halts it at the surface
+  (engines cut on contact) instead of passing through. Reuses the existing not-docked collision guard.
+- **Dock zone tightened:** `AStation::DockRange` 3000 → 1600, so you must actually pull up to the hub to
+  dock rather than from far out.
+
+**Verified (PIE + MCP):** teleporting the ship 1000 uu inside Tarsis ejected it to the surface (3200 =
+2700 radius + 500); flying full-throttle straight at Tarsis stopped dead at 3200 (no pass-through); dock
+range now reads `canDock` true at 1400 uu and false at 1800 uu. (Commit: Ships/Spaceship.{h,cpp} +
+World/WorldLandmark.{h,cpp} + World/Station.h + docs.)

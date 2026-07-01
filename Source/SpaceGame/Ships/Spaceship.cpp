@@ -24,6 +24,7 @@
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 #include "World/Station.h"
+#include "World/WorldLandmark.h"
 
 ASpaceship::ASpaceship()
 {
@@ -334,6 +335,32 @@ void ASpaceship::HandleCollisions(float DeltaSeconds)
 		UE_LOG(LogTemp, Log, TEXT("[Collision] Rammed %s — %.0f dmg (self %.0f) at %.0f uu/s%s"),
 			*Enemy->GetName(), Impact, Impact * RamSelfFraction, Speed, bShieldHit ? TEXT(" [shield]") : TEXT(""));
 	}
+
+	// Solid celestial bodies: a planet or sun blocks the ship — clamp it to the surface each tick so it
+	// can't fly through, and cut the impulse so it doesn't keep grinding in. (Shares the not-docked guard.)
+	TArray<AActor*> Bodies;
+	UGameplayStatics::GetAllActorsOfClass(World, AWorldLandmark::StaticClass(), Bodies);
+	for (AActor* A : Bodies)
+	{
+		AWorldLandmark* Body = Cast<AWorldLandmark>(A);
+		if (!Body) { continue; }
+		const float Surface = Body->GetBodyRadius() + BodyClearance;
+		FVector ToShip = GetActorLocation() - Body->GetActorLocation();
+		const float Dist = ToShip.Size();
+		if (Dist >= Surface || Dist < 1.f) { continue; }
+
+		StillTouching.Add(Body);
+		const FVector Normal = ToShip / Dist;
+		AddActorWorldOffset(Normal * (Surface - Dist), false, nullptr, ETeleportType::TeleportPhysics);
+		if (MovementComp) { MovementComp->SetThrottle(0.f); } // engines can't push you through a planet
+
+		if (!TouchingActors.Contains(Body))
+		{
+			AddCameraTrauma(0.6f);
+			UE_LOG(LogTemp, Log, TEXT("[Collision] Struck %s — halted at the surface"), *Body->GetLandmarkName());
+		}
+	}
+
 	TouchingActors = MoveTemp(StillTouching);
 }
 

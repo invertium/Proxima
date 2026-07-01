@@ -29,6 +29,11 @@ AWorldLandmark::AWorldLandmark()
 	RadarContact->bTargetable = false;
 }
 
+float AWorldLandmark::GetBodyRadius() const
+{
+	return BodyRadius;
+}
+
 void AWorldLandmark::Setup(const FString& InName, float Scale, const FLinearColor& Color, bool bSun)
 {
 	LandmarkName = InName;
@@ -36,7 +41,15 @@ void AWorldLandmark::Setup(const FString& InName, float Scale, const FLinearColo
 
 	// Engine sphere is 100uu across (radius 50) at scale 1. Planets read ~6k across, the sun ~25k.
 	const float BodyScale = (bSun ? 250.f : 60.f) * FMath::Max(0.2f, Scale);
-	if (Body) { Body->SetWorldScale3D(FVector(BodyScale)); }
+	if (Body)
+	{
+		Body->SetWorldScale3D(FVector(BodyScale));
+		// Cache the true world radius from the mesh bounds so the ship can treat the body as solid.
+		if (const UStaticMesh* SM = Body->GetStaticMesh())
+		{
+			BodyRadius = SM->GetBounds().SphereRadius * BodyScale;
+		}
+	}
 
 	if (!Body) { return; }
 
