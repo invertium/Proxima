@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
 AWorldLandmark::AWorldLandmark()
@@ -37,35 +38,33 @@ void AWorldLandmark::Setup(const FString& InName, float Scale, const FLinearColo
 	const float BodyScale = (bSun ? 250.f : 60.f) * FMath::Max(0.2f, Scale);
 	if (Body) { Body->SetWorldScale3D(FVector(BodyScale)); }
 
-	// Distinct bodies from the existing palette (no imports): the sun glows (emissive), planets use
-	// LIT surfaces so up close they read as shaded coloured worlds, not white blobs.
-	const TCHAR* MatPath;
+	if (!Body) { return; }
+
+	// Distinct, planet-like bodies. The sun is a bright emissive star; the home world keeps the detailed
+	// Earth material; every other planet uses the tintable M_Planet (a lit sphere with a Fresnel
+	// atmosphere rim) coloured to its own hue — so no two read alike and none wear a ship-hull texture.
+	const bool bEarthlike = (Color.B > Color.R && Color.B > Color.G && Color.B > 0.8f);
 	if (bSun)
 	{
-		MatPath = TEXT("/Game/Art/Materials/M_GlowOrange.M_GlowOrange"); // a hot, glowing star
-	}
-	else if (Color.B > Color.R && Color.B >= Color.G)
-	{
-		MatPath = TEXT("/Game/Art/Materials/M_Earth.M_Earth");          // blue world (home / earthlike)
-	}
-	else if (Color.R > 0.55f && Color.G < 0.45f)
-	{
-		MatPath = TEXT("/Game/Art/Materials/M_Imperial.M_Imperial");    // red / industrial
-	}
-	else if (Color.R > 0.55f)
-	{
-		MatPath = TEXT("/Game/Art/Materials/M_PlayerHull.M_PlayerHull"); // amber / rocky
-	}
-	else
-	{
-		MatPath = TEXT("/Game/Art/Materials/M_Insurgent.M_Insurgent");  // teal / icy
-	}
-	if (Body)
-	{
-		if (UMaterialInterface* Mat = Cast<UMaterialInterface>(
-			StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, MatPath)))
+		if (UMaterialInterface* Mat = Cast<UMaterialInterface>(StaticLoadObject(
+			UMaterialInterface::StaticClass(), nullptr, TEXT("/Game/Art/Materials/M_GlowOrange.M_GlowOrange"))))
 		{
 			Body->SetMaterial(0, Mat);
 		}
+	}
+	else if (bEarthlike)
+	{
+		if (UMaterialInterface* Mat = Cast<UMaterialInterface>(StaticLoadObject(
+			UMaterialInterface::StaticClass(), nullptr, TEXT("/Game/Art/Materials/M_Earth.M_Earth"))))
+		{
+			Body->SetMaterial(0, Mat);
+		}
+	}
+	else if (UMaterialInterface* Base = Cast<UMaterialInterface>(StaticLoadObject(
+		UMaterialInterface::StaticClass(), nullptr, TEXT("/Game/Art/Materials/M_Planet.M_Planet"))))
+	{
+		UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Base, this);
+		MID->SetVectorParameterValue(TEXT("Color"), Color);
+		Body->SetMaterial(0, MID);
 	}
 }

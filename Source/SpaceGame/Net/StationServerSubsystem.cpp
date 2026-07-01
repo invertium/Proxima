@@ -141,10 +141,13 @@ function drawStarmap(d){const c=$('#smapc'),x=c.getContext('2d'),W=c.width,H=c.h
  $('#smaptitle').textContent=(d.sector||'NAV MAP');
  const X=v=>pad+v*(W-2*pad),Y=v=>pad+v*(H-2*pad),sys=d.systems||[];
  x.clearRect(0,0,W,H);
- x.fillStyle='#0a1322';for(let i=0;i<70;i++){x.fillRect((i*97)%W,(i*53)%H,1,1);}
- x.strokeStyle='rgba(90,140,210,.45)';x.lineWidth=2;x.setLineDash([7,7]);x.beginPath();
- for(let i=0;i<sys.length;i++){const px=X(sys[i].x),py=Y(sys[i].y);i?x.lineTo(px,py):x.moveTo(px,py);}
- x.stroke();x.setLineDash([]);
+ x.fillStyle='#0a1322';for(let i=0;i<80;i++){x.fillRect((i*97)%W,(i*53)%H,1,1);}
+ // map frame: a subtle coordinate grid + border so it reads as a spatial chart, not a route
+ x.strokeStyle='rgba(40,84,132,.26)';x.lineWidth=1;x.beginPath();
+ for(let g=1;g<8;g++){const gx=pad+g/8*(W-2*pad);x.moveTo(gx,pad);x.lineTo(gx,H-pad);}
+ for(let g=1;g<6;g++){const gy=pad+g/6*(H-2*pad);x.moveTo(pad,gy);x.lineTo(W-pad,gy);}
+ x.stroke();
+ x.strokeStyle='rgba(74,124,184,.5)';x.lineWidth=1;x.strokeRect(pad,pad,W-2*pad,H-2*pad);
  // course line from the ship to the active objective
  const cur=sys[d.current];
  if(cur&&d.px>=-0.5){x.strokeStyle='rgba(122,208,255,.5)';x.lineWidth=2;x.setLineDash([4,6]);

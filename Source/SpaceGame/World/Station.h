@@ -36,9 +36,13 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Station")
 	TObjectPtr<USceneComponent> Root;
 
-	/** Structure hull — reuses an existing mesh scaled up with a friendly material. */
+	/** Structure hull — a lit metallic hub so it reads as a built structure, not a glowing blob. */
 	UPROPERTY(VisibleAnywhere, Category = "Station")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	/** Glowing cyan beacon core atop the hub — the friendly running light. */
+	UPROPERTY(VisibleAnywhere, Category = "Station")
+	TObjectPtr<UStaticMeshComponent> Beacon;
 
 	/** Friendly, non-targetable radar blip. */
 	UPROPERTY(VisibleAnywhere, Category = "Station")

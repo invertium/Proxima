@@ -1040,3 +1040,30 @@ the live map, and the jump landed inside the trigger zone so First Contact's fle
 Chromium capture of the nav map showed the four bodies correctly tinted/ringed (Haven cleared, Tarsis current
 with the ship chevron on it, Korrin locked, the Ember sun larger/amber), the course line, and the objective
 readout. (Commit: Core/MissionSubsystem.{h,cpp} + Ships/Spaceship.{h,cpp} + Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-07-01 — 🪐 M23.4 Sector-map & celestial-body polish (user fixes)
+
+Fixes off user feedback ("sector map should be a real map not a progress bar; the station and a planet
+have weird textures; two identical earths; didn't see a sun").
+- **Nav map is a real chart:** dropped the dashed polyline that chained the systems in mission order (it
+  read like a progress bar); systems now sit at their true `MapX/MapY` on a coordinate grid + border, with
+  the live ship→objective course line kept for navigation.
+- **New planet material `M_Planet`** (authored via MaterialEditingLibrary): a tintable lit sphere with
+  world-noise surface mottling (cloud/continent bands, darkened so it never blows out) + a subtle Fresnel
+  atmosphere limb. `AWorldLandmark::Setup` now uses it (as a runtime MID coloured to each body's hue) for
+  every non-home planet, so no two look alike and none wear a ship-hull texture. The home world keeps the
+  detailed `M_Earth`; the sun keeps the emissive glow.
+- **Two earths → one:** the level had a leftover backdrop Earth actor (`Earth` mesh, scale 260) near origin
+  from an early milestone; now that Haven is a real Earth landmark it was the duplicate — removed from
+  `VSlice_Arena` and the map re-saved.
+- **Station rework:** was the enemy `Imperial` *ship* mesh under a flat emissive `M_GlowCyan` (a glowing
+  blob). Now a wide, flat metallic hub (Engine `Cylinder` + lit `M_Imperial`) with a glowing cyan beacon
+  core on top — reads as a built structure.
+
+**Verified (PIE + MCP + headless captures):** nav map shows a gridded spatial chart (no chain line); the
+home area shows a single Earth beside the new hub-and-beacon station; Tarsis renders as a shaded teal world
+with cloud mottling (not a white blob, not an Earth); the Ember sun reads as a bright star (far out at the
+final objective). (Commit: World/WorldLandmark.cpp + World/Station.{h,cpp} + Net/StationServerSubsystem.cpp
++ Content/Art/Materials/M_Planet.uasset + Content/Maps/VSlice_Arena.umap + docs.)
