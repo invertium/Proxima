@@ -18,6 +18,10 @@ namespace
 	// How far the normalised (0..1) sector map stretches across world space, in uu. Systems are
 	// placed by their MapX/MapY relative to the home system, so warp meaningfully shortens the hops.
 	constexpr float SectorSpan = 120000.f;
+
+	// Shift the whole sector so the home body sits clear of the player's start (the ship begins in
+	// open space beside Haven, not embedded in it). Applied to every system's world position.
+	const FVector HomeOffset(0.f, 14000.f, 0.f);
 }
 
 namespace
@@ -352,14 +356,21 @@ void UMissionSubsystem::FireBeat(FCommsBeat& Beat)
 
 FVector UMissionSubsystem::GetSystemLocation(int32 Index) const
 {
-	// Shift the whole sector so the home body sits clear of the player's start (the ship begins in
-	// open space beside Haven, not embedded in it). Relative spread is unchanged.
-	const FVector HomeOffset(0.f, 14000.f, 0.f);
 	const FMissionDef Home = GetMissionDef(0);
 	const FMissionDef Def = GetMissionDef(Index);
 	const float Dx = (Def.MapX - Home.MapX) * SectorSpan;
 	const float Dy = (Def.MapY - Home.MapY) * SectorSpan;
 	return SectorAnchor + HomeOffset + FVector(Dx, Dy, 0.f);
+}
+
+FVector2D UMissionSubsystem::GetMapPosition(FVector World) const
+{
+	// Inverse of GetSystemLocation: fold a world XY back into the normalised (0..1) sector-map space
+	// so the nav map can plot the live ship alongside the systems.
+	const FMissionDef Home = GetMissionDef(0);
+	const float MapX = Home.MapX + (World.X - SectorAnchor.X - HomeOffset.X) / SectorSpan;
+	const float MapY = Home.MapY + (World.Y - SectorAnchor.Y - HomeOffset.Y) / SectorSpan;
+	return FVector2D(MapX, MapY);
 }
 
 void UMissionSubsystem::SpawnLandmarks(UWorld& World)

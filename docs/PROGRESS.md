@@ -1017,3 +1017,26 @@ comms beat fired), objective flipped to Tarsis at 29 k; teleporting the ship to 
 its Scout+Gunship fleet (WASP-1 + VIPER-1) — all four landmarks present throughout the single world; warp
 distance read 18 000. (Commit: Core/MissionSubsystem.{h,cpp} + Core/BridgePlayerController.{h,cpp} +
 Ships/Spaceship.h + Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-07-01 — 🧭 M23.3 Live navigation map + warp-to-objective
+
+The sector map becomes a real nav display and warp links to it.
+- `/api/starmap` now carries the live ship position folded back into the normalised map space
+  (`UMissionSubsystem::GetMapPosition`, the inverse of `GetSystemLocation`), each system's landmark name +
+  kind (`sun`) + colour, and the distance to the active objective. The shared modal polls while open
+  (400 ms) and plots the player as a chevron, a dashed course line to the objective, each body tinted/sized
+  by kind (planets vs the bigger amber sun) ringed by status (green cleared / yellow current / grey locked),
+  and an "OBJECTIVE: <system> — <dist>k uu / ENGAGED" readout.
+- **Warp-to-objective:** new `ASpaceship::WarpToObjective(Target)` turns the bow to the objective and jumps
+  toward it, clamped so it never overshoots (4 k standoff) and spending the charge. `/api/warp?mode=objective`
+  drives it; a **LAY IN COURSE** button sits on the nav map (hidden once engaged) and a compact **COURSE**
+  button on the Helm beside the tactical WARP.
+
+**Verified (PIE + MCP + web + headless capture):** at Tarsis (29 266 uu out) one course-warp turned the bow
+and jumped exactly 18 000 uu toward it (→ 11 266), the player marker moving diagonally toward the system on
+the live map, and the jump landed inside the trigger zone so First Contact's fleet powered up. A headless
+Chromium capture of the nav map showed the four bodies correctly tinted/ringed (Haven cleared, Tarsis current
+with the ship chevron on it, Korrin locked, the Ember sun larger/amber), the course line, and the objective
+readout. (Commit: Core/MissionSubsystem.{h,cpp} + Ships/Spaceship.{h,cpp} + Net/StationServerSubsystem.cpp + docs.)

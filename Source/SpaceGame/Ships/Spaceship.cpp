@@ -377,6 +377,43 @@ bool ASpaceship::Warp()
 	return true;
 }
 
+bool ASpaceship::WarpToObjective(FVector Target)
+{
+	if (!IsWarpReady())
+	{
+		return false;
+	}
+
+	const FVector From = GetActorLocation();
+	FVector Flat = Target - From;
+	Flat.Z = 0.f;
+	const float Dist = Flat.Size();
+	const FVector Dir = (Dist > 1.f) ? Flat / Dist : GetActorForwardVector();
+
+	// Turn the bow toward the objective (yaw only — the ship's momentum follows its new heading).
+	FRotator Face = Dir.Rotation();
+	Face.Pitch = 0.f;
+	Face.Roll = 0.f;
+	SetActorRotation(Face, ETeleportType::TeleportPhysics);
+
+	// Jump toward it without overshooting — leave a short standoff so we arrive near, not on top of, it.
+	constexpr float Standoff = 4000.f;
+	const float Jump = FMath::Clamp(Dist - Standoff, 0.f, WarpDistance);
+	const FVector NewLoc = From + Dir * Jump;
+	SetActorLocation(NewLoc, /*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
+	WarpCharge = 0.f;
+	AddCameraTrauma(0.75f);
+
+	if (WarpFxMaterial)
+	{
+		AExplosionFx::Spawn(GetWorld(), From, 600.f, WarpFxMaterial, 0.45f, false);
+		AExplosionFx::Spawn(GetWorld(), GetActorLocation(), 600.f, WarpFxMaterial, 0.45f, false);
+	}
+	UE_LOG(LogTemp, Log, TEXT("[Warp] Course laid — jumped %.0f uu toward objective (%.0f remaining)"),
+		Jump, FMath::Max(0.f, Dist - Jump));
+	return true;
+}
+
 void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)
 {
 	AddCameraTrauma(EffectiveDamage * HitTraumaPerDamage);

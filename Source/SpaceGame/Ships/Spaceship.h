@@ -102,6 +102,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Warp")
 	bool Warp();
 
+	/** Lay in a course (M23.3): turn the bow toward Target, then warp toward it (clamped so it never
+	 *  overshoots, leaving a short standoff). Spends the charge. Returns true if it jumped. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Warp")
+	bool WarpToObjective(FVector Target);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

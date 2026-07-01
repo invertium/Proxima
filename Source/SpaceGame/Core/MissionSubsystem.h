@@ -111,6 +111,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mission")
 	FVector GetSystemLocation(int32 Index) const;
 
+	/** Fold a world position back into the normalised (0..1) sector-map space (for the live nav map). */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	FVector2D GetMapPosition(FVector World) const;
+
 	/** True once an active mission's fleet is spawned and the fight is on (proximity-triggered). */
 	UFUNCTION(BlueprintPure, Category = "Mission")
 	bool IsEncounterLive() const { return bEncounterLive; }

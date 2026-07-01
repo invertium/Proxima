@@ -114,9 +114,12 @@ setInterval(poll,500);poll();
 <div class="wrap">{BODY}</div>
 <div id="smap" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(4,7,14,.95);
  flex-direction:column;align-items:center;justify-content:center;padding:16px">
-<div id="smaptitle" style="letter-spacing:3px;color:#8fb8e6;margin-bottom:6px;font-weight:600">SECTOR MAP</div>
-<canvas id="smapc" width="560" height="380" style="max-width:94vw;max-height:62vh;background:#060b14;border:1px solid #20406a;border-radius:12px"></canvas>
-<button onclick="closeStarmap()" style="width:auto;margin-top:16px;padding:12px 30px">&times; CLOSE</button></div>
+<div id="smaptitle" style="letter-spacing:3px;color:#8fb8e6;margin-bottom:6px;font-weight:600">NAV MAP</div>
+<canvas id="smapc" width="560" height="380" style="max-width:94vw;max-height:60vh;background:#060b14;border:1px solid #20406a;border-radius:12px"></canvas>
+<div id="smapobj" style="letter-spacing:1px;color:#8fb8e6;margin-top:10px;font-size:.95rem">&mdash;</div>
+<div class="row" style="max-width:420px;width:94vw">
+<button id="smapwarp" onclick="warpObjective()" style="border-color:#7ad0ff;color:#cdefff">&#9654; LAY IN COURSE</button>
+<button onclick="closeStarmap()" style="padding:12px 30px">&times; CLOSE</button></div></div>
 <footer id="gs" class="gs live"><span id="gsl">●</span>
 <button onclick="if(confirm('Restart the encounter for everyone?'))post('/api/game?action=restart')">&#8635; RESTART</button></footer>
 <script>
@@ -128,23 +131,43 @@ function renderFooter(s){const f=$('#gs'),l=$('#gsl');
  else if(s.engaged){l.textContent='● ENCOUNTER LIVE';f.className='gs live';}
  else{l.textContent='◇ EN ROUTE — '+(s.objective||'objective');f.className='gs live';}}
 async function poll(){try{const r=await fetch('/api/state');const s=await r.json();render(s);renderFooter(s);}catch(e){}}
-async function openStarmap(){try{const d=await(await fetch('/api/starmap')).json();drawStarmap(d);$('#smap').style.display='flex';}catch(e){}}
-function closeStarmap(){$('#smap').style.display='none';}
+let smapTimer=null;
+async function refreshStarmap(){try{const d=await(await fetch('/api/starmap')).json();drawStarmap(d);}catch(e){}}
+function openStarmap(){refreshStarmap();$('#smap').style.display='flex';
+ if(smapTimer)clearInterval(smapTimer);smapTimer=setInterval(refreshStarmap,400);}
+function closeStarmap(){$('#smap').style.display='none';if(smapTimer){clearInterval(smapTimer);smapTimer=null;}}
+function warpObjective(){post('/api/warp?mode=objective');}
 function drawStarmap(d){const c=$('#smapc'),x=c.getContext('2d'),W=c.width,H=c.height,pad=48;
- $('#smaptitle').textContent=(d.sector||'SECTOR MAP');
+ $('#smaptitle').textContent=(d.sector||'NAV MAP');
  const X=v=>pad+v*(W-2*pad),Y=v=>pad+v*(H-2*pad),sys=d.systems||[];
  x.clearRect(0,0,W,H);
  x.fillStyle='#0a1322';for(let i=0;i<70;i++){x.fillRect((i*97)%W,(i*53)%H,1,1);}
  x.strokeStyle='rgba(90,140,210,.45)';x.lineWidth=2;x.setLineDash([7,7]);x.beginPath();
  for(let i=0;i<sys.length;i++){const px=X(sys[i].x),py=Y(sys[i].y);i?x.lineTo(px,py):x.moveTo(px,py);}
  x.stroke();x.setLineDash([]);
+ // course line from the ship to the active objective
+ const cur=sys[d.current];
+ if(cur&&d.px>=-0.5){x.strokeStyle='rgba(122,208,255,.5)';x.lineWidth=2;x.setLineDash([4,6]);
+  x.beginPath();x.moveTo(X(d.px),Y(d.py));x.lineTo(X(cur.x),Y(cur.y));x.stroke();x.setLineDash([]);}
  for(const s of sys){const px=X(s.x),py=Y(s.y);
-  const col=s.status==='cleared'?'#43ff7a':(s.status==='current'?'#ffd24a':'#5b6b82');
-  if(s.status==='current'){x.strokeStyle='rgba(255,210,74,.55)';x.lineWidth=2;x.beginPath();x.arc(px,py,15,0,7);x.stroke();}
-  x.fillStyle=col;x.beginPath();x.arc(px,py,7,0,7);x.fill();
+  const body=s.sun?'#ffb43a':('rgb('+s.r+','+s.g+','+s.b+')');
+  const ring=s.status==='cleared'?'#43ff7a':(s.status==='current'?'#ffd24a':'#5b6b82');
+  if(s.status==='current'){x.strokeStyle='rgba(255,210,74,.6)';x.lineWidth=2;x.beginPath();x.arc(px,py,16,0,7);x.stroke();}
+  x.fillStyle=body;x.beginPath();x.arc(px,py,s.sun?10:7,0,7);x.fill();
+  x.strokeStyle=ring;x.lineWidth=2;x.beginPath();x.arc(px,py,s.sun?10:7,0,7);x.stroke();
   x.fillStyle=s.status==='locked'?'#7184a0':'#e6eefb';x.font='600 14px system-ui';x.textAlign='center';
-  x.fillText(s.name,px,py-22);
-  x.fillStyle='#6f86a8';x.font='10px system-ui';x.fillText(s.status.toUpperCase(),px,py+28);}}
+  x.fillText(s.landmark||s.name,px,py-22);
+  x.fillStyle='#6f86a8';x.font='10px system-ui';x.fillText(s.status.toUpperCase(),px,py+28);}
+ // live ship marker (chevron)
+ if(d.px>=-0.5){const sx=X(d.px),sy=Y(d.py);x.fillStyle='#7ad0ff';
+  x.beginPath();x.moveTo(sx,sy-8);x.lineTo(sx+6,sy+7);x.lineTo(sx,sy+3);x.lineTo(sx-6,sy+7);x.closePath();x.fill();
+  x.strokeStyle='rgba(122,208,255,.5)';x.lineWidth=1;x.beginPath();x.arc(sx,sy,12,0,7);x.stroke();}
+ // objective readout + warp button state
+ const o=$('#smapobj'),wb=$('#smapwarp');
+ if(cur){const dist=d.objectiveDist>=0?(Math.round(d.objectiveDist/100)/10+'k uu'):'--';
+  o.textContent=d.engaged?('OBJECTIVE: '+(cur.landmark||cur.name)+' — ENGAGED')
+   :('OBJECTIVE: '+(cur.landmark||cur.name)+'  —  '+dist);
+  wb.style.display=d.engaged?'none':'block';}}
 {SCRIPT}
 setInterval(poll,250);poll();
 </script></body></html>)HTML");
@@ -182,7 +205,10 @@ setInterval(poll,250);poll();
 			"<div class='stat'><b>STARBASE</b><span id='dock'>-</span></div>"
 			"<button id='dockbtn' onclick=\"toggleDock()\">DOCK</button>"
 			"<div class='stat'><b>WARP DRIVE</b><span id='warp'>-</span></div>"
+			"<div class='row'>"
 			"<button id='warpbtn' onclick=\"post('/api/warp')\">WARP</button>"
+			"<button id='courlbtn' onclick=\"post('/api/warp?mode=objective')\" "
+			"style='border-color:#7ad0ff;color:#cdefff'>&#9654; COURSE</button></div>"
 			"<label>THROTTLE</label>"
 			"<input id='t' type='range' min='0' max='100' value='0' "
 			"oninput=\"post('/api/helm?throttle='+(this.value/100))\">"
@@ -212,6 +238,8 @@ setInterval(poll,250);poll();
 			"$('#warp').textContent=s.docked?'offline (docked)':(s.warpReady?'READY':wc+'%');"
 			"wb.textContent=s.warpReady?'\\u27a4 WARP JUMP':'CHARGING '+wc+'%';"
 			"wb.disabled=!s.warpReady;wb.className=s.warpReady?'rdy':'blk';"
+			"const cb=$('#courlbtn'),canCourse=s.warpReady&&!s.engaged;"
+			"cb.disabled=!canCourse;cb.className=canCourse?'rdy':'blk';"
 			"drawMap(s);}"
 			"function toggleDock(){post('/api/dock?action='+(window.dk?'undock':'dock'));}"
 			"function drawMap(s){const c=$('#map'),x=c.getContext('2d');const W=c.width,H=c.height;"
@@ -815,14 +843,24 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 
 bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	// Sector starmap (M21): the campaign's systems laid out across the Veil frontier, with each marked
-	// cleared / current / locked relative to the mission the crew is on.
+	// Live navigation map (M23.3): the campaign's systems laid out across the Veil frontier, each marked
+	// cleared / current / locked, plus the live ship position folded into the same normalised space and
+	// the distance to the active objective — so the map is a real nav display, not a static readout.
 	int32 Current = 0;
+	FVector2D PlayerMap(-1.f, -1.f);
+	float ObjectiveDist = -1.f;
+	bool bEngaged = false;
 	if (const UWorld* World = GetWorld())
 	{
 		if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
 		{
 			Current = MS->GetMissionIndex();
+			ObjectiveDist = MS->GetObjectiveDistance();
+			bEngaged = MS->IsEncounterLive();
+			if (const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0))
+			{
+				PlayerMap = MS->GetMapPosition(Player->GetActorLocation());
+			}
 		}
 	}
 
@@ -832,13 +870,23 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 	{
 		const FMissionDef Def = UMissionSubsystem::GetMissionDef(i);
 		const TCHAR* Status = i < Current ? TEXT("cleared") : (i == Current ? TEXT("current") : TEXT("locked"));
+		const bool bSun = Def.LandmarkKind == ELandmarkKind::Sun;
 		if (!Systems.IsEmpty()) { Systems += TEXT(","); }
-		Systems += FString::Printf(TEXT("{\"name\":\"%s\",\"x\":%.3f,\"y\":%.3f,\"status\":\"%s\"}"),
-			*JsonEscape(Def.Name), Def.MapX, Def.MapY, Status);
+		Systems += FString::Printf(TEXT(
+			"{\"name\":\"%s\",\"landmark\":\"%s\",\"x\":%.3f,\"y\":%.3f,\"status\":\"%s\","
+			"\"sun\":%s,\"r\":%d,\"g\":%d,\"b\":%d}"),
+			*JsonEscape(Def.Name), *JsonEscape(Def.LandmarkName), Def.MapX, Def.MapY, Status,
+			bSun ? TEXT("true") : TEXT("false"),
+			FMath::RoundToInt(FMath::Clamp(Def.LandmarkColor.R, 0.f, 1.f) * 255.f),
+			FMath::RoundToInt(FMath::Clamp(Def.LandmarkColor.G, 0.f, 1.f) * 255.f),
+			FMath::RoundToInt(FMath::Clamp(Def.LandmarkColor.B, 0.f, 1.f) * 255.f));
 	}
 
 	const FString Json = FString::Printf(
-		TEXT("{\"sector\":\"THE VEIL FRONTIER\",\"current\":%d,\"systems\":[%s]}"), Current, *Systems);
+		TEXT("{\"sector\":\"THE VEIL FRONTIER\",\"current\":%d,\"px\":%.4f,\"py\":%.4f,"
+			"\"objectiveDist\":%.0f,\"engaged\":%s,\"systems\":[%s]}"),
+		Current, PlayerMap.X, PlayerMap.Y, ObjectiveDist,
+		bEngaged ? TEXT("true") : TEXT("false"), *Systems);
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
 	return true;
 }
@@ -883,10 +931,27 @@ bool UStationServerSubsystem::HandleDock(const FHttpServerRequest& Request, cons
 
 bool UStationServerSubsystem::HandleWarp(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	// Warp drive (M21): a charged FTL jump along the bow, triggered from the Helm.
+	// Warp drive: a charged FTL jump. Default is a tactical jump along the bow; "mode=objective" lays
+	// in a course — turns the bow to the active objective and warps toward it (M23.3).
 	if (ASpaceship* Ship = GetShip())
 	{
-		Ship->Warp();
+		const FString* Mode = Request.QueryParams.Find(TEXT("mode"));
+		if (Mode && *Mode == TEXT("objective"))
+		{
+			FVector Target = Ship->GetActorLocation() + Ship->GetActorForwardVector() * 1.f;
+			if (const UWorld* World = GetWorld())
+			{
+				if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+				{
+					Target = MS->GetActiveObjectiveLocation();
+				}
+			}
+			Ship->WarpToObjective(Target);
+		}
+		else
+		{
+			Ship->Warp();
+		}
 	}
 	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
 	return true;
