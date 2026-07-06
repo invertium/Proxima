@@ -54,6 +54,53 @@ Each milestone: smallest meaningful change, then PIE + screenshot + log, compare
 - [~] M14 Audio/feedback: SFX (beams/impulse/alarms), camera shake. Done: [L] triggers fire + assets assigned; feel→user hand-test. PARTIAL 2026-06-21 — camera shake done (trauma model on ASpaceship: fire recoil + damage + nearby-explosion; PIE-verified numerically). TODO: SFX/audio (needs sound assets + import), hit/impact FX.
 - M15 Hardening: tune, fix, repeatable loop, "how to play" note. Done: user plays through once successfully.
 
+## Phase 6 — Gameplay loop v2 (M24–M30) — added 2026-07-06
+_(M16–M23 were planned/tracked in PROGRESS.md; the sector, web consoles, economy, campaign and
+open world are done. These milestones deepen the loop so every station matters every mission.
+Execution order + workflow: docs/OPUS_BRIEF.md. Release chores: docs/RELEASE_PLAN.md.)_
+
+- [ ] **M24 Combat readability & death polish** (folds the 2026-07-06 smoke-test fixes): player
+  death = multi-burst explosion (reuse `AExplosionFx`) + hide ship mesh + all enemy AI stands
+  down on phase→Defeat + ~2s beat before the defeat screen; `UWeaponComponent` clears
+  `CurrentTarget` when it dies; arrival grace — enemies hold fire (approach only) for ~12s
+  after an encounter triggers; `WarpToObjective` standoff = `max(4000, bodyRadius + 3000)`.
+  Done when: [S] death burst with enemies ceased firing; [L] no `[EnemyAI] FIRE` lines after
+  `Phase -> Defeat`; [L] target cleared on kill; [L] sun-warp lands outside the body.
+- [ ] **M25 Subsystem damage — Engineering matters in combat:** hull hits (shields down) roll a
+  chance to damage a ship system (Engine/Weapons/Sensors): damaged Engine halves max speed,
+  Weapons halves recharge, Sensors halves radar+scan range. The M17.3 repair minigame
+  retargets to the damaged system (sweep success repairs it); alarm + amber flag on the
+  Engineering console + web page + `/api/state`. Done when: [L] scripted hit damages a system
+  and the stat drop is measurable; repair restores it; [S] console shows the damaged flag.
+- [ ] **M26 Enemy archetype behaviors — Helm & Science matter:** the three archetypes get real
+  behavior: **interceptor** strafe runs (fly past, overshoot, loop back — no static standoff);
+  **frigate** fires slow torpedo volleys the helm can outrun/evade; **cruiser** is armored —
+  beams deal 50% until Science completes a scan (scan reveals the weakpoint: full damage +
+  comms confirm). Mission defs mix archetypes. Done when: [L] distinct per-type behavior
+  logs; [L] scan flips the cruiser damage multiplier; [S] a strafing pass caught on screen.
+- [ ] **M27 Living sector — travel events:** while not engaged, the director rolls every
+  ~25s for at most one live event: **distress call** (timed side objective at a nearby
+  landmark — clear a small fleet for bonus credits), **pirate interdiction** (2-ship ambush
+  spawns near the ship's path), or **salvage cache** (free-floating pickup: credits or a
+  torpedo, collected by proximity). Comms announce; nav map + radar mark the event. Done
+  when: [L] each event type triggers, resolves, and pays out; [S] nav-map event marker.
+- [ ] **M28 Station contracts:** while docked, a contract board (web console + Science comms)
+  offers one of: **bounty** (kill a named ship loitering at a landmark), **patrol** (visit two
+  named landmarks), **delivery** (dock, fly to a landmark, return). One active contract;
+  credits/XP on completion; persists in the save. Done when: [L] accept→complete→payout for
+  each type across a save/load; [S] contract board on the station page.
+- [ ] **M29 Red alert & power doctrine:** an alert state (green/red) toggled from Helm/web:
+  red alert tints consoles, plays a sting, and is required for shields to charge (shields
+  bleed at green); Engineering gains one-tap power presets (COMBAT / TRAVEL / BALANCED).
+  Encounter trigger auto-suggests red alert via comms. Done when: [L] shield charge gated by
+  alert state; [L] presets set the expected power triple; [S] red-alert console tint.
+- [ ] **M30 Final battle v2 + skirmish + difficulty:** Warlord flagship encounter becomes
+  multi-phase (two shield-drone escorts make the flagship invulnerable until destroyed —
+  Science scan calls it out); post-campaign **skirmish mode** from the main menu (endless
+  waves at Ember, wave counter, credits between waves); **difficulty selector** on new game
+  (Ensign/Captain/Admiral scaling enemy damage + hull). Done when: [L] flagship takes 0
+  damage until escorts die; [L] skirmish survives ≥3 waves in a scripted run; [S] wave HUD.
+
 ## LATER (post-slice backlog, not yet detailed)
 - Networking: server + per-station clients, replicate ship/subsystem state.
 - Stations: Science (scan/database), Comms/Relay.
