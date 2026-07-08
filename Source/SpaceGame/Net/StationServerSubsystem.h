@@ -36,6 +36,10 @@ public:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
 
+	/** The URL crew devices open (e.g. "http://192.168.1.10:8080/stations"), or empty when no
+	 *  LAN adapter was found. Shown on the main/pause menus so nobody has to read the log (R2). */
+	static FString GetCrewUrl();
+
 private:
 	// --- Route handlers (all run on the game thread) ---
 	bool HandleIndex(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);

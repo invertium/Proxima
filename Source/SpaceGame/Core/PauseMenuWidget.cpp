@@ -9,6 +9,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Core/BridgePlayerController.h"
+#include "Net/StationServerSubsystem.h"
 #include "Core/MenuUI.h"
 
 using MenuUI::MakeText;
@@ -46,6 +47,20 @@ void UPauseMenuWidget::BuildUI()
 	AddFlatButton(WidgetTree, Box, TEXT("RESTART"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnRestart);
 	AddFlatButton(WidgetTree, Box, TEXT("MAIN MENU"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnMainMenu);
 	AddFlatButton(WidgetTree, Box, TEXT("QUIT"))->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnQuit);
+
+	// Crew join URL (R2): so latecomers can pull up a console mid-session without reading logs.
+	const FString CrewUrl = UStationServerSubsystem::GetCrewUrl();
+	if (!CrewUrl.IsEmpty())
+	{
+		UTextBlock* Crew = MakeText(WidgetTree,
+			FText::FromString(FString::Printf(TEXT("CREW CONSOLES  →  %s"), *CrewUrl)),
+			14, FLinearColor(0.35f, 0.8f, 0.75f, 1.f));
+		if (UVerticalBoxSlot* CS = Box->AddChildToVerticalBox(Crew))
+		{
+			CS->SetPadding(FMargin(0.f, 18.f, 0.f, 0.f));
+			CS->SetHorizontalAlignment(HAlign_Center);
+		}
+	}
 
 	Toast = MakeText(WidgetTree, FText::GetEmpty(), 16, FLinearColor(0.4f, 1.f, 0.55f, 1.f));
 	if (UVerticalBoxSlot* TS = Box->AddChildToVerticalBox(Toast))

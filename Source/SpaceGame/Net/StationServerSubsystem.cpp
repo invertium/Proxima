@@ -668,6 +668,12 @@ ASpaceship* UStationServerSubsystem::GetCommandShip(FString& OutReason) const
 	return Ship;
 }
 
+FString UStationServerSubsystem::GetCrewUrl()
+{
+	const FString Lan = GetLanAddress();
+	return Lan.IsEmpty() ? FString() : FString::Printf(TEXT("http://%s:8080/stations"), *Lan);
+}
+
 FString UStationServerSubsystem::GetLanAddress()
 {
 	ISocketSubsystem* Sockets = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);

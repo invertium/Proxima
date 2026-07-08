@@ -1185,3 +1185,19 @@ over the LAN API (warp to Haven, cycle WASP-1, turn into arc, fire to kill) → 
 advance to First Contact/Tarsis, lock cleared. Dev-editor PIE re-verified the same two fixes first.
 `PackagedShipping/` covered by the gitignore (`Packaged*/`). (Commit: Core/MissionSubsystem.cpp +
 Net/StationServerSubsystem.cpp + .gitignore + docs.)
+
+---
+
+## 2026-07-08 — 📱 R2(a) Crew-console URL on the menus
+
+First R2 slice: nobody should need the log to find the consoles.
+- `UStationServerSubsystem::GetCrewUrl()` (public static): "http://<lan-ip>:8080/stations", empty when
+  no LAN adapter.
+- **Main menu** shows "CREW CONSOLES → <url>" between the subtitle and NEW GAME — the station server
+  already listens in the menu world, and with R1(b)'s remote start the crew can join (and even start
+  the game) before the captain touches a key. Falls back to "no LAN adapter found".
+- **Pause overlay** shows the same line under QUIT, for crew joining mid-session.
+
+**Verified (PIE + OS captures):** menu shows `CREW CONSOLES → http://192.168.178.71:8080/stations`
+under the title; ESC pause overlay shows the same under QUIT. (Commit: Net/StationServerSubsystem.{h,cpp}
++ Core/MainMenuWidget.cpp + Core/PauseMenuWidget.cpp + docs.)

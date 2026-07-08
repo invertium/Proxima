@@ -12,6 +12,7 @@
 #include "Core/SpaceGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Net/StationServerSubsystem.h"
 
 using MenuUI::MakeText;
 
@@ -54,8 +55,22 @@ void UMainMenuWidget::BuildUI()
 		FLinearColor(0.4f, 0.55f, 0.7f, 1.f));
 	if (UVerticalBoxSlot* SubSlot = Box->AddChildToVerticalBox(Sub))
 	{
-		SubSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 40.f));
+		SubSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 		SubSlot->SetHorizontalAlignment(HAlign_Center);
+	}
+
+	// Crew join URL (R2): the LAN station server is already listening in the menu world, so the
+	// crew can open their consoles — and even start the game — before the captain leaves the menu.
+	const FString CrewUrl = UStationServerSubsystem::GetCrewUrl();
+	UTextBlock* Crew = MakeText(WidgetTree,
+		FText::FromString(CrewUrl.IsEmpty()
+			? FString(TEXT("crew consoles: no LAN adapter found"))
+			: FString::Printf(TEXT("CREW CONSOLES  →  %s"), *CrewUrl)),
+		15, FLinearColor(0.35f, 0.8f, 0.75f, 1.f));
+	if (UVerticalBoxSlot* CrewSlot = Box->AddChildToVerticalBox(Crew))
+	{
+		CrewSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 34.f));
+		CrewSlot->SetHorizontalAlignment(HAlign_Center);
 	}
 
 	UButton* NewGameBtn = AddMenuButton(WidgetTree, Box, TEXT("NEW GAME"));
