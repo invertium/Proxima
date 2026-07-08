@@ -477,6 +477,16 @@ setInterval(poll,250);poll();
 		return Out;
 	}
 
+	// Uniform command verdict: {"ok":true} or {"ok":false,"reason":"…"} so a web console (or a
+	// scripted client) can tell a rejected command from an accepted one (R5 API honesty).
+	TUniquePtr<FHttpServerResponse> MakeVerdict(bool bOk, const FString& Reason = FString())
+	{
+		const FString Json = bOk
+			? FString(TEXT("{\"ok\":true}"))
+			: FString::Printf(TEXT("{\"ok\":false,\"reason\":\"%s\"}"), *JsonEscape(Reason));
+		return FHttpServerResponse::Create(Json, TEXT("application/json"));
+	}
+
 	// Read a numeric query param (defaulting if missing/unparseable).
 	float QueryFloat(const FHttpServerRequest& Request, const FString& Key, float Default)
 	{
@@ -562,6 +572,24 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/science"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleScience);
 	Bind(TEXT("/api/game"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleGame);
 
+	// The router can't route the bare root ("/" fails FHttpPath::IsValidPath), so catch it in a
+	// request preprocessor and bounce the browser to the /stations landing page (R5).
+	RootRedirectHandle = Router->RegisterRequestPreprocessor(FHttpRequestHandler::CreateLambda(
+		[](const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+		{
+			const FString& Path = Request.RelativePath.GetPath();
+			if (!Path.IsEmpty() && Path != TEXT("/"))
+			{
+				return false; // not the root — fall through to the bound routes
+			}
+			TUniquePtr<FHttpServerResponse> Response = FHttpServerResponse::Create(
+				FString(TEXT("see /stations")), FString(TEXT("text/plain")));
+			Response->Code = EHttpServerResponseCodes::Moved;
+			Response->Headers.Add(TEXT("Location"), { TEXT("/stations") });
+			OnComplete(MoveTemp(Response));
+			return true;
+		}));
+
 	Http.StartAllListeners();
 
 	const FString Lan = GetLanAddress();
@@ -581,8 +609,13 @@ void UStationServerSubsystem::Deinitialize()
 				Router->UnbindRoute(Handle);
 			}
 		}
+		if (RootRedirectHandle.IsValid())
+		{
+			Router->UnregisterRequestPreprocessor(RootRedirectHandle);
+		}
 	}
 	RouteHandles.Reset();
+	RootRedirectHandle.Reset();
 	Router.Reset();
 
 	// Deliberately NOT calling StopAllListeners(): it's global (it would also stop other
@@ -601,6 +634,38 @@ ASpaceship* UStationServerSubsystem::GetShip() const
 		return Cast<ASpaceship>(UGameplayStatics::GetPlayerPawn(World, 0));
 	}
 	return nullptr;
+}
+
+ASpaceship* UStationServerSubsystem::GetCommandShip(FString& OutReason) const
+{
+	ASpaceship* Ship = GetShip();
+	if (!Ship)
+	{
+		OutReason = TEXT("no ship in play");
+		return nullptr;
+	}
+	if (const UWorld* World = GetWorld())
+	{
+		if (const ASpaceGameMode* GM = World->GetAuthGameMode<ASpaceGameMode>())
+		{
+			if (GM->GetPhase() != EGamePhase::Playing)
+			{
+				OutReason = GM->GetPhase() == EGamePhase::Defeat
+					? TEXT("ship destroyed - encounter over")
+					: TEXT("encounter over");
+				return nullptr;
+			}
+		}
+	}
+	if (const UHealthComponent* Health = Ship->GetHealthComp())
+	{
+		if (!Health->IsAlive())
+		{
+			OutReason = TEXT("ship destroyed");
+			return nullptr;
+		}
+	}
+	return Ship;
 }
 
 FString UStationServerSubsystem::GetLanAddress()
@@ -896,39 +961,71 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 
 bool UStationServerSubsystem::HandleHelm(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	if (ASpaceship* Ship = GetShip())
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
 	{
-		if (UShipMovementComponent* Move = Ship->GetMovementComp())
-		{
-			if (Request.QueryParams.Contains(TEXT("throttle")))
-			{
-				Move->SetThrottle(QueryFloat(Request, TEXT("throttle"), 0.f));
-			}
-			if (Request.QueryParams.Contains(TEXT("turn")))
-			{
-				Move->SetTurn(QueryFloat(Request, TEXT("turn"), 0.f));
-			}
-		}
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	if (Ship->IsDocked())
+	{
+		OnComplete(MakeVerdict(false, TEXT("docked - undock first")));
+		return true;
+	}
+	UShipMovementComponent* Move = Ship->GetMovementComp();
+	const bool bHasThrottle = Request.QueryParams.Contains(TEXT("throttle"));
+	const bool bHasTurn = Request.QueryParams.Contains(TEXT("turn"));
+	if (!Move || (!bHasThrottle && !bHasTurn))
+	{
+		OnComplete(MakeVerdict(false, TEXT("missing throttle/turn")));
+		return true;
+	}
+	if (bHasThrottle)
+	{
+		Move->SetThrottle(QueryFloat(Request, TEXT("throttle"), 0.f));
+	}
+	if (bHasTurn)
+	{
+		Move->SetTurn(QueryFloat(Request, TEXT("turn"), 0.f));
+	}
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
 bool UStationServerSubsystem::HandleDock(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	if (ASpaceship* Ship = GetShip())
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
 	{
-		const FString* Action = Request.QueryParams.Find(TEXT("action"));
-		if (Action && *Action == TEXT("undock"))
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
+	}
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	if (Action && *Action == TEXT("undock"))
+	{
+		if (!Ship->IsDocked())
 		{
-			Ship->Undock();
+			OnComplete(MakeVerdict(false, TEXT("not docked")));
+			return true;
 		}
-		else // default: dock (no-op if out of range / moving)
+		Ship->Undock();
+	}
+	else // default: dock
+	{
+		if (Ship->IsDocked())
 		{
-			Ship->Dock();
+			OnComplete(MakeVerdict(false, TEXT("already docked")));
+			return true;
+		}
+		if (!Ship->Dock())
+		{
+			OnComplete(MakeVerdict(false, TEXT("cannot dock - no station in range, or still moving")));
+			return true;
 		}
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
@@ -936,27 +1033,38 @@ bool UStationServerSubsystem::HandleWarp(const FHttpServerRequest& Request, cons
 {
 	// Warp drive: a charged FTL jump. Default is a tactical jump along the bow; "mode=objective" lays
 	// in a course — turns the bow to the active objective and warps toward it (M23.3).
-	if (ASpaceship* Ship = GetShip())
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
 	{
-		const FString* Mode = Request.QueryParams.Find(TEXT("mode"));
-		if (Mode && *Mode == TEXT("objective"))
-		{
-			FVector Target = Ship->GetActorLocation() + Ship->GetActorForwardVector() * 1.f;
-			if (const UWorld* World = GetWorld())
-			{
-				if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
-				{
-					Target = MS->GetActiveObjectiveLocation();
-				}
-			}
-			Ship->WarpToObjective(Target);
-		}
-		else
-		{
-			Ship->Warp();
-		}
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	bool bJumped = false;
+	const FString* Mode = Request.QueryParams.Find(TEXT("mode"));
+	if (Mode && *Mode == TEXT("objective"))
+	{
+		FVector Target = Ship->GetActorLocation() + Ship->GetActorForwardVector() * 1.f;
+		if (const UWorld* World = GetWorld())
+		{
+			if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+			{
+				Target = MS->GetActiveObjectiveLocation();
+			}
+		}
+		bJumped = Ship->WarpToObjective(Target);
+	}
+	else
+	{
+		bJumped = Ship->Warp();
+	}
+	if (!bJumped)
+	{
+		OnComplete(MakeVerdict(false, Ship->IsDocked()
+			? TEXT("warp offline while docked") : TEXT("warp drive still charging")));
+		return true;
+	}
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
@@ -964,110 +1072,193 @@ bool UStationServerSubsystem::HandleBuy(const FHttpServerRequest& Request, const
 {
 	// Drydock purchase (M19.3): only while docked. BuyUpgrade validates rank/credits/max + persists;
 	// on success re-apply the loadout to the live ship so the upgrade takes effect immediately.
-	ASpaceship* Ship = GetShip();
-	const FString* Id = Request.QueryParams.Find(TEXT("id"));
-	if (Ship && Ship->IsDocked() && Id)
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
 	{
-		if (USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr)
-		{
-			if (GI->BuyUpgrade(FName(**Id)))
-			{
-				Ship->RefreshLoadout();
-			}
-		}
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	const FString* Id = Request.QueryParams.Find(TEXT("id"));
+	if (!Id)
+	{
+		OnComplete(MakeVerdict(false, TEXT("missing id")));
+		return true;
+	}
+	if (!Ship->IsDocked())
+	{
+		OnComplete(MakeVerdict(false, TEXT("not docked - upgrades are fitted at a station")));
+		return true;
+	}
+	USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr;
+	if (!GI || !GI->BuyUpgrade(FName(**Id)))
+	{
+		OnComplete(MakeVerdict(false, TEXT("cannot buy - check credits, rank, and tier")));
+		return true;
+	}
+	Ship->RefreshLoadout();
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
 bool UStationServerSubsystem::HandleShip(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
 	// Hangar (M19.4): buy or switch the active ship — only while docked. id = EPlayerShipType value.
-	ASpaceship* Ship = GetShip();
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
+	{
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
+	}
 	const FString* Action = Request.QueryParams.Find(TEXT("action"));
 	const FString* IdStr = Request.QueryParams.Find(TEXT("id"));
-	if (Ship && Ship->IsDocked() && Action && IdStr)
+	if (!Action || !IdStr)
 	{
-		const EPlayerShipType Type = (EPlayerShipType)FCString::Atoi(**IdStr);
-		if (USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr)
+		OnComplete(MakeVerdict(false, TEXT("missing action/id")));
+		return true;
+	}
+	if (!Ship->IsDocked())
+	{
+		OnComplete(MakeVerdict(false, TEXT("not docked - the hangar is at a station")));
+		return true;
+	}
+	USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr;
+	const EPlayerShipType Type = (EPlayerShipType)FCString::Atoi(**IdStr);
+	if (GI && *Action == TEXT("buy"))
+	{
+		if (!GI->BuyShip(Type))
 		{
-			if (*Action == TEXT("buy"))
-			{
-				GI->BuyShip(Type);
-			}
-			else if (*Action == TEXT("select"))
-			{
-				if (GI->SelectShip(Type)) { Ship->RefreshLoadout(); }
-			}
+			OnComplete(MakeVerdict(false, TEXT("cannot buy - check credits and rank")));
+			return true;
 		}
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	else if (GI && *Action == TEXT("select"))
+	{
+		if (!GI->SelectShip(Type))
+		{
+			OnComplete(MakeVerdict(false, TEXT("ship not owned")));
+			return true;
+		}
+		Ship->RefreshLoadout();
+	}
+	else
+	{
+		OnComplete(MakeVerdict(false, TEXT("unknown action")));
+		return true;
+	}
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
 bool UStationServerSubsystem::HandleWeapons(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	if (ASpaceship* Ship = GetShip())
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
 	{
-		if (UWeaponComponent* Weap = Ship->GetWeaponComp())
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
+	}
+	UWeaponComponent* Weap = Ship->GetWeaponComp();
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	if (!Weap || !Action)
+	{
+		OnComplete(MakeVerdict(false, TEXT("missing action")));
+		return true;
+	}
+	if (*Action == TEXT("cycle"))
+	{
+		Weap->CycleTarget();
+	}
+	else if (*Action == TEXT("fire"))
+	{
+		if (!Weap->FireBeam())
 		{
-			const FString* Action = Request.QueryParams.Find(TEXT("action"));
-			if (Action && *Action == TEXT("cycle"))
-			{
-				Weap->CycleTarget();
-			}
-			else if (Action && *Action == TEXT("fire"))
-			{
-				Weap->FireBeam();
-			}
-			else if (Action && *Action == TEXT("torpedo"))
-			{
-				if (UTorpedoLauncherComponent* Torp = Ship->GetTorpedoComp())
-				{
-					Torp->Fire();
-				}
-			}
+			// Mirror FireBeam's own gate order so the console shows why the shot was refused.
+			const TCHAR* Why =
+				Weap->GetCharge() < 1.f     ? TEXT("beam still charging") :
+				!Weap->GetCurrentTarget()   ? TEXT("no target") :
+				!Weap->IsTargetInRange()    ? TEXT("target out of range") :
+				                              TEXT("target outside firing arc");
+			OnComplete(MakeVerdict(false, Why));
+			return true;
 		}
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	else if (*Action == TEXT("torpedo"))
+	{
+		UTorpedoLauncherComponent* Torp = Ship->GetTorpedoComp();
+		if (!Torp || !Torp->Fire())
+		{
+			OnComplete(MakeVerdict(false, TEXT("torpedo blocked - check reload, ammo, target, and arc")));
+			return true;
+		}
+	}
+	else
+	{
+		OnComplete(MakeVerdict(false, TEXT("unknown action")));
+		return true;
+	}
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
 bool UStationServerSubsystem::HandlePower(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	if (ASpaceship* Ship = GetShip())
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
 	{
-		if (UPowerComponent* Power = Ship->GetPowerComp())
-		{
-			const int32 Sys = FMath::Clamp((int32)QueryFloat(Request, TEXT("system"), -1.f), 0, 2);
-			if (Request.QueryParams.Contains(TEXT("system")))
-			{
-				Power->AdjustSystemPower((EShipSystem)Sys, QueryFloat(Request, TEXT("delta"), 0.f));
-			}
-		}
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	UPowerComponent* Power = Ship->GetPowerComp();
+	if (!Power || !Request.QueryParams.Contains(TEXT("system")))
+	{
+		OnComplete(MakeVerdict(false, TEXT("missing system")));
+		return true;
+	}
+	const int32 Sys = FMath::Clamp((int32)QueryFloat(Request, TEXT("system"), -1.f), 0, 2);
+	Power->AdjustSystemPower((EShipSystem)Sys, QueryFloat(Request, TEXT("delta"), 0.f));
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
 bool UStationServerSubsystem::HandleScience(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	if (ASpaceship* Ship = GetShip())
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
 	{
-		if (UScienceComponent* Sci = Ship->GetScienceComp())
-		{
-			const FString* Action = Request.QueryParams.Find(TEXT("action"));
-			if (Action && *Action == TEXT("cycle"))
-			{
-				Sci->CycleTarget();
-			}
-			else if (Action && *Action == TEXT("scan"))
-			{
-				Sci->BeginScan();
-			}
-		}
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	UScienceComponent* Sci = Ship->GetScienceComp();
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	if (!Sci || !Action)
+	{
+		OnComplete(MakeVerdict(false, TEXT("missing action")));
+		return true;
+	}
+	if (*Action == TEXT("cycle"))
+	{
+		Sci->CycleTarget();
+	}
+	else if (*Action == TEXT("scan"))
+	{
+		if (!Sci->GetScanTarget())
+		{
+			OnComplete(MakeVerdict(false, TEXT("no scan contact - cycle to a target first")));
+			return true;
+		}
+		Sci->BeginScan();
+	}
+	else
+	{
+		OnComplete(MakeVerdict(false, TEXT("unknown action")));
+		return true;
+	}
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
@@ -1079,59 +1270,70 @@ bool UStationServerSubsystem::HandleEngineering(const FHttpServerRequest& Reques
 	constexpr float RepairPerHit = 8.f;
 	constexpr double MinRepairInterval = 0.25; // seconds (sim time) between credited welds
 
-	const FString* Action = Request.QueryParams.Find(TEXT("action"));
-	if (Action && *Action == TEXT("repair"))
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
 	{
-		if (ASpaceship* Ship = GetShip())
-		{
-			if (UHealthComponent* Health = Ship->GetHealthComp())
-			{
-				const UWorld* World = GetWorld();
-				const double Now = World ? World->GetTimeSeconds() : 0.0;
-				if (Now - LastRepairTime >= MinRepairInterval)
-				{
-					LastRepairTime = Now;
-					Health->RepairHull(RepairPerHit);
-				}
-			}
-		}
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	if (!Action || *Action != TEXT("repair"))
+	{
+		OnComplete(MakeVerdict(false, TEXT("unknown action")));
+		return true;
+	}
+	UHealthComponent* Health = Ship->GetHealthComp();
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	if (!Health || Now - LastRepairTime < MinRepairInterval)
+	{
+		OnComplete(MakeVerdict(false, TEXT("weld not credited - pace the sweep")));
+		return true;
+	}
+	LastRepairTime = Now;
+	Health->RepairHull(RepairPerHit);
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
 bool UStationServerSubsystem::HandleGame(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
 	// "restart" retries the current mission; "new" restarts the whole campaign from mission 0
-	// (so it's meaningfully different from restart, and persists the reset).
+	// (so it's meaningfully different from restart, and persists the reset). Deliberately NOT
+	// gated on phase: restarting from the defeat screen is this endpoint's main job.
 	const FString* Action = Request.QueryParams.Find(TEXT("action"));
-	if (UWorld* World = GetWorld())
+	UWorld* World = GetWorld();
+	if (!World || !Action
+		|| (*Action != TEXT("restart") && *Action != TEXT("new") && *Action != TEXT("launch")))
 	{
-		if (Action && *Action == TEXT("new"))
+		OnComplete(MakeVerdict(false, TEXT("unknown action")));
+		return true;
+	}
+	if (*Action == TEXT("new"))
+	{
+		if (USpaceGameInstance* GI = World->GetGameInstance<USpaceGameInstance>())
 		{
-			if (USpaceGameInstance* GI = World->GetGameInstance<USpaceGameInstance>())
-			{
-				GI->ResetCampaign();
-				GI->SaveCampaign();
-			}
-		}
-		if (Action && (*Action == TEXT("restart") || *Action == TEXT("new")))
-		{
-			if (ASpaceGameMode* GM = World->GetAuthGameMode<ASpaceGameMode>())
-			{
-				GM->RestartEncounter();
-			}
-		}
-		// "launch" force-triggers the active objective's fleet now, ignoring proximity (debug / skip).
-		// Normal play spawns it by flying into the objective's zone (the open-sector director).
-		if (Action && *Action == TEXT("launch"))
-		{
-			if (UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
-			{
-				MS->ForceTriggerObjective();
-			}
+			GI->ResetCampaign();
+			GI->SaveCampaign();
 		}
 	}
-	OnComplete(MakeResponse(TEXT("ok"), TEXT("text/plain")));
+	if (*Action == TEXT("restart") || *Action == TEXT("new"))
+	{
+		if (ASpaceGameMode* GM = World->GetAuthGameMode<ASpaceGameMode>())
+		{
+			GM->RestartEncounter();
+		}
+	}
+	// "launch" force-triggers the active objective's fleet now, ignoring proximity (debug / skip).
+	// Normal play spawns it by flying into the objective's zone (the open-sector director).
+	if (*Action == TEXT("launch"))
+	{
+		if (UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+		{
+			MS->ForceTriggerObjective();
+		}
+	}
+	OnComplete(MakeVerdict(true));
 	return true;
 }

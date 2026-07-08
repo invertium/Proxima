@@ -61,6 +61,11 @@ private:
 	/** Resolve the local player ship in this world, or null if not spawned yet. */
 	ASpaceship* GetShip() const;
 
+	/** Gate for the ship-command endpoints: the ship must exist, be alive, and the encounter
+	 *  still be Playing. Returns null and fills OutReason when the command should be rejected
+	 *  (R5 API honesty — commands against a dead ship / ended encounter report why). */
+	ASpaceship* GetCommandShip(FString& OutReason) const;
+
 	/** Best-guess LAN IPv4 of this machine (skips loopback), or empty. */
 	static FString GetLanAddress();
 
@@ -69,6 +74,9 @@ private:
 
 	/** Routes we bound, unbound on Deinitialize so a later PIE run rebinds cleanly. */
 	TArray<FHttpRouteHandle> RouteHandles;
+
+	/** Request preprocessor that bounces "/" to /stations (the router can't route the bare root). */
+	FDelegateHandle RootRedirectHandle;
 
 	/** Port the router is bound to. */
 	int32 Port = 8080;

@@ -1114,3 +1114,29 @@ not paused immediately, paused (overlay) ~2.2 s later; death screenshot = screen
 `/api/game?action=restart` → playing, hull 80/80, mission + credits kept. Log: 0 Fatal/Ensure/Accessed None.
 (Commit: Ships/Spaceship.{h,cpp} + Ships/EnemyShip.{h,cpp} + Core/BridgePlayerController.{h,cpp} +
 Components/WeaponComponent.cpp + docs.)
+
+---
+
+## 2026-07-08 — 📡 R5(a) API honesty + root redirect
+
+Web-console API truthfulness (RELEASE_PLAN R5, smoke-test #3/#5). Every mutating `/api/*` endpoint now
+answers `{"ok":true}` or `{"ok":false,"reason":"…"}` (application/json) instead of an unconditional
+plain-text `ok`.
+- **Command gate** `GetCommandShip()`: ship must exist, be alive, and the phase be Playing — otherwise the
+  reason says why (e.g. `ship destroyed - encounter over`). `/api/game` is deliberately ungated: restart
+  from the defeat screen is its main job (it now rejects unknown actions instead of okaying them).
+- **Per-endpoint reasons:** helm (docked / missing params), dock (already docked / not docked / out of
+  range-moving), warp (offline docked / still charging), buy + ship (not docked / credits-rank-tier / not
+  owned), weapons fire mirrors `FireBeam`'s gate order (charging / no target / out of range / out of arc),
+  torpedo, science scan (no contact), power (missing system), engineering weld (rate-limit not credited).
+- **Root redirect:** the router can't route "/" (`FHttpPath` rejects it), so a request preprocessor 301s
+  `/` → `/stations` (unregistered on teardown). No more bare-IP 404 (smoke-test #5).
+- Console JS fires-and-forgets its command fetches, so the body change is compatible; pages can start
+  surfacing `reason` later (R2 polish).
+
+**Verified (PIE + curl):** `curl -i /` → `301 Location: /stations`; fire with no target → `no target`; buy
+undocked → `not docked…`; undock while free-flying → `not docked`; `action=bogus` → `unknown action`; helm
+no params → `missing throttle/turn`; warp twice → ok then `warp drive still charging`; scan with no contact
+→ `no scan contact…`; after killing the ship: helm/fire → `ship destroyed - encounter over` but
+`game?action=restart` → `{"ok":true}` and the encounter resets (phase playing, hull 80). `/stations` +
+`/helm` still 200; log clean. (Commit: Net/StationServerSubsystem.{h,cpp} + docs.)
