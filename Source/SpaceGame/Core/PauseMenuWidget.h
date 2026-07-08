@@ -33,10 +33,25 @@ private:
 	UFUNCTION() void OnResume();
 	UFUNCTION() void OnSave();
 	UFUNCTION() void OnRestart();
+	UFUNCTION() void OnSettings();
 	UFUNCTION() void OnMainMenu();
 	UFUNCTION() void OnQuit();
 
+	// Leaving mid-mission drops progress since the last save, so both exits confirm first (R2).
+	UFUNCTION() void OnConfirmProceed();
+	UFUNCTION() void OnConfirmBack();
+
+	/** Which exit the confirm panel's CONFIRM button executes. */
+	enum class EPendingExit : uint8 { None, MainMenu, Quit };
+
+	/** Swap the panel to a confirm prompt; CONFIRM runs the pending exit, BACK restores. */
+	void ShowConfirm(const FString& Title, const FString& ConfirmLabel, EPendingExit Exit);
+
 	class ABridgePlayerController* Owner() const;
 
+	EPendingExit PendingExit = EPendingExit::None;
+
+	UPROPERTY() TObjectPtr<class UBorder> Root;
+	UPROPERTY() TObjectPtr<class UWidget> MainPanel;
 	UPROPERTY() TObjectPtr<UTextBlock> Toast;
 };

@@ -1226,3 +1226,32 @@ in-game and the menu CONTROLS panel + BACK. Python note: the `EStation` py class
 `AStation` — recover it via `type(pc.call_method("GetStation"))`. (Commit:
 Core/ControlsOverlayWidget.{h,cpp} + Core/BridgePlayerController.{h,cpp} + Core/MainMenuWidget.{h,cpp}
 + Core/MenuUI.h + docs.)
+
+---
+
+## 2026-07-08 — ⚙️ R2(c) Settings menu + quit confirmations
+
+Rest of R2's first-run UX (minus the tutorial rewrite — see note).
+- **`USettingsMenuWidget`** (new): SETTINGS overlay reachable from the main menu and the pause
+  menu (viewport z 130, above pause). Four cycle-rows showing live values: WINDOW MODE
+  (fullscreen/borderless/windowed), RESOLUTION (display-supported modes, fallback list),
+  QUALITY (LOW→EPIC via engine scalability), MASTER VOLUME (10% steps, wraps). Every click
+  applies immediately and persists — window/res/quality through `UGameUserSettings`
+  (GameUserSettings.ini), volume through `FApp::SetVolumeMultiplier` + a `[SpaceGame.Audio]`
+  config key re-applied at boot by the new `USpaceGameInstance::Init`. SFX/music split deferred
+  until music exists (Q6) — one master slider is honest for the current soundscape.
+- **Quit confirmations:** main-menu QUIT swaps to a QUIT TO DESKTOP?/BACK panel; the pause
+  menu's QUIT **and** MAIN MENU both swap to a confirm panel ("Progress since your last save
+  will be lost.") before proceeding.
+
+**Verified (PIE):** settings panel captured over the main menu with live values; quality cycled
+CUSTOM→EPIC; volume clicks wrote `MasterVolume=0.9` then wrapped back to `=1` in
+GameUserSettings.ini (quality persists to the editor ini under PIE, game ini when packaged);
+BACK removes the overlay (viewport-check). Pause flows proven end-to-end: OnMainMenu→confirm→
+BACK restores; QUIT→CONFIRM actually quit (PIE ended); MAIN MENU→CONFIRM swapped the world
+VSlice_Arena→MainMenu; SETTINGS opens/closes over the pause panel.
+
+**Note:** the R2 "tutorialisation pass" (rewriting Shakedown comms around the new solo hotkeys)
+was **dropped by user decision** — solo keyboard play is a testing affordance, not the shipped
+mode; the tutorial keeps teaching the crew-console flow. (Commit: Core/SettingsMenuWidget.{h,cpp}
++ Core/SpaceGameInstance.{h,cpp} + Core/MainMenuWidget.{h,cpp} + Core/PauseMenuWidget.{h,cpp} + docs.)

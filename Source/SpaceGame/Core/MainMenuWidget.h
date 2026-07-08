@@ -30,7 +30,9 @@ private:
 	UFUNCTION() void OnNewGame();   // -> ship select
 	UFUNCTION() void OnContinue();
 	UFUNCTION() void OnControls();  // -> keyboard-reference panel (R2)
-	UFUNCTION() void OnQuit();
+	UFUNCTION() void OnSettings();  // -> settings overlay (R2)
+	UFUNCTION() void OnQuit();      // -> confirm panel (R2)
+	UFUNCTION() void OnQuitConfirmed();
 
 	// Ship select (shown after New Game).
 	UFUNCTION() void OnPickInterceptor();

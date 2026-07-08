@@ -9,6 +9,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Core/MenuUI.h"
+#include "Core/SettingsMenuWidget.h"
 #include "Core/SpaceGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -82,6 +83,9 @@ void UMainMenuWidget::BuildUI()
 
 	UButton* ControlsBtn = AddMenuButton(WidgetTree, Box, TEXT("CONTROLS"));
 	ControlsBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnControls);
+
+	UButton* SettingsBtn = AddMenuButton(WidgetTree, Box, TEXT("SETTINGS"));
+	SettingsBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnSettings);
 
 	UButton* QuitBtn = AddMenuButton(WidgetTree, Box, TEXT("QUIT"));
 	QuitBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnQuit);
@@ -167,6 +171,16 @@ void UMainMenuWidget::OnControls()
 	if (Root) { Root->SetContent(Box); }
 }
 
+void UMainMenuWidget::OnSettings()
+{
+	// The settings panel is a self-contained overlay (shared with the pause menu), so it goes
+	// over the menu instead of swapping the panel — BACK just removes it.
+	if (USettingsMenuWidget* Panel = CreateWidget<USettingsMenuWidget>(GetOwningPlayer(), USettingsMenuWidget::StaticClass()))
+	{
+		Panel->AddToViewport(130);
+	}
+}
+
 void UMainMenuWidget::OnBack()
 {
 	if (Root && MainPanel) { Root->SetContent(MainPanel); }
@@ -191,6 +205,24 @@ void UMainMenuWidget::OnContinue()
 }
 
 void UMainMenuWidget::OnQuit()
+{
+	// Confirm before dropping to desktop (R2) — same panel-swap pattern as ship select.
+	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
+	if (UVerticalBoxSlot* S = Box->AddChildToVerticalBox(
+		MakeText(WidgetTree, FText::FromString(TEXT("QUIT TO DESKTOP?")), 30, FLinearColor(1.f, 0.75f, 0.35f, 1.f))))
+	{
+		S->SetPadding(FMargin(0.f, 0.f, 0.f, 20.f));
+		S->SetHorizontalAlignment(HAlign_Center);
+	}
+	AddMenuButton(WidgetTree, Box, TEXT("QUIT"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnQuitConfirmed);
+	AddMenuButton(WidgetTree, Box, TEXT("BACK"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnBack);
+
+	if (Root) { Root->SetContent(Box); }
+}
+
+void UMainMenuWidget::OnQuitConfirmed()
 {
 	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }

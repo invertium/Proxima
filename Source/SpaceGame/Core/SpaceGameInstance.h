@@ -20,6 +20,9 @@ class SPACEGAME_API USpaceGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 public:
+	/** Applies persisted user settings that live outside GameUserSettings (master volume, R2). */
+	virtual void Init() override;
+
 	UFUNCTION(BlueprintPure, Category = "Campaign")
 	int32 GetMissionIndex() const { return MissionIndex; }
 

@@ -2,6 +2,7 @@
 
 #include "Core/SpaceGameInstance.h"
 
+#include "Core/SettingsMenuWidget.h"
 #include "Core/ShipCatalogue.h"
 #include "Core/SpaceSaveGame.h"
 #include "Core/UpgradeCatalogue.h"
@@ -12,6 +13,12 @@ namespace
 	// Mission count for the campaign — must match UMissionSubsystem's table size (BuildCampaign):
 	// the Shakedown tutorial (M20) + three combat missions.
 	constexpr int32 CampaignMissionCount = 4;
+}
+
+void USpaceGameInstance::Init()
+{
+	Super::Init();
+	USettingsMenuWidget::ApplyPersistedAudio();
 }
 
 void USpaceGameInstance::ResetCampaign()
