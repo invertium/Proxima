@@ -3,6 +3,8 @@
 #include "Core/BridgePlayerController.h"
 
 #include "Core/BridgeHUDWidget.h"
+#include "Core/ControlsOverlayWidget.h"
+#include "Core/MissionSubsystem.h"
 #include "Core/OutcomeMenuWidget.h"
 #include "Core/PauseMenuWidget.h"
 #include "Core/SpaceGameInstance.h"
@@ -11,6 +13,8 @@
 #include "Components/PowerComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Components/HealthComponent.h"
+#include "Components/ScienceComponent.h"
+#include "Components/TorpedoLauncherComponent.h"
 #include "Ships/Spaceship.h"
 #include "Ships/EnemyShip.h"
 #include "Blueprint/UserWidget.h"
@@ -186,6 +190,18 @@ void ABridgePlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Right,     IE_Pressed, this, &ABridgePlayerController::WeaponCycleTarget);
 	InputComponent->BindKey(EKeys::SpaceBar,  IE_Pressed, this, &ABridgePlayerController::WeaponFire);
 
+	// Solo-play hotkeys (R2): every verb the web consoles offer, on keys, so one player can
+	// run the whole loop without a second screen. Helm/Weapons keys share the station gating.
+	InputComponent->BindKey(EKeys::F, IE_Pressed, this, &ABridgePlayerController::HelmDockToggle);
+	InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ABridgePlayerController::HelmWarp);
+	InputComponent->BindKey(EKeys::G, IE_Pressed, this, &ABridgePlayerController::HelmWarpToObjective);
+	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ABridgePlayerController::WeaponFireTorpedo);
+	InputComponent->BindKey(EKeys::C, IE_Pressed, this, &ABridgePlayerController::ScienceCycleTarget);
+	InputComponent->BindKey(EKeys::X, IE_Pressed, this, &ABridgePlayerController::ScienceScan);
+
+	// H toggles the controls reference card (works alongside any station).
+	InputComponent->BindKey(EKeys::H, IE_Pressed, this, &ABridgePlayerController::ToggleControls);
+
 	// Escape toggles the pause overlay (M18). bExecuteWhenPaused so it can also un-pause.
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ABridgePlayerController::TogglePause).bExecuteWhenPaused = true;
 }
@@ -297,6 +313,92 @@ void ABridgePlayerController::WeaponFire()
 {
 	if (CurrentStation != EStation::Weapons) { return; }
 	if (UWeaponComponent* Weapon = GetShipWeapon()) { Weapon->FireBeam(); }
+}
+
+ASpaceship* ABridgePlayerController::GetShip() const
+{
+	return Cast<ASpaceship>(GetPawn());
+}
+
+// --- Solo-play hotkeys (R2) ---
+
+void ABridgePlayerController::HelmDockToggle()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	ASpaceship* Ship = GetShip();
+	if (!Ship) { return; }
+	if (Ship->IsDocked())
+	{
+		Ship->Undock();
+	}
+	else if (!Ship->Dock())
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Bridge] Dock refused — no friendly station in range"));
+	}
+}
+
+void ABridgePlayerController::HelmWarp()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	if (ASpaceship* Ship = GetShip())
+	{
+		if (!Ship->Warp())
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Bridge] Warp refused — %s"),
+				Ship->IsDocked() ? TEXT("docked") : TEXT("still charging"));
+		}
+	}
+}
+
+void ABridgePlayerController::HelmWarpToObjective()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	ASpaceship* Ship = GetShip();
+	if (!Ship) { return; }
+	// Same course the Helm console's LAY IN COURSE button plots (/api/warp?mode=objective):
+	// the director's active objective, falling back to a bow jump if it's unavailable.
+	FVector Target = Ship->GetActorLocation() + Ship->GetActorForwardVector() * 1.f;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+		{
+			Target = MS->GetActiveObjectiveLocation();
+		}
+	}
+	if (!Ship->WarpToObjective(Target))
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Bridge] Lay-in-course refused — %s"),
+			Ship->IsDocked() ? TEXT("docked") : TEXT("warp still charging"));
+	}
+}
+
+void ABridgePlayerController::WeaponFireTorpedo()
+{
+	if (CurrentStation != EStation::Weapons) { return; }
+	const ASpaceship* Ship = GetShip();
+	if (UTorpedoLauncherComponent* Torpedo = Ship ? Ship->GetTorpedoComp() : nullptr)
+	{
+		Torpedo->Fire();
+	}
+}
+
+void ABridgePlayerController::ScienceCycleTarget()
+{
+	// Science has no dedicated station key — any seat can work the scanner.
+	const ASpaceship* Ship = GetShip();
+	if (UScienceComponent* Science = Ship ? Ship->GetScienceComp() : nullptr)
+	{
+		Science->CycleTarget();
+	}
+}
+
+void ABridgePlayerController::ScienceScan()
+{
+	const ASpaceship* Ship = GetShip();
+	if (UScienceComponent* Science = Ship ? Ship->GetScienceComp() : nullptr)
+	{
+		Science->BeginScan();
+	}
 }
 
 void ABridgePlayerController::SetStation(EStation NewStation)
@@ -416,6 +518,23 @@ void ABridgePlayerController::HidePauseMenu()
 	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 	InputMode.SetHideCursorDuringCapture(false);
 	SetInputMode(InputMode);
+}
+
+// --- Controls reference overlay (H, R2) ---
+
+void ABridgePlayerController::ToggleControls()
+{
+	if (ControlsOverlay)
+	{
+		ControlsOverlay->RemoveFromParent();
+		ControlsOverlay = nullptr;
+		return;
+	}
+	ControlsOverlay = CreateWidget<UControlsOverlayWidget>(this, UControlsOverlayWidget::StaticClass());
+	if (ControlsOverlay)
+	{
+		ControlsOverlay->AddToViewport(110); // above the HUD, below the pause overlay (120)
+	}
 }
 
 void ABridgePlayerController::PauseResume()

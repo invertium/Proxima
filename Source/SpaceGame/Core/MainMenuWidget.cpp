@@ -80,6 +80,9 @@ void UMainMenuWidget::BuildUI()
 	ContinueLabel = Cast<UTextBlock>(ContinueButton->GetChildAt(0));
 	ContinueButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnContinue);
 
+	UButton* ControlsBtn = AddMenuButton(WidgetTree, Box, TEXT("CONTROLS"));
+	ControlsBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnControls);
+
 	UButton* QuitBtn = AddMenuButton(WidgetTree, Box, TEXT("QUIT"));
 	QuitBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnQuit);
 }
@@ -138,6 +141,30 @@ void UMainMenuWidget::OnPickCruiser()
 		GI->SetPlayerShip(EPlayerShipType::Cruiser);
 	}
 	StartCampaign();
+}
+
+void UMainMenuWidget::OnControls()
+{
+	// Swap the menu to the keyboard-reference card (same rows as the in-game H overlay).
+	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
+
+	if (UVerticalBoxSlot* S = Box->AddChildToVerticalBox(
+		MakeText(WidgetTree, FText::FromString(TEXT("CONTROLS")), 36, FLinearColor(0.6f, 0.85f, 1.f, 1.f))))
+	{
+		S->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+		S->SetHorizontalAlignment(HAlign_Center);
+	}
+
+	MenuUI::AddControlRows(WidgetTree, Box);
+
+	UButton* BackBtn = AddMenuButton(WidgetTree, Box, TEXT("BACK"));
+	BackBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnBack);
+	if (UVerticalBoxSlot* BS = Cast<UVerticalBoxSlot>(BackBtn->Slot))
+	{
+		BS->SetPadding(FMargin(0.f, 28.f, 0.f, 8.f));
+	}
+
+	if (Root) { Root->SetContent(Box); }
 }
 
 void UMainMenuWidget::OnBack()

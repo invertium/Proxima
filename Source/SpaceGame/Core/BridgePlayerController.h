@@ -103,6 +103,36 @@ private:
 	/** Resolve the possessed ship's weapon component, or null. */
 	class UWeaponComponent* GetShipWeapon() const;
 
+	/** Resolve the possessed ship, or null. */
+	class ASpaceship* GetShip() const;
+
+	// --- Solo-play hotkeys (R2): the web-console-only verbs, on keys, so one player at the
+	// keyboard can run the whole loop. BlueprintCallable so PIE tests can drive them directly
+	// (real key presses can't be injected over MCP).
+	/** F (Helm): dock if in range of a friendly station, or undock if docked. */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void HelmDockToggle();
+
+	/** R (Helm): tactical warp along the bow, if charged. */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void HelmWarp();
+
+	/** G (Helm): lay in course — warp toward the active campaign objective. */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void HelmWarpToObjective();
+
+	/** T (Weapons): fire a torpedo at the locked target. */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void WeaponFireTorpedo();
+
+	/** C (any station): cycle the science scan contact. */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void ScienceCycleTarget();
+
+	/** X (any station): start scanning the selected contact. */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void ScienceScan();
+
 	// --- End-of-encounter (M11 defeat / M12 victory) ---
 	/** Bound to the player ship's health OnDeath: flip the phase to Defeat (hostiles stand down)
 	 *  and start the short beat before the overlay, so the crew sees the ship go up (M24). */
@@ -129,6 +159,12 @@ private:
 	void ShowPauseMenu();
 	void HidePauseMenu();
 
+	// --- Controls reference overlay (H, R2) ---
+	/** Toggle the keyboard-reference card. Doesn't pause — it's a glance-and-dismiss aid.
+	 *  BlueprintCallable so PIE tests can drive it. */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void ToggleControls();
+
 	/** What the outcome overlay's primary button does. */
 	enum class EOutcomeKind : uint8 { VictoryNext, VictoryComplete, Defeat };
 
@@ -146,6 +182,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UPauseMenuWidget> PauseMenu;
+
+	UPROPERTY()
+	TObjectPtr<class UControlsOverlayWidget> ControlsOverlay;
 
 	/** True while the pause overlay is up (guards the toggle). */
 	bool bPaused = false;

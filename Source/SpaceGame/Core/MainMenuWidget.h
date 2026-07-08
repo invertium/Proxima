@@ -29,6 +29,7 @@ private:
 
 	UFUNCTION() void OnNewGame();   // -> ship select
 	UFUNCTION() void OnContinue();
+	UFUNCTION() void OnControls();  // -> keyboard-reference panel (R2)
 	UFUNCTION() void OnQuit();
 
 	// Ship select (shown after New Game).

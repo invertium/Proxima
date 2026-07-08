@@ -1201,3 +1201,28 @@ First R2 slice: nobody should need the log to find the consoles.
 **Verified (PIE + OS captures):** menu shows `CREW CONSOLES → http://192.168.178.71:8080/stations`
 under the title; ESC pause overlay shows the same under QUIT. (Commit: Net/StationServerSubsystem.{h,cpp}
 + Core/MainMenuWidget.cpp + Core/PauseMenuWidget.cpp + docs.)
+
+---
+
+## 2026-07-08 — ⌨️ R2(b) Solo hotkey playability + controls reference
+
+The full gameplay loop is now playable by one player at the keyboard — torpedo, dock, warp, and
+science were web-console-only verbs before this.
+- **New hotkeys** (`ABridgePlayerController::SetupInputComponent`): **F** dock/undock toggle and
+  **R** tactical bow warp and **G** lay in course (warp to the active objective, same path as
+  `/api/warp?mode=objective`) on Helm; **T** fire torpedo on Weapons; **C** cycle scan contact and
+  **X** scan from any station; **H** toggles a controls card. Handlers are `BlueprintCallable`
+  (TogglePause precedent) so PIE tests can drive them via `call_method`.
+- **`UControlsOverlayWidget`** (new): the H card — dim non-pausing overlay at viewport z 110
+  (above HUD, below pause), listing every key by station.
+- **Main menu CONTROLS button** (between CONTINUE and QUIT): swaps to the same key reference with
+  BACK. Both views share `MenuUI::AddControlRows` so they can never drift apart.
+
+**Verified (PIE, handlers driven via `call_method` + `/api/state`):** C/X → `sciTarget` WASP-1,
+`sciScanning` true; R → 18 000-unit bow jump; station gating holds (HelmWarp on Weapons moves 0);
+F beside the starbase → `IsDocked()` true, second F → false; G → bow turned 74° and jumped toward
+the objective; T with a locked in-arc contact → ammo 3→2. OS captures confirm the H overlay
+in-game and the menu CONTROLS panel + BACK. Python note: the `EStation` py class is shadowed by
+`AStation` — recover it via `type(pc.call_method("GetStation"))`. (Commit:
+Core/ControlsOverlayWidget.{h,cpp} + Core/BridgePlayerController.{h,cpp} + Core/MainMenuWidget.{h,cpp}
++ Core/MenuUI.h + docs.)
