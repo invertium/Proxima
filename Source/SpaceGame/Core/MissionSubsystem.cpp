@@ -5,6 +5,7 @@
 #include "Components/HealthComponent.h"
 #include "Core/BridgePlayerController.h"
 #include "Core/SpaceGameInstance.h"
+#include "Core/SpaceGameMode.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
@@ -146,6 +147,13 @@ bool UMissionSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) c
 void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
+
+	// Front-end worlds (MainMenu) are the same Game world type but run AMenuGameMode — don't
+	// build the sector behind the menu (no starbase/landmarks/director until the bridge loads).
+	if (!InWorld.GetAuthGameMode<ASpaceGameMode>())
+	{
+		return;
+	}
 
 	if (const USpaceGameInstance* GI = InWorld.GetGameInstance<USpaceGameInstance>())
 	{

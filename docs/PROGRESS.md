@@ -1165,3 +1165,23 @@ LAN API (warp?mode=objective → 3500 uu off Haven, cycle → WASP-1, helm turns
 credits +40 and seamless advance to First Contact/Tarsis; `/stations` + `/helm` 200, `/` 301 →
 `/stations`; M24 lock-clear works packaged; log: 0 Fatal/Ensure/Accessed None. Shipping config + icon/
 splash still pending (R1 tail). (Commit: SpaceGame.uproject + Config/DefaultGame.ini + .gitignore + docs.)
+
+---
+
+## 2026-07-08 — 📦 R1(b) Shipping build + menu-world fixes + remote game start
+
+Closing out R1: the Shipping config packages and the full loop is provable without a keyboard.
+- **Shipping BuildCookRun** succeeds (exit 0). Gotcha discovered: Shipping ignores a command-line
+  map override (UE behaviour), so the packaged gate test has to go menu → game like a player would.
+- **Menu-world sector leak fixed:** `UMissionSubsystem::OnWorldBeginPlay` now early-outs in worlds
+  without `ASpaceGameMode` — previously the MainMenu world (also EWorldType::Game when packaged) built
+  the whole sector behind the menu (starbase + 4 landmarks + director timer).
+- **Remote game start:** `/api/game?action=new|restart` from the menu world now opens `VSlice_Arena`
+  (same flow as the NEW GAME button) instead of silently no-opping — a crew phone can start the game.
+
+**Verified (Shipping package, no editor):** boot → menu world has 0 contacts (leak gone) →
+`game?action=new` → `{"ok":true}` → arena: hull 80, tutorial engaged, 6 contacts → mission 1 played
+over the LAN API (warp to Haven, cycle WASP-1, turn into arc, fire to kill) → credits 40, seamless
+advance to First Contact/Tarsis, lock cleared. Dev-editor PIE re-verified the same two fixes first.
+`PackagedShipping/` covered by the gitignore (`Packaged*/`). (Commit: Core/MissionSubsystem.cpp +
+Net/StationServerSubsystem.cpp + .gitignore + docs.)

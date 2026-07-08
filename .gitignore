@@ -46,4 +46,4 @@ _assets_dl/
 .playwright-mcp/
 
 # Packaged builds (BuildCookRun -archivedirectory output)
-Packaged/
+Packaged*/

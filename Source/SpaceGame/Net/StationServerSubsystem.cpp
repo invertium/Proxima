@@ -1324,6 +1324,12 @@ bool UStationServerSubsystem::HandleGame(const FHttpServerRequest& Request, cons
 		{
 			GM->RestartEncounter();
 		}
+		else
+		{
+			// Main-menu world (no bridge game mode): open the encounter map directly, so a crew
+			// device can start the game remotely — same flow as the menu's NEW GAME button.
+			UGameplayStatics::OpenLevel(World, FName(TEXT("VSlice_Arena")));
+		}
 	}
 	// "launch" force-triggers the active objective's fleet now, ignoring proximity (debug / skip).
 	// Normal play spawns it by flying into the objective's zone (the open-sector director).
