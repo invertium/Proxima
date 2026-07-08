@@ -18,11 +18,13 @@
 		},
 		{
 			"Name": "UnrealClaude",
-			"Enabled": true
+			"Enabled": true,
+			"TargetAllowList": [ "Editor" ]
 		},
 		{
 			"Name": "VibeUE",
-			"Enabled": true
+			"Enabled": true,
+			"TargetAllowList": [ "Editor" ]
 		}
 	]
 }

@@ -1140,3 +1140,28 @@ no params → `missing throttle/turn`; warp twice → ok then `warp drive still 
 → `no scan contact…`; after killing the ship: helm/fire → `ship destroyed - encounter over` but
 `game?action=restart` → `{"ok":true}` and the encounter resets (phase playing, hull 80). `/stations` +
 `/helm` still 200; log clean. (Commit: Net/StationServerSubsystem.{h,cpp} + docs.)
+
+---
+
+## 2026-07-08 — 📦 R1 First packaged build (Linux)
+
+The game runs outside the editor for the first time (RELEASE_PLAN R1).
+- **Dev plugins fenced:** `UnrealClaude` + `VibeUE` get `"TargetAllowList": ["Editor"]` in
+  `SpaceGame.uproject` — they no longer ship (packaged build stages no project plugins, no :8088
+  listener, zero VibeUE/Claude log lines → the "arbitrary Python execution" security hole is editor-only).
+- **Project identity:** `DefaultGame.ini` was literally empty; now GeneralProjectSettings carry
+  ProjectName "SpaceGame — Bridge Simulator" (working title — final name is a user call), version 0.9.0,
+  company/copyright + CC0 asset credit line.
+- **Cook settings:** the runtime loads assets by string path (LoadClass `WBP_BridgeHUD`,
+  ship/upgrade-catalogue `StaticLoadObject`s) that the cooker can't see, so
+  `+DirectoriesToAlwaysCook=(Path="/Game")` cooks all content (small, ~63 MB raw) and both maps are in
+  `MapsToCook`. `Packaged/` is gitignored.
+- **BuildCookRun** (Linux Development, build+cook+stage+pak+archive): BUILD SUCCESSFUL first try —
+  473 packages cooked, zero missing-asset warnings, exit 0.
+
+**Verified (packaged binary, no editor):** default boot lands on `/Game/Maps/MainMenu`; launching into
+`VSlice_Arena` starts Shakedown with the :8080 station server live; played mission 1 entirely over the
+LAN API (warp?mode=objective → 3500 uu off Haven, cycle → WASP-1, helm turns into arc, fire → kill) —
+credits +40 and seamless advance to First Contact/Tarsis; `/stations` + `/helm` 200, `/` 301 →
+`/stations`; M24 lock-clear works packaged; log: 0 Fatal/Ensure/Accessed None. Shipping config + icon/
+splash still pending (R1 tail). (Commit: SpaceGame.uproject + Config/DefaultGame.ini + .gitignore + docs.)

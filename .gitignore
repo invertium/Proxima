@@ -44,3 +44,6 @@ _assets_dl/
 
 # Playwright MCP scratch (browser snapshots/screenshots)
 .playwright-mcp/
+
+# Packaged builds (BuildCookRun -archivedirectory output)
+Packaged/
