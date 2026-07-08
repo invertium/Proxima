@@ -123,6 +123,12 @@ protected:
 	UFUNCTION()
 	void HandleDamaged(float EffectiveDamage, float HullRemaining);
 
+	/** Bound to HealthComp->OnDeath: blow the hull apart (multi-burst FX + debris), hide the mesh,
+	 *  and freeze the helm. The pawn survives so the camera keeps framing the wreck while the
+	 *  controller waits out the defeat beat (M24). */
+	UFUNCTION()
+	void HandleShipDestroyed(AActor* DeadActor);
+
 	/** Unrotated root so camera/forward stay aligned with actor +X regardless of mesh orientation. */
 	UPROPERTY(VisibleAnywhere, Category = "Ship")
 	TObjectPtr<USceneComponent> ShipRoot;

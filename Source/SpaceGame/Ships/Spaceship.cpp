@@ -16,6 +16,7 @@
 #include "Core/UpgradeCatalogue.h"
 #include "Engine/StaticMesh.h"
 #include "FX/BeamFx.h"
+#include "FX/Debris.h"
 #include "FX/ExplosionFx.h"
 #include "Ships/EnemyShip.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -127,10 +128,11 @@ void ASpaceship::BeginPlay()
 
 	Super::BeginPlay();
 
-	// Hits add camera trauma (M14 game-feel).
+	// Hits add camera trauma (M14 game-feel); death blows the hull apart (M24).
 	if (HealthComp)
 	{
 		HealthComp->OnDamaged.AddDynamic(this, &ASpaceship::HandleDamaged);
+		HealthComp->OnDeath.AddDynamic(this, &ASpaceship::HandleShipDestroyed);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("ASpaceship spawned: %s at %s"),
@@ -423,8 +425,20 @@ bool ASpaceship::WarpToObjective(FVector Target)
 	Face.Roll = 0.f;
 	SetActorRotation(Face, ETeleportType::TeleportPhysics);
 
-	// Jump toward it without overshooting — leave a short standoff so we arrive near, not on top of, it.
-	constexpr float Standoff = 4000.f;
+	// Jump toward it without overshooting — leave a standoff so we arrive near, not on top of, it.
+	// The standoff scales with the destination body: a fixed 4000 uu would land inside a big body's
+	// surface clamp (the Ember sun's radius is ~12500), so clear its radius plus a margin (M24).
+	float Standoff = 4000.f;
+	TArray<AActor*> Bodies;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWorldLandmark::StaticClass(), Bodies);
+	for (AActor* A : Bodies)
+	{
+		const AWorldLandmark* Body = Cast<AWorldLandmark>(A);
+		if (Body && FVector::Dist(Body->GetActorLocation(), Target) <= Body->GetBodyRadius() + 2000.f)
+		{
+			Standoff = FMath::Max(Standoff, Body->GetBodyRadius() + 3000.f);
+		}
+	}
 	const float Jump = FMath::Clamp(Dist - Standoff, 0.f, WarpDistance);
 	const FVector NewLoc = From + Dir * Jump;
 	SetActorLocation(NewLoc, /*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
@@ -439,6 +453,47 @@ bool ASpaceship::WarpToObjective(FVector Target)
 	UE_LOG(LogTemp, Log, TEXT("[Warp] Course laid — jumped %.0f uu toward objective (%.0f remaining)"),
 		Jump, FMath::Max(0.f, Dist - Jump));
 	return true;
+}
+
+void ASpaceship::HandleShipDestroyed(AActor* /*DeadActor*/)
+{
+	UWorld* World = GetWorld();
+	const FVector Loc = GetActorLocation();
+
+	// Same multi-burst + wreckage treatment enemy kills get (M14), so the player's own death
+	// reads as an event instead of a freeze-frame straight into the defeat menu.
+	AExplosionFx::Spawn(World, Loc, 1100.f, HullSparkMaterial, 0.7f);
+	for (int32 i = 0; i < 5; ++i)
+	{
+		const FVector Offset = FMath::VRand() * FMath::FRandRange(220.f, 700.f);
+		AExplosionFx::Spawn(World, Loc + Offset, FMath::FRandRange(260.f, 500.f),
+			HullSparkMaterial, FMath::FRandRange(0.3f, 0.55f), false);
+	}
+	const float ShipScale = ShipMesh ? ShipMesh->GetRelativeScale3D().X : 0.6f;
+	for (int32 i = 0; i < 6; ++i)
+	{
+		const FVector Vel = FMath::VRand() * FMath::FRandRange(350.f, 950.f);
+		ADebris::Spawn(World, Loc + Vel.GetSafeNormal() * 120.f, Vel, HullSparkMaterial,
+			ShipScale * 0.7f, FMath::FRandRange(8.f, 14.f));
+	}
+
+	// The hull is gone: hide it, kill the drive audio, and freeze the helm. The pawn itself
+	// stays alive so the follow camera keeps framing the wreck during the defeat beat.
+	if (ShipMesh)
+	{
+		ShipMesh->SetVisibility(false, true);
+		ShipMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+	if (MovementComp)
+	{
+		MovementComp->SetThrottle(0.f);
+		MovementComp->SetTurn(0.f);
+		MovementComp->SetInputLocked(true);
+	}
+	if (EngineAudio) { EngineAudio->Stop(); }
+	AddCameraTrauma(1.f);
+
+	UE_LOG(LogTemp, Log, TEXT("[Ship] Destroyed — hull blown apart, helm frozen"));
 }
 
 void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)

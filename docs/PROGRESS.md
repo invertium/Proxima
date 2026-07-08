@@ -1084,3 +1084,33 @@ Two feel fixes off user feedback.
 2700 radius + 500); flying full-throttle straight at Tarsis stopped dead at 3200 (no pass-through); dock
 range now reads `canDock` true at 1400 uu and false at 1800 uu. (Commit: Ships/Spaceship.{h,cpp} +
 World/WorldLandmark.{h,cpp} + World/Station.h + docs.)
+
+---
+
+## 2026-07-08 — 💥 M24 Combat readability & death polish
+
+Phase 6 opener (PROJECT_PLAN M24): the smoke-test punch list around dying and arriving.
+- **Player death is an event now.** `ASpaceship::HandleShipDestroyed` (bound to its own health
+  `OnDeath`): main blast + 5 satellite bursts (`AExplosionFx`) + 6 tumbling `ADebris` chunks, hull mesh
+  hidden + collision off, helm frozen (`SetInputLocked`), engine hum stopped, full camera trauma. The pawn
+  survives so the follow camera frames the wreck.
+- **Defeat beat.** `HandlePlayerDeath` flips the phase to Defeat immediately (web API reports it, AI reads
+  it) but the DEFEAT overlay now waits `DefeatBeatSeconds` (2.2 s) on a timer — the crew watches the ship
+  go up instead of an instant menu.
+- **Hostiles stand down.** `AEnemyShip::Tick` early-outs to Idle when the player's health reads dead — no
+  more beaming the wreck forever (smoke-test #2).
+- **Stale lock cleared.** `UWeaponComponent::TickComponent` drops `CurrentTarget` when the actor is gone
+  (smoke-test #1: consoles kept showing the dead ship).
+- **Arrival grace 6 → 12 s** (`EngageDelay` default): spawned fleets close in but hold fire ~12 s so a solo
+  crew can man stations after a warp-in (smoke-test #4 death trap).
+- **Warp standoff clears the body.** `WarpToObjective` standoff is now `max(4000, bodyRadius + 3000)` for
+  a landmark at the objective — laying in a course for Ember (r≈12500) arrives off the surface instead of
+  inside its collision clamp.
+
+**Verified (PIE + MCP + /api/state):** lock WASP-1 → kill → `target:"none"` on the API; warp-to-Ember from
+20000 out lands exactly 15500 from centre; Tarsis fleet spawned 08:10:59.5, first shot 08:11:13.1 (~13.6 s);
+player kill → same frame: phase Defeat + both raiders `state -> Idle` + mesh hidden + zero FIRE lines after;
+not paused immediately, paused (overlay) ~2.2 s later; death screenshot = screen-filling blast; defeat →
+`/api/game?action=restart` → playing, hull 80/80, mission + credits kept. Log: 0 Fatal/Ensure/Accessed None.
+(Commit: Ships/Spaceship.{h,cpp} + Ships/EnemyShip.{h,cpp} + Core/BridgePlayerController.{h,cpp} +
+Components/WeaponComponent.cpp + docs.)

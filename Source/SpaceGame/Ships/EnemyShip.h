@@ -130,10 +130,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
 	float FireInterval = 2.5f;
 
-	/** Grace period after spawn before this ship opens fire (uu): a beat for the player to get
-	 *  oriented at mission start. The ship still closes in during it; it just holds its fire. */
+	/** Grace period after spawn before this ship opens fire (s): a beat for the crew to get
+	 *  oriented when a fleet triggers. The ship still closes in during it; it just holds its
+	 *  fire. Sized for the open sector's warp-in arrivals (M24) — long enough to man stations. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
-	float EngageDelay = 6.f;
+	float EngageDelay = 12.f;
 
 	/** Raw damage per shot to the player (before the player's shield-power mitigation). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")

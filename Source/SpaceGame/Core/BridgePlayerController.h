@@ -104,9 +104,13 @@ private:
 	class UWeaponComponent* GetShipWeapon() const;
 
 	// --- End-of-encounter (M11 defeat / M12 victory) ---
-	/** Bound to the player ship's health OnDeath: bring up the defeat overlay. */
+	/** Bound to the player ship's health OnDeath: flip the phase to Defeat (hostiles stand down)
+	 *  and start the short beat before the overlay, so the crew sees the ship go up (M24). */
 	UFUNCTION()
 	void HandlePlayerDeath(AActor* DeadActor);
+
+	/** Raise the defeat overlay after the death beat has played out. */
+	void ShowDefeatOutcome();
 
 	/** Bound to every hostile's health OnDeath: the last kill brings up victory. */
 	UFUNCTION()
@@ -145,6 +149,12 @@ private:
 
 	/** True while the pause overlay is up (guards the toggle). */
 	bool bPaused = false;
+
+	/** Delays the defeat overlay after the player ship dies (M24 death beat). */
+	FTimerHandle DefeatBeatTimer;
+
+	/** Seconds between the player ship's death FX and the defeat overlay. */
+	static constexpr float DefeatBeatSeconds = 2.2f;
 
 	EStation CurrentStation = EStation::Helm;
 

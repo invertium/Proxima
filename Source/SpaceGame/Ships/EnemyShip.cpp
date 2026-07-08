@@ -253,6 +253,15 @@ void AEnemyShip::Tick(float DeltaSeconds)
 		return;
 	}
 
+	// The fight is over once the player is dead: stand down instead of pounding the wreck while
+	// the defeat beat plays out (M24).
+	const UHealthComponent* PlayerHealth = Player->FindComponentByClass<UHealthComponent>();
+	if (PlayerHealth && !PlayerHealth->IsAlive())
+	{
+		SetAIState(EEnemyAIState::Idle);
+		return;
+	}
+
 	const FVector ToPlayer = Player->GetActorLocation() - GetActorLocation();
 	const float Distance = ToPlayer.Size();
 

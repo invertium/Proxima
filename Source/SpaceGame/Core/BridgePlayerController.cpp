@@ -17,6 +17,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "InputCoreTypes.h"
+#include "TimerManager.h"
 
 void ABridgePlayerController::BeginPlay()
 {
@@ -338,10 +339,19 @@ void ABridgePlayerController::OnPossess(APawn* InPawn)
 void ABridgePlayerController::HandlePlayerDeath(AActor* DeadActor)
 {
 	UE_LOG(LogTemp, Log, TEXT("[Bridge] PLAYER DEFEATED — ship destroyed"));
+
+	// Phase flips right away (hostiles stand down off it; the web API reports Defeat), but the
+	// overlay waits a short beat so the crew watches the ship go up instead of an instant menu (M24).
 	if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
 	{
 		GM->SetPhase(EGamePhase::Defeat);
 	}
+	GetWorldTimerManager().SetTimer(DefeatBeatTimer, this,
+		&ABridgePlayerController::ShowDefeatOutcome, DefeatBeatSeconds, false);
+}
+
+void ABridgePlayerController::ShowDefeatOutcome()
+{
 	OutcomeKind = EOutcomeKind::Defeat;
 	ShowOutcome(
 		FText::FromString(TEXT("DEFEAT")), FLinearColor(1.0f, 0.25f, 0.2f, 1.0f),

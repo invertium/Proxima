@@ -188,6 +188,14 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	// A destroyed contact is no longer a lock — drop it so the consoles stop showing a dead
+	// target and the next cycle starts fresh (M24).
+	if (CurrentTarget && !IsValid(CurrentTarget))
+	{
+		CurrentTarget = nullptr;
+		UE_LOG(LogTemp, Log, TEXT("[Weapon] Target destroyed — lock cleared"));
+	}
+
 	// Recharge, scaled by Weapons power (0 power → never charges).
 	Charge = FMath::Clamp(Charge + BaseRechargeRate * WeaponPowerScale() * DeltaTime, 0.f, 1.f);
 }
