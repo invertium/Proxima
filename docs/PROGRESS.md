@@ -1326,3 +1326,35 @@ steps across invocations; landmark actors are reachable via `get_all_actors_of_c
 unreal.WorldLandmark)` and the GI via `unreal.GameplayStatics.get_game_instance`. (Commit:
 Ships/EnemyShip.{h,cpp} + FX/TorpedoProjectile.{h,cpp} + Components/{WeaponComponent,
 ScienceComponent}.cpp + Core/MissionSubsystem.{h,cpp} + docs.)
+
+---
+
+## 2026-07-09 — 📡 M27 Living sector — travel events
+
+The long hops between systems are alive now: while the crew isn't engaged, the director rolls
+every 25 s (`EventRollInterval`, 40% `EventChance`) for **at most one live event**.
+- **Distress call**: a convoy under raider attack near the closest *other* system — two scouts
+  spawn there and a MAYDAY hits the comms. Clear them inside 150 s for a 150-credit bounty
+  (plus per-kill salvage); too slow and the convoy goes dark.
+- **Pirate interdiction**: a scout + gunship ambush powers up 11 000 uu dead ahead on the
+  ship's course. Kill both for +60 credits; they jump out after 180 s.
+- **Salvage cache**: a new `ASalvageCache` cargo pod (glowing tumbled cube, amber neutral
+  radar blip, not targetable) drifts 9 000 uu off. Fly within 1 500 uu to tractor it in —
+  pays 90 credits, or a torpedo restock when the magazine has room. Beacon dies after 120 s.
+- Every beat announces on comms (`PostComms`); the **nav map** draws a pulsing pink diamond
+  with a label + live countdown at the event (`/api/starmap` gains an `event` object), and the
+  pod/ambush ships mark the helm radar via their radar contacts. Event ships live in their own
+  `EventFleet` — wiping them resolves the event but never advances the campaign, while each
+  kill still banks its salvage through the controller. `/api/game?action=event&type=...`
+  force-starts one (debug, mirrors `action=launch`); state readouts show the pod as "CARGO POD".
+
+**Verified (PIE + /api + headless-Firefox map shot):** all three types forced, resolved, and
+paid out — salvage collected by proximity (credits 0→90, ENGINEERING comms) *and* expired
+naturally at 120 s ("beacon just died", EVENT EXPIRED log); distress resolved (+150 bounty,
+CONVOY MASTER comms, credits math exact at 360); interdiction spawned scout+gunship ahead and
+paid +60 on the wipe ("Pirates neutralised"). A **natural roll** also fired mid-test (random
+distress at Haven 26 s after the previous event closed) and the forced event correctly no-oped
+against it — the one-live-event rule holds. [S] `navmap_event.png`: the sector map with the
+pink "◆ SALVAGE 120s" diamond beside Haven and the pod's amber blip on the helm radar above.
+(Commit: World/SalvageCache.{h,cpp} + Core/MissionSubsystem.{h,cpp} + Net/StationServerSubsystem.cpp
++ docs.)

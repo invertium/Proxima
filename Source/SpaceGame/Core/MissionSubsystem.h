@@ -28,6 +28,16 @@ enum class ELandmarkKind : uint8
 	Sun    UMETA(DisplayName = "Sun")     // a huge bright star
 };
 
+/** A rolling sector travel event (M27): at most one live at a time, announced on comms. */
+UENUM(BlueprintType)
+enum class ESectorEvent : uint8
+{
+	None         UMETA(DisplayName = "None"),
+	Distress     UMETA(DisplayName = "Distress Call"),  // timed: clear raiders near another system
+	Interdiction UMETA(DisplayName = "Interdiction"),   // pirate ambush on the ship's path
+	Salvage      UMETA(DisplayName = "Salvage Cache")   // free-floating pickup, collect by proximity
+};
+
 /** One campaign mission: a name, the enemy fleet to field, and its comms script. */
 USTRUCT()
 struct FMissionDef
@@ -142,6 +152,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Mission")
 	void ForceTriggerObjective();
 
+	/** The live travel event (M27), if any. */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	ESectorEvent GetActiveEvent() const { return ActiveEvent; }
+
+	/** World location of the live event (its fleet anchor / cargo pod). */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	FVector GetEventLocation() const { return EventLocation; }
+
+	/** Seconds until the live event expires (-1 when none). */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	float GetEventTimeLeft() const;
+
+	/** Start a specific travel event now, skipping the periodic roll (debug / API). */
+	UFUNCTION(BlueprintCallable, Category = "Mission")
+	void ForceEvent(ESectorEvent Kind);
+
+	/** Wire name for an event kind ("distress"/"interdiction"/"salvage"), for the nav-map JSON. */
+	static const TCHAR* EventKindName(ESectorEvent Kind);
+
 private:
 	/** Spawn the friendly starbase just behind the player's start (once per encounter). */
 	void SpawnStation(UWorld& World);
@@ -174,6 +203,30 @@ private:
 	UFUNCTION()
 	void HandleEnemyKilled(AActor* DeadActor);
 
+	// --- M27 travel events ---
+
+	/** Periodic roll: while not engaged and nothing live, maybe start a travel event. */
+	void RollEvent();
+
+	/** Spin up an event: spawn its ships/pod, set the deadline, announce it on comms. */
+	void StartEvent(ESectorEvent Kind);
+
+	/** Event tick (from CheckDirector): expiry countdown + salvage proximity collection. */
+	void CheckEvent();
+
+	/** Close out the live event: payout + comms on success, cleanup + comms on expiry. */
+	void ResolveEvent(bool bSuccess);
+
+	/** Spawn a small hostile group for an event at Center (not part of the campaign fleet). */
+	void SpawnEventShips(UWorld& World, const FVector& Center, const TArray<EEnemyType>& Types);
+
+	/** How many of the event's ships are still alive. */
+	int32 CountEventFleetAlive() const;
+
+	/** Bound to each event ship's death: resolves the event once its group is wiped. */
+	UFUNCTION()
+	void HandleEventShipKilled(AActor* DeadActor);
+
 	/** Append a beat to the comms log (once). */
 	void FireBeat(FCommsBeat& Beat);
 
@@ -197,4 +250,24 @@ private:
 	/** Planar range (uu) from the objective's landmark at which its fleet triggers. First-pass tunable. */
 	UPROPERTY(EditAnywhere, Category = "Mission")
 	float TriggerRadius = 18000.f;
+
+	// --- M27 travel-event state ---
+
+	ESectorEvent ActiveEvent = ESectorEvent::None;
+	FVector EventLocation = FVector::ZeroVector;
+	double EventDeadline = 0.0;
+	TArray<TWeakObjectPtr<AEnemyShip>> EventFleet;
+	TWeakObjectPtr<class ASalvageCache> SalvagePod;
+	FTimerHandle EventRollTimer;
+
+	// M27 tunables (first pass): roll cadence + odds, per-event lifetimes, payouts.
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") float EventRollInterval = 25.f;
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") float EventChance = 0.4f;
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") float DistressDuration = 150.f;
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") float InterdictionDuration = 180.f;
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") float SalvageDuration = 120.f;
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") float SalvageCollectRange = 1500.f;
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") int32 DistressBonusCredits = 150;
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") int32 InterdictionBonusCredits = 60;
+	UPROPERTY(EditAnywhere, Category = "Mission|Events") int32 SalvageCredits = 90;
 };

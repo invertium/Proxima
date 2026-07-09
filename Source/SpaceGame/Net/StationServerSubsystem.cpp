@@ -24,6 +24,7 @@
 #include "Misc/ConfigCacheIni.h"
 #include "Ships/EnemyShip.h"
 #include "Ships/Spaceship.h"
+#include "World/SalvageCache.h"
 #include "World/Station.h"
 #include "World/WorldLandmark.h"
 #include "SocketSubsystem.h"
@@ -162,6 +163,13 @@ function drawStarmap(d){const c=$('#smapc'),x=c.getContext('2d'),W=c.width,H=c.h
   x.fillStyle=s.status==='locked'?'#7184a0':'#e6eefb';x.font='600 14px system-ui';x.textAlign='center';
   x.fillText(s.landmark||s.name,px,py-22);
   x.fillStyle='#6f86a8';x.font='10px system-ui';x.fillText(s.status.toUpperCase(),px,py+28);}
+ // live travel-event marker (M27): pulsing diamond + label + countdown
+ if(d.event){const ex=X(d.event.x),ey=Y(d.event.y),r=10+2*Math.sin(Date.now()/300);
+  x.strokeStyle='#ff5ad0';x.lineWidth=2;
+  x.beginPath();x.moveTo(ex,ey-r);x.lineTo(ex+r,ey);x.lineTo(ex,ey+r);x.lineTo(ex-r,ey);x.closePath();x.stroke();
+  const lbl={distress:'◆ DISTRESS',interdiction:'◆ PIRATES',salvage:'◆ SALVAGE'}[d.event.kind]||'◆ EVENT';
+  x.fillStyle='#ff9ae2';x.font='700 12px system-ui';x.textAlign='center';
+  x.fillText(lbl+(d.event.timeLeft>0?' '+Math.ceil(d.event.timeLeft)+'s':''),ex,ey-r-8);}
  // live ship marker (chevron)
  if(d.px>=-0.5){const sx=X(d.px),sy=Y(d.py);x.fillStyle='#7ad0ff';
   x.beginPath();x.moveTo(sx,sy-8);x.lineTo(sx+6,sy+7);x.lineTo(sx,sy+3);x.lineTo(sx-6,sy+7);x.closePath();x.fill();
@@ -753,6 +761,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		if (const AEnemyShip* E = Cast<AEnemyShip>(A)) { return E->GetCallsign(); }
 		if (const AStation* S = Cast<AStation>(A)) { return S->GetStationName(); }
 		if (const AWorldLandmark* L = Cast<AWorldLandmark>(A)) { return L->GetLandmarkName(); }
+		if (Cast<ASalvageCache>(A)) { return TEXT("CARGO POD"); }
 		return A ? A->GetName() : TEXT("none");
 	};
 
@@ -946,6 +955,7 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 	FVector2D PlayerMap(-1.f, -1.f);
 	float ObjectiveDist = -1.f;
 	bool bEngaged = false;
+	FString EventJson = TEXT("null");
 	if (const UWorld* World = GetWorld())
 	{
 		if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
@@ -956,6 +966,15 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 			if (const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0))
 			{
 				PlayerMap = MS->GetMapPosition(Player->GetActorLocation());
+			}
+			// Live travel event (M27): kind + normalised map position + remaining window.
+			if (MS->GetActiveEvent() != ESectorEvent::None)
+			{
+				const FVector2D Ev = MS->GetMapPosition(MS->GetEventLocation());
+				EventJson = FString::Printf(
+					TEXT("{\"kind\":\"%s\",\"x\":%.3f,\"y\":%.3f,\"timeLeft\":%.0f}"),
+					UMissionSubsystem::EventKindName(MS->GetActiveEvent()),
+					Ev.X, Ev.Y, MS->GetEventTimeLeft());
 			}
 		}
 	}
@@ -980,9 +999,9 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 
 	const FString Json = FString::Printf(
 		TEXT("{\"sector\":\"THE VEIL FRONTIER\",\"current\":%d,\"px\":%.4f,\"py\":%.4f,"
-			"\"objectiveDist\":%.0f,\"engaged\":%s,\"systems\":[%s]}"),
+			"\"objectiveDist\":%.0f,\"engaged\":%s,\"event\":%s,\"systems\":[%s]}"),
 		Current, PlayerMap.X, PlayerMap.Y, ObjectiveDist,
-		bEngaged ? TEXT("true") : TEXT("false"), *Systems);
+		bEngaged ? TEXT("true") : TEXT("false"), *EventJson, *Systems);
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
 	return true;
 }
@@ -1349,7 +1368,8 @@ bool UStationServerSubsystem::HandleGame(const FHttpServerRequest& Request, cons
 	const FString* Action = Request.QueryParams.Find(TEXT("action"));
 	UWorld* World = GetWorld();
 	if (!World || !Action
-		|| (*Action != TEXT("restart") && *Action != TEXT("new") && *Action != TEXT("launch")))
+		|| (*Action != TEXT("restart") && *Action != TEXT("new")
+			&& *Action != TEXT("launch") && *Action != TEXT("event")))
 	{
 		OnComplete(MakeVerdict(false, TEXT("unknown action")));
 		return true;
@@ -1382,6 +1402,19 @@ bool UStationServerSubsystem::HandleGame(const FHttpServerRequest& Request, cons
 		if (UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
 		{
 			MS->ForceTriggerObjective();
+		}
+	}
+	// "event" force-starts a travel event now, skipping the periodic roll (debug):
+	// /api/game?action=event&type=distress|interdiction|salvage
+	if (*Action == TEXT("event"))
+	{
+		if (UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+		{
+			const FString* Type = Request.QueryParams.Find(TEXT("type"));
+			ESectorEvent Kind = ESectorEvent::Salvage;
+			if (Type && *Type == TEXT("distress"))     { Kind = ESectorEvent::Distress; }
+			if (Type && *Type == TEXT("interdiction")) { Kind = ESectorEvent::Interdiction; }
+			MS->ForceEvent(Kind);
 		}
 	}
 	OnComplete(MakeVerdict(true));

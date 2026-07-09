@@ -3,6 +3,7 @@
 #include "Core/MissionSubsystem.h"
 
 #include "Components/HealthComponent.h"
+#include "Components/TorpedoLauncherComponent.h"
 #include "Core/BridgePlayerController.h"
 #include "Core/SpaceGameInstance.h"
 #include "Core/SpaceGameMode.h"
@@ -11,6 +12,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Ships/EnemyShip.h"
 #include "TimerManager.h"
+#include "World/SalvageCache.h"
 #include "World/Station.h"
 #include "World/WorldLandmark.h"
 
@@ -184,6 +186,9 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// Arm the active objective (fire its briefing) and start the director watching for proximity.
 	BeginObjective(MissionIndex);
 	InWorld.GetTimerManager().SetTimer(DirectorTimer, this, &UMissionSubsystem::CheckDirector, 0.25f, true);
+
+	// Travel events (M27): a periodic roll keeps the long hops between systems alive.
+	InWorld.GetTimerManager().SetTimer(EventRollTimer, this, &UMissionSubsystem::RollEvent, EventRollInterval, true);
 	UE_LOG(LogTemp, Log, TEXT("[Sector] Director online — objective %d '%s' at '%s'"),
 		MissionIndex, *Mission.Name, *Mission.LandmarkName);
 }
@@ -214,6 +219,9 @@ void UMissionSubsystem::BeginObjective(int32 Index)
 
 void UMissionSubsystem::CheckDirector()
 {
+	// The live travel event ticks regardless of the encounter state (deadlines keep counting).
+	CheckEvent();
+
 	if (bEncounterLive || bSectorComplete) { return; }
 	const UWorld* World = GetWorld();
 	if (!World) { return; }
@@ -359,6 +367,291 @@ void UMissionSubsystem::PostComms(const FString& Sender, const FString& Text)
 	Msg.Text = Text;
 	CommsLog.Add(Msg);
 	UE_LOG(LogTemp, Log, TEXT("[Comms] %s: %s"), *Sender, *Text);
+}
+
+// --- M27 travel events -------------------------------------------------------------------
+
+const TCHAR* UMissionSubsystem::EventKindName(ESectorEvent Kind)
+{
+	switch (Kind)
+	{
+	case ESectorEvent::Distress:     return TEXT("distress");
+	case ESectorEvent::Interdiction: return TEXT("interdiction");
+	case ESectorEvent::Salvage:      return TEXT("salvage");
+	default:                         return TEXT("none");
+	}
+}
+
+float UMissionSubsystem::GetEventTimeLeft() const
+{
+	const UWorld* World = GetWorld();
+	if (ActiveEvent == ESectorEvent::None || !World) { return -1.f; }
+	return FMath::Max(0.f, (float)(EventDeadline - World->GetTimeSeconds()));
+}
+
+void UMissionSubsystem::RollEvent()
+{
+	if (ActiveEvent != ESectorEvent::None || bEncounterLive || bSectorComplete) { return; }
+	const UWorld* World = GetWorld();
+	const APawn* Player = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr;
+	if (!Player) { return; }
+	if (const UHealthComponent* H = Player->FindComponentByClass<UHealthComponent>())
+	{
+		if (!H->IsAlive()) { return; }
+	}
+	if (FMath::FRand() >= EventChance) { return; }
+	StartEvent(static_cast<ESectorEvent>(FMath::RandRange(1, 3)));
+}
+
+void UMissionSubsystem::ForceEvent(ESectorEvent Kind)
+{
+	if (Kind == ESectorEvent::None || ActiveEvent != ESectorEvent::None) { return; }
+	StartEvent(Kind);
+}
+
+void UMissionSubsystem::StartEvent(ESectorEvent Kind)
+{
+	UWorld* World = GetWorld();
+	APawn* Player = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr;
+	if (!World || !Player || ActiveEvent != ESectorEvent::None) { return; }
+	const FVector PlayerLoc = Player->GetActorLocation();
+
+	switch (Kind)
+	{
+	case ESectorEvent::Distress:
+	{
+		// A convoy under attack near the closest *other* system — a timed detour off the course.
+		int32 Best = -1;
+		float BestDist = TNumericLimits<float>::Max();
+		for (int32 i = 0; i < MissionCount(); ++i)
+		{
+			if (i == MissionIndex) { continue; }
+			const float D = FVector::Dist2D(GetSystemLocation(i), PlayerLoc);
+			if (D < BestDist) { BestDist = D; Best = i; }
+		}
+		if (Best < 0) { return; }
+		EventLocation = GetSystemLocation(Best) + FVector(0.f, 6000.f, 0.f); // beside the body, not in it
+		SpawnEventShips(*World, EventLocation, { EEnemyType::Scout, EEnemyType::Scout });
+		EventDeadline = World->GetTimeSeconds() + DistressDuration;
+		PostComms(TEXT("DISTRESS"), FString::Printf(
+			TEXT("MAYDAY, MAYDAY — supply convoy under raider attack near %s! Shields failing — anyone in range, please respond!"),
+			*GetMissionDef(Best).LandmarkName));
+		break;
+	}
+	case ESectorEvent::Interdiction:
+	{
+		// A two-ship ambush powering up dead ahead on the ship's course.
+		FVector Fwd = Player->GetActorForwardVector();
+		Fwd.Z = 0.f;
+		Fwd = Fwd.IsNearlyZero() ? FVector::ForwardVector : Fwd.GetSafeNormal();
+		EventLocation = PlayerLoc + Fwd * 11000.f;
+		SpawnEventShips(*World, EventLocation, { EEnemyType::Scout, EEnemyType::Gunship });
+		EventDeadline = World->GetTimeSeconds() + InterdictionDuration;
+		PostComms(TEXT("TACTICAL"),
+			TEXT("Pirate interdiction! Two contacts powering up dead ahead on our course — they want our cargo, Captain."));
+		break;
+	}
+	case ESectorEvent::Salvage:
+	{
+		// A drifting cargo pod nearby: fly within collect range and Engineering tractors it in.
+		const float Angle = FMath::FRandRange(0.f, 360.f);
+		const FVector Dir = FVector::ForwardVector.RotateAngleAxis(Angle, FVector::UpVector);
+		EventLocation = PlayerLoc + Dir * 9000.f;
+		if (ASalvageCache* Pod = World->SpawnActor<ASalvageCache>(
+			ASalvageCache::StaticClass(), EventLocation, FRotator::ZeroRotator))
+		{
+			SalvagePod = Pod;
+		}
+		EventDeadline = World->GetTimeSeconds() + SalvageDuration;
+		PostComms(TEXT("SCIENCE"),
+			TEXT("Sensor ghost resolved: a free-floating cargo pod adrift close by — amber blip on the radar. Close to 1,500 uu and we can tractor it in."));
+		break;
+	}
+	default:
+		return;
+	}
+
+	ActiveEvent = Kind;
+	UE_LOG(LogTemp, Log, TEXT("[Sector] EVENT started: %s at %s (%.0fs window)"),
+		EventKindName(Kind), *EventLocation.ToString(), GetEventTimeLeft());
+}
+
+void UMissionSubsystem::SpawnEventShips(UWorld& World, const FVector& Center, const TArray<EEnemyType>& Types)
+{
+	FVector PlayerLoc = Center + FVector::ForwardVector * 8000.f;
+	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(&World, 0))
+	{
+		PlayerLoc = Player->GetActorLocation();
+	}
+	FVector ToPlayer = PlayerLoc - Center;
+	ToPlayer.Z = 0.f;
+	const FVector FaceDir = ToPlayer.IsNearlyZero() ? FVector::ForwardVector : ToPlayer.GetSafeNormal();
+
+	EventFleet.Reset();
+	TMap<EEnemyType, int32> TypeCounts;
+	for (int32 i = 0; i < Types.Num(); ++i)
+	{
+		const float T = (Types.Num() <= 1) ? 0.f : ((float)i / (float)(Types.Num() - 1) - 0.5f);
+		const FVector Dir = FaceDir.RotateAngleAxis(T * 50.f, FVector::UpVector);
+		const FVector Loc = Center + Dir * (3500.f + (i % 2) * 1800.f);
+		FTransform Xform((PlayerLoc - Loc).Rotation(), Loc);
+		AEnemyShip* Enemy = World.SpawnActorDeferred<AEnemyShip>(
+			AEnemyShip::StaticClass(), Xform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (!Enemy) { continue; }
+		Enemy->ShipType = Types[i];
+		Enemy->Callsign = AEnemyShip::MakeCallsign(Types[i], TypeCounts.FindOrAdd(Types[i])++);
+		UGameplayStatics::FinishSpawningActor(Enemy, Xform);
+		EventFleet.Add(Enemy);
+		// Event ships resolve the event when wiped — but never advance the campaign (not LiveFleet).
+		if (UHealthComponent* H = Enemy->GetHealthComp())
+		{
+			H->OnDeath.AddUniqueDynamic(this, &UMissionSubsystem::HandleEventShipKilled);
+		}
+	}
+
+	// Rebind the controller so each event kill still banks its per-ship salvage.
+	if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(
+		UGameplayStatics::GetPlayerController(&World, 0)))
+	{
+		PC->BindEnemyDeaths();
+	}
+}
+
+int32 UMissionSubsystem::CountEventFleetAlive() const
+{
+	int32 Alive = 0;
+	for (const TWeakObjectPtr<AEnemyShip>& Ptr : EventFleet)
+	{
+		const AEnemyShip* Enemy = Ptr.Get();
+		const UHealthComponent* Health = Enemy ? Enemy->GetHealthComp() : nullptr;
+		if (Health && Health->IsAlive()) { ++Alive; }
+	}
+	return Alive;
+}
+
+void UMissionSubsystem::HandleEventShipKilled(AActor* DeadActor)
+{
+	if ((ActiveEvent == ESectorEvent::Distress || ActiveEvent == ESectorEvent::Interdiction)
+		&& CountEventFleetAlive() == 0)
+	{
+		ResolveEvent(true);
+	}
+}
+
+void UMissionSubsystem::CheckEvent()
+{
+	if (ActiveEvent == ESectorEvent::None) { return; }
+	const UWorld* World = GetWorld();
+	if (!World) { return; }
+
+	// Salvage: collected by flying close to the pod.
+	if (ActiveEvent == ESectorEvent::Salvage)
+	{
+		const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0);
+		const ASalvageCache* Pod = SalvagePod.Get();
+		if (Player && Pod
+			&& FVector::Dist2D(Player->GetActorLocation(), Pod->GetActorLocation()) <= SalvageCollectRange)
+		{
+			ResolveEvent(true);
+			return;
+		}
+	}
+
+	if (World->GetTimeSeconds() >= EventDeadline)
+	{
+		ResolveEvent(false);
+	}
+}
+
+void UMissionSubsystem::ResolveEvent(bool bSuccess)
+{
+	UWorld* World = GetWorld();
+	USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr;
+	const ESectorEvent Kind = ActiveEvent;
+
+	if (bSuccess)
+	{
+		switch (Kind)
+		{
+		case ESectorEvent::Distress:
+			if (GI) { GI->AddReward(DistressBonusCredits, 40); }
+			PostComms(TEXT("CONVOY MASTER"), FString::Printf(
+				TEXT("Raiders down — the convoy is safe thanks to you. Transferring a salvage bounty of %d credits. Safe travels, Captain."),
+				DistressBonusCredits));
+			break;
+
+		case ESectorEvent::Interdiction:
+			if (GI) { GI->AddReward(InterdictionBonusCredits, 20); }
+			PostComms(TEXT("TACTICAL"), FString::Printf(
+				TEXT("Pirates neutralised — cargo's still ours. Stripped %d credits of parts from the wrecks."),
+				InterdictionBonusCredits));
+			break;
+
+		case ESectorEvent::Salvage:
+		{
+			// The pod pays out a torpedo restock when the magazine has room, otherwise credits.
+			bool bRestocked = false;
+			if (const APawn* Player = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr)
+			{
+				if (UTorpedoLauncherComponent* Torp = Player->FindComponentByClass<UTorpedoLauncherComponent>())
+				{
+					if (Torp->GetAmmo() < Torp->GetMaxAmmo() && FMath::FRand() < 0.5f)
+					{
+						Torp->Resupply();
+						bRestocked = true;
+					}
+				}
+			}
+			if (bRestocked)
+			{
+				PostComms(TEXT("ENGINEERING"),
+					TEXT("Cargo pod secured — torpedo casings inside! Magazine restocked, Captain."));
+			}
+			else
+			{
+				if (GI) { GI->AddReward(SalvageCredits, 10); }
+				PostComms(TEXT("ENGINEERING"), FString::Printf(
+					TEXT("Cargo pod secured — salvageable alloys worth %d credits."), SalvageCredits));
+			}
+			if (ASalvageCache* Pod = SalvagePod.Get()) { Pod->Destroy(); }
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	else
+	{
+		// Expired: clean up whatever's left and close the story beat.
+		for (const TWeakObjectPtr<AEnemyShip>& Ptr : EventFleet)
+		{
+			if (AEnemyShip* Enemy = Ptr.Get()) { Enemy->Destroy(); }
+		}
+		if (ASalvageCache* Pod = SalvagePod.Get()) { Pod->Destroy(); }
+
+		switch (Kind)
+		{
+		case ESectorEvent::Distress:
+			PostComms(TEXT("TACTICAL"), TEXT("The convoy's gone dark... the raiders picked it clean and jumped out. We were too slow."));
+			break;
+		case ESectorEvent::Interdiction:
+			PostComms(TEXT("TACTICAL"), TEXT("The pirates broke off pursuit and jumped out. Good riddance."));
+			break;
+		case ESectorEvent::Salvage:
+			PostComms(TEXT("SCIENCE"), TEXT("The cargo pod's beacon just died — lost to the void."));
+			break;
+		default:
+			break;
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Sector] EVENT %s: %s"), EventKindName(Kind),
+		bSuccess ? TEXT("RESOLVED (paid out)") : TEXT("EXPIRED"));
+
+	ActiveEvent = ESectorEvent::None;
+	EventFleet.Reset();
+	SalvagePod = nullptr;
 }
 
 void UMissionSubsystem::FireBeat(FCommsBeat& Beat)
