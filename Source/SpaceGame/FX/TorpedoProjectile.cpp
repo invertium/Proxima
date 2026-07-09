@@ -26,12 +26,13 @@ ATorpedoProjectile::ATorpedoProjectile()
 }
 
 void ATorpedoProjectile::Activate(const FVector& Start, AActor* InTarget, UMaterialInterface* Material,
-	float InDamage, float InSpeed)
+	float InDamage, float InSpeed, float InLifetime)
 {
 	Target = InTarget;
 	FxMaterial = Material;
 	Damage = InDamage;
 	Speed = InSpeed;
+	MaxLifetime = InLifetime;
 	LastTargetLoc = InTarget ? InTarget->GetActorLocation() : Start;
 
 	if (Material)
@@ -43,7 +44,7 @@ void ATorpedoProjectile::Activate(const FVector& Start, AActor* InTarget, UMater
 }
 
 ATorpedoProjectile* ATorpedoProjectile::Spawn(UWorld* World, const FVector& Start, AActor* Target,
-	UMaterialInterface* Material, float Damage, float Speed)
+	UMaterialInterface* Material, float Damage, float Speed, float Lifetime)
 {
 	if (!World) { return nullptr; }
 	FActorSpawnParameters Params;
@@ -52,19 +53,31 @@ ATorpedoProjectile* ATorpedoProjectile::Spawn(UWorld* World, const FVector& Star
 		ATorpedoProjectile::StaticClass(), FTransform(Start), Params);
 	if (Torp)
 	{
-		Torp->Activate(Start, Target, Material, Damage, Speed);
+		Torp->Activate(Start, Target, Material, Damage, Speed, Lifetime);
 	}
 	return Torp;
 }
 
 void ATorpedoProjectile::Detonate(const FVector& At)
 {
-	// Big burst straight to hull (torpedoes bypass shield mitigation, M17).
+	// Big burst straight to hull (torpedoes bypass shield mitigation, M17) — but only if the
+	// target is actually inside the blast. A torpedo that times out because the target outran
+	// it fizzles harmlessly instead of landing its payload from across the map (M26: enemy
+	// volleys are evadable, and the same honesty applies to the player's shots).
 	if (AActor* Hit = Target.Get())
 	{
-		if (UHealthComponent* Health = Hit->FindComponentByClass<UHealthComponent>())
+		const float Miss = FVector::Dist(Hit->GetActorLocation(), At);
+		if (Miss <= BlastRadius)
 		{
-			Health->ApplyDamage(Damage, /*bBypassShield=*/true);
+			if (UHealthComponent* Health = Hit->FindComponentByClass<UHealthComponent>())
+			{
+				Health->ApplyDamage(Damage, /*bBypassShield=*/true);
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Torpedo] fizzled %.0f uu short of %s — evaded"),
+				Miss, *Hit->GetName());
 		}
 	}
 	// Orange blast at the impact point (with boom).

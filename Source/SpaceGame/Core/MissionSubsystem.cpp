@@ -352,6 +352,15 @@ void UMissionSubsystem::HandleEnemyKilled(AActor* DeadActor)
 	}
 }
 
+void UMissionSubsystem::PostComms(const FString& Sender, const FString& Text)
+{
+	FCommsMessage Msg;
+	Msg.Sender = Sender;
+	Msg.Text = Text;
+	CommsLog.Add(Msg);
+	UE_LOG(LogTemp, Log, TEXT("[Comms] %s: %s"), *Sender, *Text);
+}
+
 void UMissionSubsystem::FireBeat(FCommsBeat& Beat)
 {
 	Beat.bFired = true;

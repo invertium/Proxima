@@ -1289,3 +1289,40 @@ API. Engineering web page screenshot shows ENGINE “100% ⚠ DMG” amber + the
 label. (Commit: Components/DamageControlComponent.{h,cpp} + Components/{ScienceComponent,
 ShipMovementComponent,WeaponComponent}.{h,cpp} + Core/{EngineeringConsoleWidget,RadarWidget}.cpp
 + Net/StationServerSubsystem.cpp + Ships/Spaceship.{h,cpp} + docs.)
+
+---
+
+## 2026-07-09 — 🛸 M26 Enemy archetype behaviors — Helm & Science matter
+
+The three archetypes now fight differently, and each one pressures a different station.
+- **Scout — strafe runs** (`bStrafeRuns`): no static standoff. It dives past the player at
+  full speed (aiming a 1 400 uu lateral lead so a run is a fly-by, not a ram), breaks into a
+  new `Overshoot` AI state inside `StrafePassDistance` (2 800 uu), holds its heading flat out
+  to `StrafeBreakoffDistance` (9 000 uu), then loops back — alternating sides each pass. It
+  holds fire through the loop-out.
+- **Gunship — torpedo volleys** (`bTorpedoVolleys`): beams replaced by 3-round homing torpedo
+  volleys (`VolleySize`/`VolleyGap` 0.6 s, `FireInterval` 9 s) at 1 900 uu/s — slower than the
+  Interceptor's 2 100 top speed, so the helm can outrun them. `ATorpedoProjectile` gained a
+  lifetime param (enemy rounds chase 12 s) and an honesty fix: `Detonate` only lands the
+  payload if the target is inside `BlastRadius` (700 uu) — a torpedo that times out because
+  the target ran **fizzles harmlessly** (applies to the player's shots too).
+- **Cruiser — armored** (`bArmored`): player beams deal 50% (`ArmoredBeamMultiplier`) until
+  Science completes a scan — `UScienceComponent` scan-complete calls `RevealWeakpoint()` and
+  posts a SCIENCE comms confirm ("armor gap is on the tactical grid") via the director's new
+  `PostComms`. Torpedoes always land full damage (the counter while unscanned).
+- Mission fleets already mix archetypes (M18); no def changes needed.
+
+**Verified (PIE, mission 3 "Warlord's Reach" fleet forced via `/api/game?action=launch`):**
+scouts logged full strafe cycles (Engage→Overshoot→Approach→Engage; telemetry: HORNET-2 in to
+1 403 uu, past to 8 610, loop, re-engage); VIPER-1 logged "TORPEDO VOLLEY inbound (3 rounds)"
++ staggered launches, and fleeing after a launch made all three rounds log "fizzled ~40 000 uu
+short — evaded" (staying put earlier proved they hit: hull dropped to defeat); cruiser armor
+flip exact — same beam took LEVIATHAN-1's shield down 10.0 pre-scan (mult 0.5) and 20.0
+post-scan (mult 1.0), with the weakpoint log + SCIENCE comms beat firing on scan complete.
+[S] `strafe_101238.png`: a scout crossing the bow at 2 000 uu mid-Overshoot. Bonus: an M25
+engine-damage roll fired in live combat (maxSpeed 1050 in the defeat-state JSON). Python
+notes: `time.sleep` in MCP scripts blocks the game thread (scans/recharge never tick) — split
+steps across invocations; landmark actors are reachable via `get_all_actors_of_class(world,
+unreal.WorldLandmark)` and the GI via `unreal.GameplayStatics.get_game_instance`. (Commit:
+Ships/EnemyShip.{h,cpp} + FX/TorpedoProjectile.{h,cpp} + Components/{WeaponComponent,
+ScienceComponent}.cpp + Core/MissionSubsystem.{h,cpp} + docs.)

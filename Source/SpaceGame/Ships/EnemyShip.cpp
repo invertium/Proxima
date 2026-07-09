@@ -9,6 +9,7 @@
 #include "FX/BeamFx.h"
 #include "FX/Debris.h"
 #include "FX/ExplosionFx.h"
+#include "FX/TorpedoProjectile.h"
 #include "Materials/MaterialInterface.h"
 #include "Sound/SoundBase.h"
 #include "Kismet/GameplayStatics.h"
@@ -121,6 +122,7 @@ void AEnemyShip::ApplyTypePreset()
 		Blip = FLinearColor(0.3f, 0.9f, 1.0f, 1.f);
 		MoveSpeed = 1900.f; TurnRateDeg = 80.f; StandoffDistance = 4500.f;
 		EngageRange = 10000.f; FireInterval = 1.6f; EnemyBeamDamage = 5.f;
+		bStrafeRuns = true; // M26: interceptor strafe runs — no static standoff
 		RewardCredits = 40; RewardXP = 15;
 		if (HealthComp) { HealthComp->MaxHull = 50.f;  HealthComp->MaxShield = 20.f; }
 		break;
@@ -131,6 +133,7 @@ void AEnemyShip::ApplyTypePreset()
 		Blip = FLinearColor(1.0f, 0.15f, 0.12f, 1.f);
 		MoveSpeed = 700.f; TurnRateDeg = 32.f; StandoffDistance = 7500.f;
 		EngageRange = 14000.f; FireInterval = 3.2f; EnemyBeamDamage = 14.f;
+		bArmored = true; // M26: beams deal 50% until Science scans the weakpoint
 		RewardCredits = 200; RewardXP = 80;
 		if (HealthComp) { HealthComp->MaxHull = 220.f; HealthComp->MaxShield = 110.f; }
 		break;
@@ -138,7 +141,8 @@ void AEnemyShip::ApplyTypePreset()
 	case EEnemyType::Gunship:
 	default:
 		MoveSpeed = 1100.f; TurnRateDeg = 50.f; StandoffDistance = 6000.f;
-		EngageRange = 12000.f; FireInterval = 2.5f; EnemyBeamDamage = 8.f;
+		EngageRange = 12000.f; FireInterval = 9.f; EnemyBeamDamage = 8.f;
+		bTorpedoVolleys = true; // M26: frigate-style slow torpedo volleys the helm can outrun
 		RewardCredits = 80; RewardXP = 30;
 		if (HealthComp) { HealthComp->MaxHull = 100.f; HealthComp->MaxShield = 50.f; }
 		break;
@@ -193,6 +197,37 @@ AActor* AEnemyShip::GetPlayerTarget() const
 	return UGameplayStatics::GetPlayerPawn(this, 0);
 }
 
+bool AEnemyShip::RevealWeakpoint()
+{
+	if (!bArmored || bWeakpointKnown)
+	{
+		return false;
+	}
+	bWeakpointKnown = true;
+	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s \"%s\" weakpoint revealed — armor no longer mitigates beams"),
+		*GetName(), *Callsign);
+	return true;
+}
+
+void AEnemyShip::LaunchTorpedo(AActor* Target)
+{
+	if (!Target)
+	{
+		return;
+	}
+	const FVector Start = GetActorLocation() + GetActorForwardVector() * 400.f;
+	// Long lifetime: launched from standoff range, it needs time to chase — but it's slower than
+	// the player's top speed, so a running helm makes it fizzle (see ATorpedoProjectile::Detonate).
+	ATorpedoProjectile::Spawn(GetWorld(), Start, Target, FxMaterial, TorpedoDamage, TorpedoSpeed, 12.f);
+	if (FireSound)
+	{
+		// Lower pitch than the beam so a torpedo launch reads as a heavier "thunk" (M17 precedent).
+		UGameplayStatics::PlaySoundAtLocation(this, FireSound, Start, 1.f, FMath::FRandRange(0.55f, 0.68f));
+	}
+	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s TORPEDO away at %s (%d left in volley)"),
+		*GetName(), *Target->GetName(), VolleyRemaining);
+}
+
 void AEnemyShip::SetAIState(EEnemyAIState NewState)
 {
 	if (AIState == NewState)
@@ -202,9 +237,10 @@ void AEnemyShip::SetAIState(EEnemyAIState NewState)
 	AIState = NewState;
 
 	const TCHAR* Name =
-		NewState == EEnemyAIState::Engage   ? TEXT("Engage") :
-		NewState == EEnemyAIState::Approach ? TEXT("Approach") :
-		                                      TEXT("Idle");
+		NewState == EEnemyAIState::Overshoot ? TEXT("Overshoot") :
+		NewState == EEnemyAIState::Engage    ? TEXT("Engage") :
+		NewState == EEnemyAIState::Approach  ? TEXT("Approach") :
+		                                       TEXT("Idle");
 	UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s state -> %s"), *GetName(), Name);
 }
 
@@ -246,7 +282,7 @@ void AEnemyShip::Tick(float DeltaSeconds)
 		return;
 	}
 
-	const AActor* Player = GetPlayerTarget();
+	AActor* Player = GetPlayerTarget();
 	if (!Player)
 	{
 		SetAIState(EEnemyAIState::Idle);
@@ -265,19 +301,49 @@ void AEnemyShip::Tick(float DeltaSeconds)
 	const FVector ToPlayer = Player->GetActorLocation() - GetActorLocation();
 	const float Distance = ToPlayer.Size();
 
-	// Yaw toward the player (yaw-only; space combat stays on a plane for the slice).
-	if (Distance > 1.f)
+	// Yaw toward the player (yaw-only; space combat stays on a plane for the slice). Strafers
+	// (M26) lead a lateral offset so a run is a fly-by, not a head-on ram, and hold their
+	// heading flat through the overshoot instead of orbiting the target.
+	if (Distance > 1.f && AIState != EEnemyAIState::Overshoot)
 	{
+		FVector AimAt = Player->GetActorLocation();
+		if (bStrafeRuns)
+		{
+			const FVector Lateral = FVector::CrossProduct(ToPlayer.GetSafeNormal(), FVector::UpVector);
+			AimAt += Lateral * StrafeSide * 1400.f;
+		}
 		const FRotator Current = GetActorRotation();
-		const FRotator Desired = ToPlayer.Rotation();
+		const FRotator Desired = (AimAt - GetActorLocation()).Rotation();
 		const FRotator Stepped = FMath::RInterpConstantTo(Current, Desired, DeltaSeconds, TurnRateDeg);
 		SetActorRotation(FRotator(0.f, Stepped.Yaw, 0.f));
 	}
 
-	// Approach until inside the standoff bubble, then hold.
 	const bool bInEngageRange = Distance <= EngageRange;
-	if (Distance > StandoffDistance)
+
+	if (bStrafeRuns)
 	{
+		// M26 strafe runs: never stop — dive past the player at full speed, loop back, repeat.
+		if (AIState == EEnemyAIState::Overshoot)
+		{
+			if (Distance > StrafeBreakoffDistance)
+			{
+				StrafeSide = -StrafeSide; // alternate sides so successive runs cross
+				SetAIState(EEnemyAIState::Approach);
+			}
+		}
+		else if (Distance < StrafePassDistance)
+		{
+			SetAIState(EEnemyAIState::Overshoot);
+		}
+		else
+		{
+			SetAIState(bInEngageRange ? EEnemyAIState::Engage : EEnemyAIState::Approach);
+		}
+		AddActorWorldOffset(GetActorForwardVector() * MoveSpeed * DeltaSeconds, true);
+	}
+	else if (Distance > StandoffDistance)
+	{
+		// Approach until inside the standoff bubble, then hold.
 		SetAIState(bInEngageRange ? EEnemyAIState::Engage : EEnemyAIState::Approach);
 		AddActorWorldOffset(GetActorForwardVector() * MoveSpeed * DeltaSeconds, true);
 	}
@@ -292,18 +358,42 @@ void AEnemyShip::Tick(float DeltaSeconds)
 		GraceTimer = FMath::Max(0.f, GraceTimer - DeltaSeconds);
 	}
 
-	// Fire on a fixed interval while in engage range (once the grace period is over).
-	if (bInEngageRange && GraceTimer <= 0.f)
+	// Fire on a fixed interval while in engage range (once the grace period is over). Strafers
+	// hold fire through the loop-out; volley ships (M26 gunship) open a torpedo volley instead
+	// of an instant beam.
+	if (bInEngageRange && GraceTimer <= 0.f && AIState != EEnemyAIState::Overshoot)
 	{
 		FireCooldown -= DeltaSeconds;
 		if (FireCooldown <= 0.f)
 		{
-			FireAtPlayer(Player);
+			if (bTorpedoVolleys)
+			{
+				VolleyRemaining = VolleySize;
+				VolleyTimer = 0.f;
+				UE_LOG(LogTemp, Log, TEXT("[EnemyAI] %s TORPEDO VOLLEY inbound (%d rounds) — outrun or shoot back"),
+					*GetName(), VolleySize);
+			}
+			else
+			{
+				FireAtPlayer(Player);
+			}
 			FireCooldown = FireInterval;
 		}
 	}
 	else
 	{
 		FireCooldown = FireInterval;
+	}
+
+	// Pump a started volley to completion, even if the player slips out of range mid-volley.
+	if (VolleyRemaining > 0)
+	{
+		VolleyTimer -= DeltaSeconds;
+		if (VolleyTimer <= 0.f)
+		{
+			--VolleyRemaining;
+			LaunchTorpedo(Player);
+			VolleyTimer = VolleyGap;
+		}
 	}
 }

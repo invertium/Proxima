@@ -17,9 +17,10 @@ class USoundBase;
 UENUM(BlueprintType)
 enum class EEnemyAIState : uint8
 {
-	Idle     UMETA(DisplayName = "Idle"),     // no player found
-	Approach UMETA(DisplayName = "Approach"), // closing to standoff range
-	Engage   UMETA(DisplayName = "Engage")    // in range, holding + firing
+	Idle      UMETA(DisplayName = "Idle"),     // no player found
+	Approach  UMETA(DisplayName = "Approach"), // closing to standoff range
+	Engage    UMETA(DisplayName = "Engage"),   // in range, holding + firing
+	Overshoot UMETA(DisplayName = "Overshoot") // strafer flying past, looping out for another run (M26)
 };
 
 /**
@@ -73,6 +74,16 @@ public:
 	/** XP awarded for the kill (drives the campaign Rank; set per type in BeginPlay). */
 	UFUNCTION(BlueprintPure, Category = "Enemy")
 	int32 GetRewardXP() const { return RewardXP; }
+
+	/** M26: multiplier for incoming player *beam* damage. An armored hull (cruiser) mitigates
+	 *  beams until Science scans it; torpedoes always land full damage. */
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	float GetBeamDamageMultiplier() const { return (bArmored && !bWeakpointKnown) ? ArmoredBeamMultiplier : 1.f; }
+
+	/** Mark this hull's weakpoint scanned (Science). Returns true only the first time it
+	 *  actually reveals something (i.e. the ship is armored and wasn't scanned yet). */
+	UFUNCTION(BlueprintCallable, Category = "Enemy")
+	bool RevealWeakpoint();
 
 	/** Override the post-spawn fire-hold (seconds) before BeginPlay reads it into GraceTimer. The
 	 *  mission spawner uses this to field a passive target drone for the tutorial (huge delay). */
@@ -140,6 +151,48 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
 	float EnemyBeamDamage = 8.f;
 
+	// --- M26 archetype behaviors ---
+
+	/** Scout: strafe runs instead of a standoff — dive past the player at full speed, loop
+	 *  back around, repeat. Firing pauses during the loop-out. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	bool bStrafeRuns = false;
+
+	/** Strafer: the run-in breaks into the fly-past inside this range (uu). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float StrafePassDistance = 2800.f;
+
+	/** Strafer: loops back for another run once this far out (uu). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float StrafeBreakoffDistance = 9000.f;
+
+	/** Gunship: replaces beam fire with slow homing torpedo volleys the helm can outrun. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	bool bTorpedoVolleys = false;
+
+	/** Torpedoes per volley (FireInterval spaces the volleys). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	int32 VolleySize = 3;
+
+	/** Seconds between launches within one volley. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float VolleyGap = 0.6f;
+
+	/** Enemy torpedo cruise speed (uu/s) — slower than the player's top speed, so running works. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float TorpedoSpeed = 1900.f;
+
+	/** Hull damage per enemy torpedo (bypasses shields, like all torpedoes — evade them). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float TorpedoDamage = 7.f;
+
+	/** Cruiser: armored — player beams deal ArmoredBeamMultiplier until Science scans it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	bool bArmored = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float ArmoredBeamMultiplier = 0.5f;
+
 	/** Salvage credits + XP this kill is worth (set per archetype in ApplyTypePreset). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Reward")
 	int32 RewardCredits = 80;
@@ -169,6 +222,9 @@ private:
 	/** Log + draw a shot at the player (damage to the player lands at M11). */
 	void FireAtPlayer(const AActor* Target);
 
+	/** Launch one homing torpedo at the player (gunship volleys, M26). */
+	void LaunchTorpedo(AActor* Target);
+
 	EEnemyAIState AIState = EEnemyAIState::Idle;
 
 	/** Counts down to the next shot while engaged. */
@@ -176,4 +232,14 @@ private:
 
 	/** Counts down from EngageDelay after spawn; while > 0 the ship holds its fire. */
 	float GraceTimer = 0.f;
+
+	/** True once Science scanned an armored hull — beams land full damage from then on. */
+	bool bWeakpointKnown = false;
+
+	/** Torpedoes still to launch in the running volley + the gap countdown to the next one. */
+	int32 VolleyRemaining = 0;
+	float VolleyTimer = 0.f;
+
+	/** Lateral aim-offset sign for strafe runs; flipped each pass so runs cross sides. */
+	float StrafeSide = 1.f;
 };

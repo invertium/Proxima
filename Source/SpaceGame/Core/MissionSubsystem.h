@@ -100,6 +100,9 @@ public:
 	/** The scripted transmissions fired so far this campaign (oldest first), for the Science console. */
 	const TArray<FCommsMessage>& GetComms() const { return CommsLog; }
 
+	/** Append an ad-hoc transmission to the comms log (M26: e.g. Science's weakpoint confirm). */
+	void PostComms(const FString& Sender, const FString& Text);
+
 	/** The campaign table size (kept in sync with USpaceGameInstance::GetMissionCount). */
 	static int32 MissionCount();
 

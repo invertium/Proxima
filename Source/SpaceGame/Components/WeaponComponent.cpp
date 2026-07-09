@@ -8,6 +8,7 @@
 #include "Components/HealthComponent.h"
 #include "FX/BeamFx.h"
 #include "FX/ExplosionFx.h"
+#include "Ships/EnemyShip.h"
 #include "Ships/Spaceship.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
@@ -186,10 +187,22 @@ bool UWeaponComponent::FireBeam()
 	UE_LOG(LogTemp, Log, TEXT("[Weapon] BEAM FIRED at %s (range %.0f uu)"),
 		*CurrentTarget->GetName(), GetTargetRange());
 
-	// Apply damage: shields absorb first, then hull (UHealthComponent handles death).
+	// Apply damage: shields absorb first, then hull (UHealthComponent handles death). M26: an
+	// armored hull (cruiser) mitigates beams until Science scans it for the weakpoint.
+	float Damage = BeamDamage;
+	if (const AEnemyShip* Enemy = Cast<AEnemyShip>(CurrentTarget))
+	{
+		const float ArmorMult = Enemy->GetBeamDamageMultiplier();
+		if (ArmorMult < 1.f)
+		{
+			Damage *= ArmorMult;
+			UE_LOG(LogTemp, Log, TEXT("[Weapon] %s's armor mitigates the beam (%.0f%% damage) — scan it to expose the weakpoint"),
+				*Enemy->GetCallsign(), ArmorMult * 100.f);
+		}
+	}
 	if (UHealthComponent* Health = CurrentTarget->FindComponentByClass<UHealthComponent>())
 	{
-		Health->ApplyDamage(BeamDamage);
+		Health->ApplyDamage(Damage);
 	}
 
 	// Small cyan impact flash where the beam lands (no boom — bPlaySound off).

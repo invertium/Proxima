@@ -24,13 +24,14 @@ public:
 	ATorpedoProjectile();
 	virtual void Tick(float DeltaSeconds) override;
 
-	/** Launch from Start toward Target, flying at Speed uu/s and dealing Damage on impact. */
+	/** Launch from Start toward Target, flying at Speed uu/s and dealing Damage on impact.
+	 *  Lifetime caps the chase (M26: enemy volleys fly longer than the player's snap shots). */
 	void Activate(const FVector& Start, AActor* InTarget, UMaterialInterface* Material,
-		float InDamage, float InSpeed);
+		float InDamage, float InSpeed, float InLifetime = 6.f);
 
 	/** Spawn + activate in one call. */
 	static ATorpedoProjectile* Spawn(UWorld* World, const FVector& Start, AActor* Target,
-		UMaterialInterface* Material, float Damage, float Speed);
+		UMaterialInterface* Material, float Damage, float Speed, float Lifetime = 6.f);
 
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Mesh;
@@ -46,5 +47,6 @@ private:
 	float Age = 0.f;
 	float MaxLifetime = 6.f;     // safety despawn if it never reaches the target
 	float HitRadius = 350.f;     // detonation proximity (uu)
+	float BlastRadius = 700.f;   // payload only lands if the target is inside this (M26: evadable)
 	FVector LastTargetLoc = FVector::ZeroVector;
 };

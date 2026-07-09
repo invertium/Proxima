@@ -5,7 +5,9 @@
 #include "Components/DamageControlComponent.h"
 #include "Components/HealthComponent.h"
 #include "Components/RadarContactComponent.h"
+#include "Core/MissionSubsystem.h"
 #include "GameFramework/Actor.h"
+#include "Ships/EnemyShip.h"
 #include "UObject/UObjectIterator.h"
 
 UScienceComponent::UScienceComponent()
@@ -119,6 +121,22 @@ void UScienceComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 			bScanning = false;
 			bScanned = true;
 			UE_LOG(LogTemp, Log, TEXT("[Science] Scan complete: %s"), *ScanTarget->GetName());
+
+			// M26: scanning an armored cruiser exposes its weakpoint — beams go to full damage,
+			// confirmed on the comms log so the whole bridge hears it.
+			if (AEnemyShip* Enemy = Cast<AEnemyShip>(ScanTarget))
+			{
+				if (Enemy->RevealWeakpoint())
+				{
+					UWorld* World = GetWorld();
+					if (UMissionSubsystem* MS = World ? World->GetSubsystem<UMissionSubsystem>() : nullptr)
+					{
+						MS->PostComms(TEXT("SCIENCE"), FString::Printf(
+							TEXT("Scan complete — %s's armor gap is on the tactical grid. Beams to full effect."),
+							*Enemy->GetCallsign()));
+					}
+				}
+			}
 		}
 	}
 }
