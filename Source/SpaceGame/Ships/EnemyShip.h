@@ -90,6 +90,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Enemy|AI")
 	void SetEngageDelay(float Seconds) { EngageDelay = Seconds; }
 
+	/** Make this ship loiter until the player is within Range uu (M28 bounty targets). */
+	UFUNCTION(BlueprintCallable, Category = "Enemy|AI")
+	void SetAggroRange(float Range) { AggroRange = Range; }
+
 	/** Archetype, set by the mission spawner before FinishSpawning; applied in BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
 	EEnemyType ShipType = EEnemyType::Gunship;
@@ -146,6 +150,11 @@ protected:
 	 *  fire. Sized for the open sector's warp-in arrivals (M24) — long enough to man stations. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
 	float EngageDelay = 12.f;
+
+	/** If > 0, the ship idles (loiters) until the player is inside this range (uu). 0 = always
+	 *  hunts. The bounty contract's target uses this to actually wait at its landmark (M28). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float AggroRange = 0.f;
 
 	/** Raw damage per shot to the player (before the player's shield-power mitigation). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")

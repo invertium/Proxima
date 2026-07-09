@@ -11,6 +11,7 @@
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Ships/EnemyShip.h"
+#include "Ships/Spaceship.h"
 #include "TimerManager.h"
 #include "World/SalvageCache.h"
 #include "World/Station.h"
@@ -189,6 +190,15 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 	// Travel events (M27): a periodic roll keeps the long hops between systems alive.
 	InWorld.GetTimerManager().SetTimer(EventRollTimer, this, &UMissionSubsystem::RollEvent, EventRollInterval, true);
+
+	// A loaded save may carry an active bounty contract — restore its target in the world (M28).
+	if (const USpaceGameInstance* GI = InWorld.GetGameInstance<USpaceGameInstance>())
+	{
+		if (GI->GetContractType() == EContractType::Bounty)
+		{
+			SpawnBountyShip();
+		}
+	}
 	UE_LOG(LogTemp, Log, TEXT("[Sector] Director online — objective %d '%s' at '%s'"),
 		MissionIndex, *Mission.Name, *Mission.LandmarkName);
 }
@@ -219,8 +229,10 @@ void UMissionSubsystem::BeginObjective(int32 Index)
 
 void UMissionSubsystem::CheckDirector()
 {
-	// The live travel event ticks regardless of the encounter state (deadlines keep counting).
+	// The live travel event ticks regardless of the encounter state (deadlines keep counting),
+	// and so does contract progress (waypoints count even mid-fight).
 	CheckEvent();
+	CheckContract();
 
 	if (bEncounterLive || bSectorComplete) { return; }
 	const UWorld* World = GetWorld();
@@ -652,6 +664,236 @@ void UMissionSubsystem::ResolveEvent(bool bSuccess)
 	ActiveEvent = ESectorEvent::None;
 	EventFleet.Reset();
 	SalvagePod = nullptr;
+}
+
+// --- M28 station contracts ---------------------------------------------------------------
+
+const TCHAR* UMissionSubsystem::ContractTypeName(EContractType Type)
+{
+	switch (Type)
+	{
+	case EContractType::Bounty:   return TEXT("bounty");
+	case EContractType::Patrol:   return TEXT("patrol");
+	case EContractType::Delivery: return TEXT("delivery");
+	default:                      return TEXT("none");
+	}
+}
+
+FString UMissionSubsystem::DescribeContract(EContractType Type, int32 A, int32 B,
+	const FString& Ship, int32 Reward) const
+{
+	const FString NameA = GetMissionDef(A).LandmarkName;
+	const FString NameB = GetMissionDef(B).LandmarkName;
+	switch (Type)
+	{
+	case EContractType::Bounty:
+		return FString::Printf(TEXT("BOUNTY — The pirate %s was last seen loitering near %s. Destroy it. Pays %d cr."),
+			*Ship, *NameA, Reward);
+	case EContractType::Patrol:
+		return FString::Printf(TEXT("PATROL — Sweep %s and %s and report contacts. Pays %d cr."),
+			*NameA, *NameB, Reward);
+	case EContractType::Delivery:
+		return FString::Printf(TEXT("DELIVERY — Run relief supplies to %s and return to the starbase. Pays %d cr."),
+			*NameA, Reward);
+	default:
+		return FString();
+	}
+}
+
+void UMissionSubsystem::GenerateOffer()
+{
+	// Pick a type + targets away from home (index 0 hosts the starbase itself).
+	const int32 Count = MissionCount();
+	auto RandomSystem = [Count](int32 Exclude) -> int32
+	{
+		int32 Pick = Exclude;
+		for (int32 Guard = 0; Guard < 16 && Pick == Exclude; ++Guard)
+		{
+			Pick = FMath::RandRange(1, Count - 1);
+		}
+		return Pick;
+	};
+
+	static const TCHAR* Pirates[] = { TEXT("KRAIT"), TEXT("DUSKRUNNER"), TEXT("RED HARROW"), TEXT("VULTURE"), TEXT("IRONJAW") };
+
+	OfferType = static_cast<EContractType>(FMath::RandRange(1, 3));
+	OfferTargetA = RandomSystem(-1);
+	OfferTargetB = -1;
+	OfferShip.Reset();
+	switch (OfferType)
+	{
+	case EContractType::Bounty:
+		OfferShip = Pirates[FMath::RandRange(0, UE_ARRAY_COUNT(Pirates) - 1)];
+		OfferReward = 220;
+		break;
+	case EContractType::Patrol:
+		OfferTargetB = RandomSystem(OfferTargetA);
+		OfferReward = 140;
+		break;
+	case EContractType::Delivery:
+	default:
+		OfferReward = 160;
+		break;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Contract] Board offer: %s"),
+		*DescribeContract(OfferType, OfferTargetA, OfferTargetB, OfferShip, OfferReward));
+}
+
+bool UMissionSubsystem::AcceptContract()
+{
+	UWorld* World = GetWorld();
+	USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr;
+	const ASpaceship* Ship = World ? Cast<ASpaceship>(UGameplayStatics::GetPlayerPawn(World, 0)) : nullptr;
+	if (!GI || !Ship || !Ship->IsDocked()
+		|| OfferType == EContractType::None
+		|| GI->GetContractType() != EContractType::None)
+	{
+		return false;
+	}
+
+	GI->SetContract(OfferType, OfferTargetA, OfferTargetB, OfferShip, OfferReward);
+	GI->SaveCampaign();
+	PostComms(TEXT("STARBASE OPS"), FString::Printf(TEXT("Contract logged. %s"),
+		*DescribeContract(OfferType, OfferTargetA, OfferTargetB, OfferShip, OfferReward)));
+
+	if (OfferType == EContractType::Bounty)
+	{
+		SpawnBountyShip();
+	}
+	OfferType = EContractType::None; // the board goes empty until the next docking
+	return true;
+}
+
+void UMissionSubsystem::SpawnBountyShip()
+{
+	UWorld* World = GetWorld();
+	const USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr;
+	if (!World || !GI || GI->GetContractType() != EContractType::Bounty || BountyShip.IsValid())
+	{
+		return;
+	}
+
+	const FVector Loc = GetSystemLocation(GI->GetContractTargetA()) + FVector(4500.f, -4500.f, 0.f);
+	FTransform Xform(FRotator::ZeroRotator, Loc);
+	AEnemyShip* Enemy = World->SpawnActorDeferred<AEnemyShip>(
+		AEnemyShip::StaticClass(), Xform, nullptr, nullptr,
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Enemy)
+	{
+		return;
+	}
+	Enemy->ShipType = EEnemyType::Gunship;
+	Enemy->Callsign = GI->GetContractShip();
+	Enemy->SetAggroRange(15000.f); // loiter at the landmark until the hunter comes calling
+	UGameplayStatics::FinishSpawningActor(Enemy, Xform);
+	BountyShip = Enemy;
+	if (UHealthComponent* H = Enemy->GetHealthComp())
+	{
+		H->OnDeath.AddUniqueDynamic(this, &UMissionSubsystem::HandleBountyKilled);
+	}
+	if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(
+		UGameplayStatics::GetPlayerController(World, 0)))
+	{
+		PC->BindEnemyDeaths(); // the kill still banks its regular salvage
+	}
+	UE_LOG(LogTemp, Log, TEXT("[Contract] Bounty target '%s' loitering at %s"),
+		*Enemy->Callsign, *GetMissionDef(GI->GetContractTargetA()).LandmarkName);
+}
+
+void UMissionSubsystem::HandleBountyKilled(AActor* DeadActor)
+{
+	const UWorld* World = GetWorld();
+	const USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr;
+	if (GI && GI->GetContractType() == EContractType::Bounty)
+	{
+		CompleteContract();
+	}
+}
+
+void UMissionSubsystem::CheckContract()
+{
+	UWorld* World = GetWorld();
+	USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr;
+	const ASpaceship* Ship = World ? Cast<ASpaceship>(UGameplayStatics::GetPlayerPawn(World, 0)) : nullptr;
+	if (!GI || !Ship)
+	{
+		return;
+	}
+
+	// Refresh the board on each fresh docking (only while no contract is running).
+	const bool bDocked = Ship->IsDocked();
+	if (bDocked && !bWasDocked && GI->GetContractType() == EContractType::None)
+	{
+		GenerateOffer();
+	}
+	if (!bDocked)
+	{
+		OfferType = EContractType::None; // offers are only signable at the board
+	}
+	bWasDocked = bDocked;
+
+	// Waypoint / return progress for the active contract.
+	const FVector Loc = Ship->GetActorLocation();
+	switch (GI->GetContractType())
+	{
+	case EContractType::Patrol:
+		if (GI->GetContractStage() == 0
+			&& FVector::Dist2D(Loc, GetSystemLocation(GI->GetContractTargetA())) <= ContractVisitRange)
+		{
+			GI->SetContractStage(1);
+			GI->SaveCampaign();
+			PostComms(TEXT("STARBASE OPS"), FString::Printf(
+				TEXT("First waypoint swept — %s reads clear. One leg to go: %s."),
+				*GetMissionDef(GI->GetContractTargetA()).LandmarkName,
+				*GetMissionDef(GI->GetContractTargetB()).LandmarkName));
+		}
+		else if (GI->GetContractStage() == 1
+			&& FVector::Dist2D(Loc, GetSystemLocation(GI->GetContractTargetB())) <= ContractVisitRange)
+		{
+			CompleteContract();
+		}
+		break;
+
+	case EContractType::Delivery:
+		if (GI->GetContractStage() == 0
+			&& FVector::Dist2D(Loc, GetSystemLocation(GI->GetContractTargetA())) <= ContractVisitRange)
+		{
+			GI->SetContractStage(1);
+			GI->SaveCampaign();
+			PostComms(TEXT("STARBASE OPS"), FString::Printf(
+				TEXT("Cargo delivered to %s. Return to the starbase and dock to close the contract."),
+				*GetMissionDef(GI->GetContractTargetA()).LandmarkName));
+		}
+		else if (GI->GetContractStage() == 1 && bDocked)
+		{
+			CompleteContract();
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+void UMissionSubsystem::CompleteContract()
+{
+	UWorld* World = GetWorld();
+	USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr;
+	if (!GI || GI->GetContractType() == EContractType::None)
+	{
+		return;
+	}
+	const int32 Reward = GI->GetContractReward();
+	const EContractType Type = GI->GetContractType();
+	GI->AddReward(Reward, Reward / 4);
+	GI->ClearContract();
+	GI->SaveCampaign();
+	BountyShip = nullptr;
+	PostComms(TEXT("STARBASE OPS"), FString::Printf(
+		TEXT("Contract complete, Captain — transferring %d credits. The board will have fresh work next time you dock."),
+		Reward));
+	UE_LOG(LogTemp, Log, TEXT("[Contract] COMPLETE (%s) — paid %d cr"), ContractTypeName(Type), Reward);
 }
 
 void UMissionSubsystem::FireBeat(FCommsBeat& Beat)

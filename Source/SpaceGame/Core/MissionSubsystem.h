@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/StationTypes.h"
 #include "Ships/EnemyShip.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MissionSubsystem.generated.h"
@@ -171,6 +172,36 @@ public:
 	/** Wire name for an event kind ("distress"/"interdiction"/"salvage"), for the nav-map JSON. */
 	static const TCHAR* EventKindName(ESectorEvent Kind);
 
+	// --- Station contracts (M28): offered while docked, tracked by the director ---
+
+	/** The contract on offer at the starbase board (regenerated each docking; None when
+	 *  a contract is already active or the ship is not docked). */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	EContractType GetOfferType() const { return OfferType; }
+
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	int32 GetOfferTargetA() const { return OfferTargetA; }
+
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	int32 GetOfferTargetB() const { return OfferTargetB; }
+
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	const FString& GetOfferShip() const { return OfferShip; }
+
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	int32 GetOfferReward() const { return OfferReward; }
+
+	/** One-line description of a contract for the board / comms. */
+	FString DescribeContract(EContractType Type, int32 A, int32 B, const FString& Ship, int32 Reward) const;
+
+	/** Sign the offered contract (must be docked, offer live, no active contract). Persists,
+	 *  announces on comms, and spawns the bounty target when applicable. Returns true on success. */
+	UFUNCTION(BlueprintCallable, Category = "Mission")
+	bool AcceptContract();
+
+	/** Wire name for a contract type ("bounty"/"patrol"/"delivery"). */
+	static const TCHAR* ContractTypeName(EContractType Type);
+
 private:
 	/** Spawn the friendly starbase just behind the player's start (once per encounter). */
 	void SpawnStation(UWorld& World);
@@ -227,6 +258,24 @@ private:
 	UFUNCTION()
 	void HandleEventShipKilled(AActor* DeadActor);
 
+	// --- M28 station contracts ---
+
+	/** Contract tick (from CheckDirector): dock-edge offer refresh + waypoint/return progress. */
+	void CheckContract();
+
+	/** Roll a fresh offer for the board (called on each docking with no active contract). */
+	void GenerateOffer();
+
+	/** Spawn the active bounty contract's loitering target at its landmark (accept + reload). */
+	void SpawnBountyShip();
+
+	/** Pay out + clear the active contract, with a comms confirm. */
+	void CompleteContract();
+
+	/** Bound to the bounty target's death. */
+	UFUNCTION()
+	void HandleBountyKilled(AActor* DeadActor);
+
 	/** Append a beat to the comms log (once). */
 	void FireBeat(FCommsBeat& Beat);
 
@@ -259,6 +308,25 @@ private:
 	TArray<TWeakObjectPtr<AEnemyShip>> EventFleet;
 	TWeakObjectPtr<class ASalvageCache> SalvagePod;
 	FTimerHandle EventRollTimer;
+
+	// --- M28 contract state ---
+
+	/** The board's current offer (valid only while docked with no active contract). */
+	EContractType OfferType = EContractType::None;
+	int32 OfferTargetA = -1;
+	int32 OfferTargetB = -1;
+	FString OfferShip;
+	int32 OfferReward = 0;
+
+	/** Dock-edge detector for regenerating the board's offer. */
+	bool bWasDocked = false;
+
+	/** The live bounty target, so reloads don't double-spawn it. */
+	TWeakObjectPtr<AEnemyShip> BountyShip;
+
+	/** Planar range (uu) that counts as "visiting" a contract waypoint. */
+	UPROPERTY(EditAnywhere, Category = "Mission|Contracts")
+	float ContractVisitRange = 9000.f;
 
 	// M27 tunables (first pass): roll cadence + odds, per-event lifetimes, payouts.
 	UPROPERTY(EditAnywhere, Category = "Mission|Events") float EventRollInterval = 25.f;

@@ -106,6 +106,36 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Campaign|Hangar")
 	bool SelectShip(EPlayerShipType Ship);
 
+	// --- Station contracts (M28): one active at a time, persisted in the save ---
+
+	UFUNCTION(BlueprintPure, Category = "Campaign|Contracts")
+	EContractType GetContractType() const { return ContractType; }
+
+	UFUNCTION(BlueprintPure, Category = "Campaign|Contracts")
+	int32 GetContractTargetA() const { return ContractTargetA; }
+
+	UFUNCTION(BlueprintPure, Category = "Campaign|Contracts")
+	int32 GetContractTargetB() const { return ContractTargetB; }
+
+	UFUNCTION(BlueprintPure, Category = "Campaign|Contracts")
+	int32 GetContractStage() const { return ContractStage; }
+
+	UFUNCTION(BlueprintPure, Category = "Campaign|Contracts")
+	const FString& GetContractShip() const { return ContractShip; }
+
+	UFUNCTION(BlueprintPure, Category = "Campaign|Contracts")
+	int32 GetContractReward() const { return ContractReward; }
+
+	/** Take on a contract (stage 0). The director tracks progress and completes it. */
+	UFUNCTION(BlueprintCallable, Category = "Campaign|Contracts")
+	void SetContract(EContractType InType, int32 TargetA, int32 TargetB, const FString& Ship, int32 Reward);
+
+	UFUNCTION(BlueprintCallable, Category = "Campaign|Contracts")
+	void SetContractStage(int32 Stage) { ContractStage = FMath::Max(0, Stage); }
+
+	UFUNCTION(BlueprintCallable, Category = "Campaign|Contracts")
+	void ClearContract();
+
 private:
 	UPROPERTY()
 	int32 MissionIndex = 0;
@@ -126,6 +156,14 @@ private:
 	/** Bought non-starter ships (starters are implicitly owned via the catalogue's Cost==0). */
 	UPROPERTY()
 	TArray<EPlayerShipType> OwnedShips;
+
+	// Active station contract (M28); mirrors USpaceSaveGame's contract block.
+	UPROPERTY() EContractType ContractType = EContractType::None;
+	UPROPERTY() int32 ContractTargetA = -1;
+	UPROPERTY() int32 ContractTargetB = -1;
+	UPROPERTY() int32 ContractStage = 0;
+	UPROPERTY() FString ContractShip;
+	UPROPERTY() int32 ContractReward = 0;
 
 	/** XP needed per rank step (rank = 1 + XP/XpPerRank). */
 	static constexpr int32 XpPerRank = 400;

@@ -301,6 +301,13 @@ void AEnemyShip::Tick(float DeltaSeconds)
 	const FVector ToPlayer = Player->GetActorLocation() - GetActorLocation();
 	const float Distance = ToPlayer.Size();
 
+	// Loiterers (M28 bounty targets) hold position until the player comes to them.
+	if (AggroRange > 0.f && Distance > AggroRange)
+	{
+		SetAIState(EEnemyAIState::Idle);
+		return;
+	}
+
 	// Yaw toward the player (yaw-only; space combat stays on a plane for the slice). Strafers
 	// (M26) lead a lateral offset so a run is a fly-by, not a head-on ram, and hold their
 	// heading flat through the overshoot instead of orbiting the target.

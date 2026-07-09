@@ -28,7 +28,8 @@ void USpaceGameInstance::ResetCampaign()
 	XP = 0;
 	UpgradeTiers.Reset();
 	OwnedShips.Reset(); // starters stay owned implicitly via the catalogue
-	UE_LOG(LogTemp, Log, TEXT("[Campaign] Reset to mission 0 (wallet + upgrades + hangar cleared)"));
+	ClearContract();
+	UE_LOG(LogTemp, Log, TEXT("[Campaign] Reset to mission 0 (wallet + upgrades + hangar + contract cleared)"));
 }
 
 bool USpaceGameInstance::BuyUpgrade(FName UpgradeId)
@@ -131,6 +132,29 @@ int32 USpaceGameInstance::AdvanceMission()
 	return MissionIndex;
 }
 
+void USpaceGameInstance::SetContract(EContractType InType, int32 TargetA, int32 TargetB,
+	const FString& Ship, int32 Reward)
+{
+	ContractType = InType;
+	ContractTargetA = TargetA;
+	ContractTargetB = TargetB;
+	ContractStage = 0;
+	ContractShip = Ship;
+	ContractReward = FMath::Max(0, Reward);
+	UE_LOG(LogTemp, Log, TEXT("[Contract] Accepted type %d (targets %d/%d, ship '%s', %d cr)"),
+		(int32)InType, TargetA, TargetB, *Ship, ContractReward);
+}
+
+void USpaceGameInstance::ClearContract()
+{
+	ContractType = EContractType::None;
+	ContractTargetA = -1;
+	ContractTargetB = -1;
+	ContractStage = 0;
+	ContractShip.Reset();
+	ContractReward = 0;
+}
+
 bool USpaceGameInstance::SaveCampaign()
 {
 	USpaceSaveGame* Save = Cast<USpaceSaveGame>(
@@ -145,6 +169,12 @@ bool USpaceGameInstance::SaveCampaign()
 	Save->XP = XP;
 	Save->UpgradeTiers = UpgradeTiers;
 	Save->OwnedShips = OwnedShips;
+	Save->ContractType = ContractType;
+	Save->ContractTargetA = ContractTargetA;
+	Save->ContractTargetB = ContractTargetB;
+	Save->ContractStage = ContractStage;
+	Save->ContractShip = ContractShip;
+	Save->ContractReward = ContractReward;
 	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotName(), 0);
 	UE_LOG(LogTemp, Log, TEXT("[Campaign] Save %s (mission %d, ship %d)"),
 		bOk ? TEXT("OK") : TEXT("FAILED"), MissionIndex, (int32)PlayerShip);
@@ -169,6 +199,12 @@ bool USpaceGameInstance::LoadCampaign()
 	XP = FMath::Max(0, Save->XP);
 	UpgradeTiers = Save->UpgradeTiers;
 	OwnedShips = Save->OwnedShips;
+	ContractType = Save->ContractType;
+	ContractTargetA = Save->ContractTargetA;
+	ContractTargetB = Save->ContractTargetB;
+	ContractStage = Save->ContractStage;
+	ContractShip = Save->ContractShip;
+	ContractReward = Save->ContractReward;
 	UE_LOG(LogTemp, Log, TEXT("[Campaign] Loaded (mission %d, ship %d, %d cr, %d xp, %d upgrades, %d ships)"),
 		MissionIndex, (int32)PlayerShip, Credits, XP, UpgradeTiers.Num(), OwnedShips.Num());
 	return true;

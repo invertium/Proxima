@@ -1358,3 +1358,37 @@ against it — the one-live-event rule holds. [S] `navmap_event.png`: the sector
 pink "◆ SALVAGE 120s" diamond beside Haven and the pod's amber blip on the helm radar above.
 (Commit: World/SalvageCache.{h,cpp} + Core/MissionSubsystem.{h,cpp} + Net/StationServerSubsystem.cpp
 + docs.)
+
+---
+
+## 2026-07-09 — 📋 M28 Station contracts
+
+Docking at the starbase now offers work beyond the drydock: a **contract board** with one
+signable job at a time, persisted in the campaign save.
+- **Three contract types**, rolled fresh on each docking (while none is active): **bounty**
+  (a named pirate — KRAIT/DUSKRUNNER/RED HARROW/VULTURE/IRONJAW — loiters at a random system;
+  destroy it, 220 cr), **patrol** (sweep two named systems in order, 140 cr), **delivery**
+  (run supplies to a system and dock back home, 160 cr). Completion pays credits + XP/4.
+- **Persistence:** contract fields live on `USpaceGameInstance` mirrored into `USpaceSaveGame`
+  (type, two target indices, stage, ship name, reward); accept/stage/complete all auto-save.
+  On world begin-play the director respawns an active bounty's target, so reloads keep the hunt.
+- **Loitering AI:** `AEnemyShip` gains an `AggroRange` leash (0 = always hunts, unchanged
+  default) — the bounty target idles at its landmark until the player closes to 15 000 uu.
+- **Web board** on the engineering page below the hangar: shows the active contract's progress
+  anywhere, the day's offer + ✎ ACCEPT while docked (new `/api/contract` endpoint, accept via
+  `action=accept`); every beat (logged / waypoint / complete) goes out on STARBASE OPS comms.
+  The director tracks waypoints at 4 Hz within 9 000 uu (`ContractVisitRange`).
+
+**Verified (PIE + /api + save/load):** all three types accept→complete→payout — bounty:
+DUSKRUNNER spawned loitering (AI **Idle** at 60 k uu while the tutorial drone stayed Engaged),
+survived a full world reload (respawned at Korrin Belt) *and* an explicit
+`ClearContract`→`LoadCampaign` disk roundtrip, kill paid 220 + 80 salvage; patrol: leg-1 comms
+at Ember, disk roundtrip mid-contract, leg 2 at Tarsis paid 140; delivery: stage 1 at Ember,
+**world reload mid-contract kept stage 1**, docking home completed it for 160 (credits
+300→440→600 exact). Offer rerolls proven across dockings (bounty/patrol/delivery mix); offers
+null while undocked or a contract is active. [S] `board2.png`: the engineering console with
+"ON OFFER — BOUNTY … Pays 220 cr." + ACCEPT CONTRACT button. Test note: back-to-back
+undock+dock inside one MCP script never sees a director tick — no dock edge, same offer; give
+the 4 Hz director a beat between them. (Commit: Core/{StationTypes,SpaceSaveGame,
+SpaceGameInstance{,.cpp},MissionSubsystem{,.cpp}}.h/.cpp + Ships/EnemyShip.{h,cpp} +
+Net/StationServerSubsystem.{h,cpp} + docs.)

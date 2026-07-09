@@ -366,7 +366,14 @@ setInterval(poll,250);poll();
 			     "<div class='stat'><b>SALVAGE</b><span id='wallet' class='big'>-</span></div>"
 			     "<div id='shop'></div>"
 			     "<label style='margin-top:18px'>HANGAR &mdash; SHIPS</label>"
-			     "<div id='hangar'></div></div>");
+			     "<div id='hangar'></div></div>"
+			     // Contract board (M28): shows the active contract's progress anywhere; offers are
+			     // browsable + signable only while docked.
+			     "<label style='margin-top:24px'>CONTRACT BOARD</label>"
+			     "<div id='cboard' style='text-align:left;font-size:.92rem;line-height:1.35;color:#8fb8e6;"
+			     "background:#0b1220;border:1px solid #15243a;border-radius:8px;padding:10px'>&hellip;</div>"
+			     "<button id='cbtn' onclick=\"post('/api/contract?action=accept')\" style='display:none'>"
+			     "&#9998; ACCEPT CONTRACT</button>");
 		// The hull bar + numeric readout poll from /api/state; the weld minigame runs entirely
 		// client-side (requestAnimationFrame sweep) and only POSTs a repair when the marker is
 		// inside the green zone — the server still rate-limits + caps the actual hull restore.
@@ -421,7 +428,16 @@ setInterval(poll,250);poll();
 			"const m=$('#mark');if(m)m.style.left='calc('+(sp*100)+'% - 2px)';"
 			"requestAnimationFrame(loop);}requestAnimationFrame(loop);"
 			"function flash(c){const s=$('#sweep');s.style.boxShadow='0 0 14px '+c;setTimeout(function(){s.style.boxShadow='';},160);}"
-			"function weld(){if(sp>=0.40&&sp<=0.60){post('/api/engineering?action=repair');flash('#43ff7a');}else{flash('#ff5a4a');}}");
+			"function weld(){if(sp>=0.40&&sp<=0.60){post('/api/engineering?action=repair');flash('#43ff7a');}else{flash('#ff5a4a');}}"
+			// Contract board: its own light poll (the board changes on dock/accept, not per-frame).
+			"async function pollContract(){try{const c=await(await fetch('/api/contract')).json();"
+			"const b=$('#cboard'),btn=$('#cbtn');"
+			"if(c.active){b.innerHTML='<span style=\"color:#43d1ff\">ACTIVE</span> &mdash; '+c.active.desc"
+			"+(c.active.stage>0?' <span style=\"color:#43ff7a\">[leg 1 done]</span>':'');btn.style.display='none';}"
+			"else if(c.offer){b.innerHTML='<span style=\"color:#ffd24a\">ON OFFER</span> &mdash; '+c.offer.desc;btn.style.display='block';}"
+			"else{b.textContent=c.docked?'No work on the board right now \\u2014 undock and return later.'"
+			":'Dock at the STARBASE to browse contracts.';btn.style.display='none';}}catch(e){}}"
+			"setInterval(pollContract,1500);pollContract();");
 		return MakePage(TEXT("ENGINEERING"), TEXT("#a82"), Body, Script);
 	}
 
@@ -579,6 +595,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// These are simple idempotent-ish console commands on a LAN, so GET is fine.
 	Bind(TEXT("/api/state"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleState);
 	Bind(TEXT("/api/starmap"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleStarmap);
+	Bind(TEXT("/api/contract"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleContract);
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
 	Bind(TEXT("/api/warp"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWarp);
@@ -942,6 +959,53 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Sci ? Sci->GetEffectiveScanRange() : -1.f,
 		Heading, HelmRadarRangeUU * SensorMult, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
+	OnComplete(MakeResponse(Json, TEXT("application/json")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleContract(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Station contract board (M28): read the active/offered contract, or accept the offer.
+	UWorld* World = GetWorld();
+	UMissionSubsystem* MS = World ? World->GetSubsystem<UMissionSubsystem>() : nullptr;
+	USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr;
+	if (!MS || !GI)
+	{
+		OnComplete(MakeVerdict(false, TEXT("no game running")));
+		return true;
+	}
+
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	if (Action && *Action == TEXT("accept"))
+	{
+		const bool bOk = MS->AcceptContract();
+		OnComplete(MakeVerdict(bOk, bOk ? TEXT("") : TEXT("no signable offer - dock at the starbase")));
+		return true;
+	}
+
+	FString Reason;
+	const ASpaceship* Ship = GetCommandShip(Reason);
+	const bool bDocked = Ship && Ship->IsDocked();
+
+	FString Active = TEXT("null");
+	FString Offer = TEXT("null");
+	if (GI->GetContractType() != EContractType::None)
+	{
+		Active = FString::Printf(TEXT("{\"type\":\"%s\",\"stage\":%d,\"desc\":\"%s\"}"),
+			UMissionSubsystem::ContractTypeName(GI->GetContractType()), GI->GetContractStage(),
+			*JsonEscape(MS->DescribeContract(GI->GetContractType(), GI->GetContractTargetA(),
+				GI->GetContractTargetB(), GI->GetContractShip(), GI->GetContractReward())));
+	}
+	else if (bDocked && MS->GetOfferType() != EContractType::None)
+	{
+		Offer = FString::Printf(TEXT("{\"type\":\"%s\",\"desc\":\"%s\"}"),
+			UMissionSubsystem::ContractTypeName(MS->GetOfferType()),
+			*JsonEscape(MS->DescribeContract(MS->GetOfferType(), MS->GetOfferTargetA(),
+				MS->GetOfferTargetB(), MS->GetOfferShip(), MS->GetOfferReward())));
+	}
+
+	const FString Json = FString::Printf(TEXT("{\"docked\":%s,\"active\":%s,\"offer\":%s}"),
+		bDocked ? TEXT("true") : TEXT("false"), *Active, *Offer);
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
 	return true;
 }

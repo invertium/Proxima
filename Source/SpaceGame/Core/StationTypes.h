@@ -30,6 +30,18 @@ enum class EGamePhase : uint8
 };
 
 /**
+ * A station contract's kind (M28). One may be active at a time; it persists in the save.
+ */
+UENUM(BlueprintType)
+enum class EContractType : uint8
+{
+	None     UMETA(DisplayName = "None"),
+	Bounty   UMETA(DisplayName = "Bounty"),   // kill a named ship loitering at a landmark
+	Patrol   UMETA(DisplayName = "Patrol"),   // visit two named landmarks
+	Delivery UMETA(DisplayName = "Delivery")  // fly cargo to a landmark, return, dock
+};
+
+/**
  * Player ship the campaign is being played with (chosen at New Game, persisted in the save).
  * Both reuse existing art; they trade speed for toughness (applied in ASpaceship::BeginPlay).
  */
