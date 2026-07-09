@@ -68,6 +68,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Health")
 	float GetShieldMitigation() const;
 
+	/** M29 alert doctrine: advance the shield pool one frame. Charging (red alert) regenerates
+	 *  at ShieldChargeRate × sibling Shields power; otherwise the pool bleeds at
+	 *  ShieldBleedRate. Called by the owning ship (player-only mechanic — enemies keep their
+	 *  static pools). */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Health")
+	void TickShield(float DeltaSeconds, bool bCharging);
+
 	/** Broadcast once when hull first reaches zero. */
 	UPROPERTY(BlueprintAssignable, Category = "Ship|Health")
 	FOnHealthDeath OnDeath;
@@ -91,6 +98,14 @@ public:
 	/** Hard cap on shield-power mitigation, so damage never reaches zero. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Health")
 	float MaxMitigation = 0.8f;
+
+	/** Shield regen per second at red alert (scaled by Shields power), M29. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Health")
+	float ShieldChargeRate = 4.f;
+
+	/** Shield drain per second at green alert (emitters idle down), M29. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Health")
+	float ShieldBleedRate = 1.5f;
 
 protected:
 	virtual void BeginPlay() override;

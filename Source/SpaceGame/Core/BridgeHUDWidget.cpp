@@ -27,6 +27,14 @@ void UBridgeHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 
 	const float MaxHull = FMath::Max(Health->GetMaxHull(), 1.f);
 	const float Pct = Health->GetHull() / MaxHull;
+	// Red alert (M29) rides the hull line: the whole readout goes red with a battle-stations flag.
+	if (Ship->IsRedAlert())
+	{
+		HullText->SetText(FText::FromString(
+			FString::Printf(TEXT("⚠ RED ALERT   HULL  %3d%%"), FMath::RoundToInt(Pct * 100.f))));
+		HullText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.25f, 0.2f, 1.0f)));
+		return;
+	}
 	HullText->SetText(FText::FromString(
 		FString::Printf(TEXT("HULL  %3d%%"), FMath::RoundToInt(Pct * 100.f))));
 	// Green when healthy, amber under 50%, red under 25%.

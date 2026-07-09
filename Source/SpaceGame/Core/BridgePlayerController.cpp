@@ -193,6 +193,7 @@ void ABridgePlayerController::SetupInputComponent()
 	// Solo-play hotkeys (R2): every verb the web consoles offer, on keys, so one player can
 	// run the whole loop without a second screen. Helm/Weapons keys share the station gating.
 	InputComponent->BindKey(EKeys::F, IE_Pressed, this, &ABridgePlayerController::HelmDockToggle);
+	InputComponent->BindKey(EKeys::B, IE_Pressed, this, &ABridgePlayerController::HelmRedAlertToggle);
 	InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ABridgePlayerController::HelmWarp);
 	InputComponent->BindKey(EKeys::G, IE_Pressed, this, &ABridgePlayerController::HelmWarpToObjective);
 	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ABridgePlayerController::WeaponFireTorpedo);
@@ -321,6 +322,15 @@ ASpaceship* ABridgePlayerController::GetShip() const
 }
 
 // --- Solo-play hotkeys (R2) ---
+
+void ABridgePlayerController::HelmRedAlertToggle()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	if (ASpaceship* Ship = GetShip())
+	{
+		Ship->ToggleRedAlert();
+	}
+}
 
 void ABridgePlayerController::HelmDockToggle()
 {

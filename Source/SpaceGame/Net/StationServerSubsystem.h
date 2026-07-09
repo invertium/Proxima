@@ -62,6 +62,7 @@ private:
 	// New Game / Restart — reloads the encounter.
 	bool HandleGame(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleContract(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	bool HandleAlert(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 
 	/** Resolve the local player ship in this world, or null if not spawned yet. */
 	ASpaceship* GetShip() const;

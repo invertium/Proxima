@@ -67,7 +67,7 @@ namespace MenuUI
 			}
 		};
 		AddRow(TEXT("STATIONS"),          TEXT("1  Helm      2  Weapons      3  Engineering"));
-		AddRow(TEXT("HELM  (1)"),         TEXT("W/S throttle     A/D turn     F dock / undock     R warp (along bow)     G lay in course"));
+		AddRow(TEXT("HELM  (1)"),         TEXT("W/S throttle     A/D turn     F dock / undock     R warp (along bow)     G lay in course     B red alert"));
 		AddRow(TEXT("WEAPONS  (2)"),      TEXT("RIGHT cycle target     SPACE fire beam     T fire torpedo"));
 		AddRow(TEXT("ENGINEERING  (3)"),  TEXT("LEFT/RIGHT select system     UP/DOWN route power"));
 		AddRow(TEXT("SCIENCE  (any)"),    TEXT("C cycle scan contact     X scan"));

@@ -1392,3 +1392,38 @@ undock+dock inside one MCP script never sees a director tick — no dock edge, s
 the 4 Hz director a beat between them. (Commit: Core/{StationTypes,SpaceSaveGame,
 SpaceGameInstance{,.cpp},MissionSubsystem{,.cpp}}.h/.cpp + Ships/EnemyShip.{h,cpp} +
 Net/StationServerSubsystem.{h,cpp} + docs.)
+
+---
+
+## 2026-07-09 — 🚨 M29 Red alert & power doctrine
+
+The bridge gains an alert state and one-tap Engineering doctrines — shields are now something
+the crew *runs*, not a passive stat.
+- **Red alert** (`ASpaceship::SetRedAlert/ToggleRedAlert`): toggled by **B** on Helm (gated,
+  in the controls card) or `/api/alert?state=red|green|toggle` from any console (whole-bridge
+  doctrine). Going red plays the alarm sting and logs the state change.
+- **Shield doctrine** (`UHealthComponent::TickShield`, driven from the player ship's Tick):
+  shields **only charge at red alert** (`ShieldChargeRate` 4/s × Shields power) and **bleed at
+  green** (`ShieldBleedRate` 1.5/s). Docked ships hold steady (combat-safe). Enemies keep
+  their static pools. The encounter trigger now nudges the crew on comms: "Recommend RED
+  ALERT — shields won't charge without it."
+- **Power presets** (`UPowerComponent::ApplyPreset`): COMBAT 0.4/1.3/1.3, TRAVEL 2.0/0.5/0.5,
+  BALANCED 1/1/1 — one-tap buttons on the web engineering page (`/api/power?preset=...`),
+  each triple summing to the nominal reactor budget. **Bug found & fixed:** the budget-guarded
+  setter clamped a boost applied before the cuts (TRAVEL from COMBAT gave Engine 0.4, not
+  2.0) — presets now clear all three systems before setting the triple.
+- **Console tint:** every web console goes red at red alert (`body.red` CSS via the shared
+  poll — dark red page, red header, red-bordered buttons); the Helm button flips to
+  "⚠ STAND DOWN — GREEN"; the engineering page gains a SHIELD row with a ▲/▼ doctrine arrow;
+  the on-ship HUD hull line becomes "⚠ RED ALERT  HULL …" in red. `/api/state` gains
+  `shield`, `maxShield`, and `alert`.
+
+**Verified (PIE + /api):** [L] shield gating exact — 4.01/s measured charge at red (rate ×1.0
+Shields power), 1.49/s measured bleed at green, pool capped at 50 and drained to 0; [L]
+presets return exactly [0.4, 1.3, 1.3], [2.0, 0.5, 0.5], [1.0, 1.0, 1.0] over `/api/state`
+(including the previously-clamped COMBAT→TRAVEL transition); B toggles red on Helm and is
+inert on Weapons; the TACTICAL "Recommend RED ALERT" beat fired on encounter trigger.
+[S] `red_alert.png`: the whole helm console tinted red with the STAND DOWN button.
+(Commit: Ships/Spaceship.{h,cpp} + Components/{HealthComponent,PowerComponent}.{h,cpp} +
+Core/{BridgePlayerController.{h,cpp},BridgeHUDWidget.cpp,MenuUI.h,MissionSubsystem.cpp} +
+Net/StationServerSubsystem.{h,cpp} + docs.)

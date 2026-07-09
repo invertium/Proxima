@@ -53,3 +53,27 @@ float UPowerComponent::GetTotalPower() const
 	}
 	return Total;
 }
+
+void UPowerComponent::ApplyPreset(EPowerPreset Preset)
+{
+	// Doctrine triples (Engine / Weapons / Shields), each summing to the nominal budget so a
+	// preset never trips the reactor cap.
+	float Engine = 1.f, Weapons = 1.f, Shields = 1.f;
+	switch (Preset)
+	{
+	case EPowerPreset::Combat: Engine = 0.4f; Weapons = 1.3f; Shields = 1.3f; break;
+	case EPowerPreset::Travel: Engine = 2.0f; Weapons = 0.5f; Shields = 0.5f; break;
+	case EPowerPreset::Balanced:
+	default: break;
+	}
+	// Clear first: the budget-guarded setter would clamp a boost applied before the cuts
+	// (e.g. TRAVEL's Engine 2.0 while combat's 1.3/1.3 still holds the reactor).
+	SetSystemPower(EShipSystem::Engine, 0.f);
+	SetSystemPower(EShipSystem::Weapons, 0.f);
+	SetSystemPower(EShipSystem::Shields, 0.f);
+	SetSystemPower(EShipSystem::Engine, Engine);
+	SetSystemPower(EShipSystem::Weapons, Weapons);
+	SetSystemPower(EShipSystem::Shields, Shields);
+	UE_LOG(LogTemp, Log, TEXT("[Power] Preset %d -> E %.1f / W %.1f / S %.1f"),
+		(int32)Preset, Engine, Weapons, Shields);
+}

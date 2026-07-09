@@ -261,6 +261,21 @@ bool ASpaceship::CanDock() const
 	return Speed <= DockMaxSpeed;
 }
 
+void ASpaceship::SetRedAlert(bool bNewRed)
+{
+	if (bRedAlert == bNewRed)
+	{
+		return;
+	}
+	bRedAlert = bNewRed;
+	if (bRedAlert && AlarmAudio && AlarmAudio->GetSound())
+	{
+		// One alarm sting as the ship goes to battle stations (the loop stays owned by low-hull).
+		UGameplayStatics::PlaySound2D(this, AlarmAudio->GetSound(), 0.55f);
+	}
+	UE_LOG(LogTemp, Log, TEXT("[Ship] Alert state -> %s"), bRedAlert ? TEXT("RED") : TEXT("GREEN"));
+}
+
 bool ASpaceship::Dock()
 {
 	if (!CanDock()) { return false; }
@@ -550,6 +565,13 @@ void ASpaceship::Tick(float DeltaSeconds)
 	{
 		const float EnginePower = PowerComp ? PowerComp->GetSystemPower(EShipSystem::Engine) : 1.f;
 		WarpCharge = FMath::Clamp(WarpCharge + WarpChargeRate * EnginePower * DeltaSeconds, 0.f, 1.f);
+	}
+
+	// Alert doctrine (M29): shields build only at red alert, and bleed off at green. Docked
+	// ships are combat-safe — hold the pool steady either way.
+	if (HealthComp && !bDocked)
+	{
+		HealthComp->TickShield(DeltaSeconds, bRedAlert);
 	}
 
 	HandleCollisions(DeltaSeconds);

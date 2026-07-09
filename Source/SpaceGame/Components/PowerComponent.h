@@ -6,6 +6,15 @@
 #include "Components/ActorComponent.h"
 #include "PowerComponent.generated.h"
 
+/** One-tap Engineering power doctrines (M29): a full Engine/Weapons/Shields triple each. */
+UENUM(BlueprintType)
+enum class EPowerPreset : uint8
+{
+	Balanced UMETA(DisplayName = "Balanced"), // 1.0 / 1.0 / 1.0
+	Combat   UMETA(DisplayName = "Combat"),   // guns + shields up, engines trimmed
+	Travel   UMETA(DisplayName = "Travel")    // engines redlined, everything else trimmed
+};
+
 /** Ship systems that draw power. Each maps to one Engineering row + one stat. */
 UENUM(BlueprintType)
 enum class EShipSystem : uint8
@@ -48,6 +57,10 @@ public:
 	/** Sum of all system power, for the reactor-load readout. */
 	UFUNCTION(BlueprintPure, Category = "Ship|Power")
 	float GetTotalPower() const;
+
+	/** Snap all three systems to a doctrine's triple in one tap (M29). Stays within budget. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Power")
+	void ApplyPreset(EPowerPreset Preset);
 
 	/** Ceiling for any single system (nominal = 1.0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Power")

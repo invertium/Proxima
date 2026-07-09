@@ -104,3 +104,33 @@ void UHealthComponent::ResetPools()
 	Shield = MaxShield;
 	bDeathBroadcast = false;
 }
+
+void UHealthComponent::TickShield(float DeltaSeconds, bool bCharging)
+{
+	// M29 alert doctrine: emitters only build charge at red alert; at green the pool bleeds
+	// away as they idle down. Dead ships don't tick shields.
+	if (Hull <= 0.f || DeltaSeconds <= 0.f)
+	{
+		return;
+	}
+	if (bCharging)
+	{
+		float ShieldPower = 1.f;
+		if (!CachedPower)
+		{
+			if (const AActor* Owner = GetOwner())
+			{
+				CachedPower = Owner->FindComponentByClass<UPowerComponent>();
+			}
+		}
+		if (CachedPower)
+		{
+			ShieldPower = CachedPower->GetSystemPower(EShipSystem::Shields);
+		}
+		Shield = FMath::Min(MaxShield, Shield + ShieldChargeRate * ShieldPower * DeltaSeconds);
+	}
+	else
+	{
+		Shield = FMath::Max(0.f, Shield - ShieldBleedRate * DeltaSeconds);
+	}
+}

@@ -113,6 +113,10 @@ private:
 	UFUNCTION(BlueprintCallable, Category = "Bridge")
 	void HelmDockToggle();
 
+	/** B (Helm): toggle red alert — battle stations (shields charge only at red, M29). */
+	UFUNCTION(BlueprintCallable, Category = "Bridge")
+	void HelmRedAlertToggle();
+
 	/** R (Helm): tactical warp along the bow, if charged. */
 	UFUNCTION(BlueprintCallable, Category = "Bridge")
 	void HelmWarp();

@@ -98,6 +98,9 @@ setInterval(poll,500);poll();
    border-radius:12px;padding:20px;width:100%;font-size:1.25rem;letter-spacing:1px;margin-top:14px}
  button:active{background:#16263f}
  button.rdy{border-color:#43ff7a;color:#aef0c0;background:#0e2418}
+ body.red{background:#170406}
+ body.red header{border-bottom-color:#ff3b30;background:#2a0709;color:#ffb3ad}
+ body.red button{border-color:#7a2622}
  button.blk{color:#6f86a8;border-color:#33425c;background:#0b1220}
  .row{display:flex;gap:12px}.row button{margin-top:12px}
  input[type=range]{width:100%;height:42px;margin-top:16px}
@@ -132,7 +135,11 @@ function renderFooter(s){const f=$('#gs'),l=$('#gsl');
  else if(s.phase==='defeat'){l.textContent='✖ DEFEAT';f.className='gs lose';}
  else if(s.engaged){l.textContent='● ENCOUNTER LIVE';f.className='gs live';}
  else{l.textContent='◇ EN ROUTE — '+(s.objective||'objective');f.className='gs live';}}
-async function poll(){try{const r=await fetch('/api/state');const s=await r.json();render(s);renderFooter(s);}catch(e){}}
+async function poll(){try{const r=await fetch('/api/state');const s=await r.json();
+ document.body.classList.toggle('red',s.alert==='red');
+ const ab=$('#alertbtn');if(ab){ab.textContent=s.alert==='red'?'⚠ STAND DOWN — GREEN':'⚠ RED ALERT';
+  ab.style.borderColor=s.alert==='red'?'#ff3b30':'';ab.style.color=s.alert==='red'?'#ff8d85':'';}
+ render(s);renderFooter(s);}catch(e){}}
 let smapTimer=null;
 async function refreshStarmap(){try{const d=await(await fetch('/api/starmap')).json();drawStarmap(d);}catch(e){}}
 function openStarmap(){refreshStarmap();$('#smap').style.display='flex';
@@ -209,6 +216,9 @@ setInterval(poll,250);poll();
 			"<span style='color:#78b4ff'>&#9632; TORPEDO</span></div>"
 			"<button onclick='openStarmap()' style='width:auto;margin:10px auto 0;display:block;"
 			"padding:8px 18px;font-size:.9rem'>&#9678; SECTOR MAP</button>"
+			// Red alert toggle (M29): whole-bridge doctrine — shields only charge at red.
+			"<button id='alertbtn' onclick=\"post('/api/alert?state=toggle')\" "
+			"style='padding:12px;font-size:1.05rem'>&#9888; RED ALERT</button>"
 			"<div class='stat'><b>HEADING</b><span id='hdg' class='big'>0&deg;</span></div>"
 			"<div class='stat'><b>SPEED</b><span id='spd'>0</span></div>"
 			"<div class='stat'><b>THROTTLE</b><span id='thr'>0%</span></div>"
@@ -349,7 +359,15 @@ setInterval(poll,250);poll();
 			TEXT("<label>HULL INTEGRITY</label>"
 			     "<div style='height:22px;background:#0b1220;border:1px solid #15243a;border-radius:6px;overflow:hidden'>"
 			     "<div id='hullbar' style='height:100%;width:0%;background:#43ff7a;transition:width .2s'></div></div>"
-			     "<div class='stat'><b>HULL</b><span id='hull' class='big'>-</span></div>")
+			     "<div class='stat'><b>HULL</b><span id='hull' class='big'>-</span></div>"
+			     "<div class='stat'><b>SHIELD</b><span id='shld' class='big'>-</span></div>"
+			     // One-tap power doctrines (M29): each triple sums to the nominal budget.
+			     "<label>POWER PRESETS</label>"
+			     "<div class='row'>"
+			     "<button onclick=\"post('/api/power?preset=combat')\">&#9876; COMBAT</button>"
+			     "<button onclick=\"post('/api/power?preset=travel')\">&#10148; TRAVEL</button>"
+			     "<button onclick=\"post('/api/power?preset=balanced')\">&#9878; BALANCED</button>"
+			     "</div>")
 			+ Sys(TEXT("ENGINE"), 0) + Sys(TEXT("WEAPONS"), 1) + Sys(TEXT("SHIELDS"), 2)
 			+ TEXT(
 			     "<label id='dclab'>DAMAGE CONTROL &mdash; WELD WHEN THE MARKER HITS THE GREEN</label>"
@@ -397,6 +415,9 @@ setInterval(poll,250);poll();
 			"$('#hullbar').style.width=Math.round(f*100)+'%';"
 			"$('#hullbar').style.background=f<0.3?'#ff5a4a':(f<0.6?'#e6b800':'#43ff7a');"
 			"$('#hull').textContent=Math.round(s.hull)+' / '+Math.round(s.maxHull);"
+			// Shield pool + alert doctrine readout (M29): charging at red, bleeding at green.
+			"const sh=$('#shld');sh.textContent=Math.round(s.shield)+' / '+Math.round(s.maxShield)"
+			"+(s.alert==='red'?' \\u25b2':' \\u25bc');sh.style.color=s.alert==='red'?'#ff8d85':'';"
 			// Drydock store: wallet + a buy row per upgrade. Active only while docked; otherwise dimmed.
 			"$('#wallet').textContent=s.credits+' cr \\u00b7 RANK '+s.rank;"
 			"const dd=$('#drydock'),shop=$('#shop');dd.style.opacity=s.docked?1:.5;"
@@ -596,6 +617,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/state"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleState);
 	Bind(TEXT("/api/starmap"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleStarmap);
 	Bind(TEXT("/api/contract"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleContract);
+	Bind(TEXT("/api/alert"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleAlert);
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
 	Bind(TEXT("/api/warp"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWarp);
@@ -904,7 +926,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"charge\":%.3f,\"target\":\"%s\",\"targetRange\":%.1f,\"inRange\":%s,\"inArc\":%s,"
 		"\"inArcTorp\":%s,\"phaserArc\":%.0f,\"torpedoArc\":%.0f,"
 		"\"power\":[%.3f,%.3f,%.3f],\"reactorLoad\":%.3f,\"reactorBudget\":%.3f,"
-		"\"hull\":%.1f,\"maxHull\":%.1f,"
+		"\"hull\":%.1f,\"maxHull\":%.1f,\"shield\":%.1f,\"maxShield\":%.1f,\"alert\":\"%s\","
 		"\"ammo\":%d,\"maxAmmo\":%d,\"torpedoReady\":%s,\"torpedoReload\":%.3f,"
 		"\"sciTarget\":\"%s\",\"sciProgress\":%.3f,\"sciScanning\":%s,\"sciScanned\":%s,"
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
@@ -932,6 +954,9 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Power ? Power->ReactorBudget : 0.f,
 		Health ? Health->GetHull() : 0.f,
 		Health ? Health->GetMaxHull() : 0.f,
+		Health ? Health->GetShield() : 0.f,
+		Health ? Health->GetMaxShield() : 0.f,
+		(Ship && Ship->IsRedAlert()) ? TEXT("red") : TEXT("green"),
 		Torp ? Torp->GetAmmo() : 0,
 		Torp ? Torp->GetMaxAmmo() : 0,
 		(Torp && Torp->IsReady()) ? TEXT("true") : TEXT("false"),
@@ -960,6 +985,25 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Heading, HelmRadarRangeUU * SensorMult, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleAlert(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Alert state (M29): /api/alert?state=red|green|toggle. Any console may call the ship to
+	// battle stations (it's a whole-bridge doctrine, not a station-gated control).
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
+	{
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
+	}
+	const FString* State = Request.QueryParams.Find(TEXT("state"));
+	if (State && *State == TEXT("red"))        { Ship->SetRedAlert(true); }
+	else if (State && *State == TEXT("green")) { Ship->SetRedAlert(false); }
+	else                                       { Ship->ToggleRedAlert(); }
+	OnComplete(MakeVerdict(true));
 	return true;
 }
 
@@ -1324,6 +1368,19 @@ bool UStationServerSubsystem::HandlePower(const FHttpServerRequest& Request, con
 		return true;
 	}
 	UPowerComponent* Power = Ship->GetPowerComp();
+	// One-tap doctrine presets (M29): /api/power?preset=combat|travel|balanced.
+	if (Power)
+	{
+		if (const FString* Preset = Request.QueryParams.Find(TEXT("preset")))
+		{
+			EPowerPreset Pick = EPowerPreset::Balanced;
+			if (*Preset == TEXT("combat")) { Pick = EPowerPreset::Combat; }
+			if (*Preset == TEXT("travel")) { Pick = EPowerPreset::Travel; }
+			Power->ApplyPreset(Pick);
+			OnComplete(MakeVerdict(true));
+			return true;
+		}
+	}
 	if (!Power || !Request.QueryParams.Contains(TEXT("system")))
 	{
 		OnComplete(MakeVerdict(false, TEXT("missing system")));

@@ -64,6 +64,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Feel")
 	void AddCameraTrauma(float Amount);
 
+	// --- Alert state (M29): red alert gates shield charging ---
+
+	/** True while the ship stands at red alert (shields charge; consoles tint red). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Alert")
+	bool IsRedAlert() const { return bRedAlert; }
+
+	/** Set the alert state; going red plays the alarm sting. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Alert")
+	void SetRedAlert(bool bNewRed);
+
+	UFUNCTION(BlueprintCallable, Category = "Ship|Alert")
+	void ToggleRedAlert() { SetRedAlert(!bRedAlert); }
+
 	// --- Docking (M19): dock at a friendly station to upgrade, repair, and restock ---
 
 	/** True while docked to a station. */
@@ -198,6 +211,10 @@ protected:
 	/** Hull-hit SFX (CC0), loaded in the constructor; played 2D when the player takes damage. */
 	UPROPERTY(EditAnywhere, Category = "Ship|Feel")
 	TObjectPtr<USoundBase> HitSound;
+
+	/** Red alert (M29): shields only charge while this is set; consoles tint red. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Alert")
+	bool bRedAlert = false;
 
 	// --- Ambient audio (M14 nice-to-haves) ---
 

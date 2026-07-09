@@ -259,6 +259,16 @@ void UMissionSubsystem::TriggerActiveEncounter()
 	bEncounterLive = true;
 	SpawnFleet(*World);
 
+	// M29: nudge the crew onto the alert doctrine the moment hostiles power up.
+	if (const ASpaceship* Ship = Cast<ASpaceship>(UGameplayStatics::GetPlayerPawn(World, 0)))
+	{
+		if (!Ship->IsRedAlert())
+		{
+			PostComms(TEXT("TACTICAL"),
+				TEXT("Hostiles powering up! Recommend RED ALERT, Captain — shields won't charge without it."));
+		}
+	}
+
 	// Time the mission's comms beats from the moment the fight opens.
 	StartTime = World->GetTimeSeconds();
 	World->GetTimerManager().SetTimer(BeatTimer, this, &UMissionSubsystem::CheckTimedBeats, 0.25f, true);
