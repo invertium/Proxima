@@ -184,6 +184,17 @@ void UMissionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	SpawnStation(InWorld);
 	SpawnLandmarks(InWorld);
 
+	// Skirmish mode (M30): endless waves at Ember instead of the campaign flow. No objectives,
+	// no travel events, no contracts — a pure fight with a wave counter.
+	if (const USpaceGameInstance* SkirmishGI = InWorld.GetGameInstance<USpaceGameInstance>())
+	{
+		if (SkirmishGI->IsSkirmish())
+		{
+			StartSkirmish(InWorld);
+			return;
+		}
+	}
+
 	// Arm the active objective (fire its briefing) and start the director watching for proximity.
 	BeginObjective(MissionIndex);
 	InWorld.GetTimerManager().SetTimer(DirectorTimer, this, &UMissionSubsystem::CheckDirector, 0.25f, true);
@@ -375,10 +386,32 @@ void UMissionSubsystem::HandleEnemyKilled(AActor* DeadActor)
 		}
 	}
 
-	// The just-killed ship reads hull 0 (not alive); when the whole fleet is down, the sector clears.
+	// M30 flagship phase: once the shield drones are down, the flagship becomes vulnerable.
+	if (Flagship.IsValid() && Flagship->IsEscortShielded() && CountEscortsAlive() == 0)
+	{
+		if (UHealthComponent* H = Flagship->GetHealthComp())
+		{
+			H->SetInvulnerable(false);
+		}
+		Flagship->SetEscortShielded(false);
+		PostComms(TEXT("SCIENCE"), FString::Printf(
+			TEXT("The drones are down — %s's shield matrix just collapsed. She's vulnerable, hit her with everything!"),
+			*Flagship->GetCallsign()));
+		UE_LOG(LogTemp, Log, TEXT("[Sector] Flagship shields DOWN — escorts destroyed"));
+	}
+
+	// The just-killed ship reads hull 0 (not alive); when the whole fleet is down, the sector
+	// clears — or, in skirmish, the next wave spins up.
 	if (bEncounterLive && CountLiveFleet() == 0)
 	{
-		OnFleetCleared();
+		if (bSkirmishMode)
+		{
+			OnWaveCleared();
+		}
+		else
+		{
+			OnFleetCleared();
+		}
 	}
 }
 
@@ -1026,11 +1059,138 @@ void UMissionSubsystem::SpawnFleet(UWorld& World)
 		}
 	}
 
+	// M30: the final campaign objective is a phase fight — the flagship starts invulnerable
+	// behind its shield-drone escorts.
+	if (!bSkirmishMode && MissionIndex == MissionCount() - 1)
+	{
+		WireFlagshipFight();
+	}
+
 	// Subsystems begin play after the player controller, so its win-condition binding ran before
 	// these ships existed — re-bind now that the fleet is spawned.
 	if (ABridgePlayerController* PC = Cast<ABridgePlayerController>(
 		UGameplayStatics::GetPlayerController(&World, 0)))
 	{
 		PC->BindEnemyDeaths();
+	}
+}
+
+void UMissionSubsystem::WireFlagshipFight()
+{
+	// The fleet's cruiser is the Warlord's flagship; its scouts become AEGIS shield drones.
+	// The flagship takes zero damage until both drones die (HandleEnemyKilled drops the
+	// shields); Science's scan calls the tactic out (UScienceComponent).
+	Flagship = nullptr;
+	FlagshipEscorts.Reset();
+	int32 DroneOrdinal = 0;
+	for (const TWeakObjectPtr<AEnemyShip>& Ptr : LiveFleet)
+	{
+		AEnemyShip* Enemy = Ptr.Get();
+		if (!Enemy) { continue; }
+		if (Enemy->ShipType == EEnemyType::Cruiser && !Flagship.IsValid())
+		{
+			Flagship = Enemy;
+			Enemy->SetEscortShielded(true);
+			if (UHealthComponent* H = Enemy->GetHealthComp())
+			{
+				H->SetInvulnerable(true);
+			}
+		}
+		else if (Enemy->ShipType == EEnemyType::Scout)
+		{
+			Enemy->Callsign = FString::Printf(TEXT("AEGIS-%d"), ++DroneOrdinal);
+			FlagshipEscorts.Add(Enemy);
+		}
+	}
+	if (Flagship.IsValid())
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Sector] Flagship fight wired: %s shielded by %d drone(s)"),
+			*Flagship->GetCallsign(), FlagshipEscorts.Num());
+	}
+}
+
+int32 UMissionSubsystem::CountEscortsAlive() const
+{
+	int32 Alive = 0;
+	for (const TWeakObjectPtr<AEnemyShip>& Ptr : FlagshipEscorts)
+	{
+		const AEnemyShip* Enemy = Ptr.Get();
+		const UHealthComponent* Health = Enemy ? Enemy->GetHealthComp() : nullptr;
+		if (Health && Health->IsAlive()) { ++Alive; }
+	}
+	return Alive;
+}
+
+void UMissionSubsystem::StartSkirmish(UWorld& World)
+{
+	bSkirmishMode = true;
+	SkirmishWave = 0;
+
+	// The arena is the Pact staging point: park the ship off Ember so wave 1 is right there.
+	const FVector Arena = GetSystemLocation(MissionCount() - 1);
+	if (APawn* Player = UGameplayStatics::GetPlayerPawn(&World, 0))
+	{
+		Player->SetActorLocation(Arena - FVector(16000.f, 0.f, 0.f), false, nullptr,
+			ETeleportType::TeleportPhysics);
+	}
+
+	PostComms(TEXT("FLEET COMMAND"),
+		TEXT("Skirmish exercise live: hold position at Ember and repel everything the Pact throws at you. Waves will keep coming — good hunting."));
+	World.GetTimerManager().SetTimer(WaveTimer, this, &UMissionSubsystem::SpawnWave, 6.f, false);
+	UE_LOG(LogTemp, Log, TEXT("[Sector] SKIRMISH mode — first wave in 6s"));
+}
+
+void UMissionSubsystem::SpawnWave()
+{
+	UWorld* World = GetWorld();
+	if (!World || !bSkirmishMode) { return; }
+
+	++SkirmishWave;
+
+	// Composition scales with the wave: more scouts, then gunships, then cruisers (cap 6).
+	TArray<EEnemyType> Types;
+	const int32 Scouts = 1 + SkirmishWave / 3;
+	const int32 Gunships = SkirmishWave / 2;
+	const int32 Cruisers = SkirmishWave / 4;
+	for (int32 i = 0; i < Scouts; ++i)   { Types.Add(EEnemyType::Scout); }
+	for (int32 i = 0; i < Gunships; ++i) { Types.Add(EEnemyType::Gunship); }
+	for (int32 i = 0; i < Cruisers; ++i) { Types.Add(EEnemyType::Cruiser); }
+	if (Types.Num() > 6) { Types.SetNum(6); }
+
+	// Reuse the campaign spawner: aim it at Ember with the wave as the "mission" fleet.
+	MissionIndex = MissionCount() - 1;
+	Mission = GetMissionDef(MissionIndex);
+	Mission.Comms.Reset(); // no campaign beats in skirmish
+	Mission.Enemies = Types;
+	Mission.EngageDelayOverride = 6.f; // waves come in hot — shorter grace than a campaign start
+	bEncounterLive = true;
+	SpawnFleet(*World);
+
+	PostComms(TEXT("TACTICAL"), FString::Printf(
+		TEXT("WAVE %d inbound — %d contact(s) powering up!"), SkirmishWave, Types.Num()));
+	UE_LOG(LogTemp, Log, TEXT("[Sector] SKIRMISH wave %d: %d hostile(s)"), SkirmishWave, Types.Num());
+}
+
+void UMissionSubsystem::OnWaveCleared()
+{
+	UWorld* World = GetWorld();
+	bEncounterLive = false;
+	LiveFleet.Reset();
+
+	// Wave bonus on top of the per-kill salvage; nothing is saved — skirmish is a sandbox.
+	const int32 Bonus = 25 * SkirmishWave;
+	if (USpaceGameInstance* GI = World ? World->GetGameInstance<USpaceGameInstance>() : nullptr)
+	{
+		GI->AddReward(Bonus, 10 * SkirmishWave);
+	}
+	PostComms(TEXT("FLEET COMMAND"), FString::Printf(
+		TEXT("Wave %d repelled — +%d credit bonus wired. Next wave in %.0f seconds, stay sharp."),
+		SkirmishWave, Bonus, WaveInterval));
+	UE_LOG(LogTemp, Log, TEXT("[Sector] SKIRMISH wave %d CLEARED (+%d cr) — next in %.0fs"),
+		SkirmishWave, Bonus, WaveInterval);
+
+	if (World)
+	{
+		World->GetTimerManager().SetTimer(WaveTimer, this, &UMissionSubsystem::SpawnWave, WaveInterval, false);
 	}
 }

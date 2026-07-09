@@ -133,6 +133,7 @@ function post(path){fetch(path);}
 function renderFooter(s){const f=$('#gs'),l=$('#gsl');
  if(s.phase==='victory'){l.textContent='✔ VICTORY';f.className='gs win';}
  else if(s.phase==='defeat'){l.textContent='✖ DEFEAT';f.className='gs lose';}
+ else if(s.wave>0){l.textContent=s.engaged?('● WAVE '+s.wave+' — REPEL THE ATTACK'):('◇ WAVE '+(s.wave+1)+' INBOUND');f.className='gs live';}
  else if(s.engaged){l.textContent='● ENCOUNTER LIVE';f.className='gs live';}
  else{l.textContent='◇ EN ROUTE — '+(s.objective||'objective');f.className='gs live';}}
 async function poll(){try{const r=await fetch('/api/state');const s=await r.json();
@@ -852,6 +853,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	FString Comms;
 	bool bEngaged = false;      // an active fleet is up (proximity-triggered).
 	float ObjectiveDist = -1.f; // planar range to the objective landmark.
+	int32 Wave = 0;             // skirmish wave counter (0 = not in skirmish, M30).
 	if (const UWorld* World = GetWorld())
 	{
 		if (const UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
@@ -860,6 +862,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 			ObjectiveName = MS->GetObjectiveName();
 			bEngaged = MS->IsEncounterLive();
 			ObjectiveDist = MS->GetObjectiveDistance();
+			Wave = MS->GetSkirmishWave();
 			for (const FCommsMessage& M : MS->GetComms())
 			{
 				if (!Comms.IsEmpty()) { Comms += TEXT(","); }
@@ -931,7 +934,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciTarget\":\"%s\",\"sciProgress\":%.3f,\"sciScanning\":%s,\"sciScanned\":%s,"
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
-		"\"objective\":\"%s\",\"engaged\":%s,\"objectiveDist\":%.0f,"
+		"\"objective\":\"%s\",\"engaged\":%s,\"objectiveDist\":%.0f,\"wave\":%d,"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
 		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,"
 		"\"warpCharge\":%.3f,\"warpReady\":%s,\"upgrades\":[%s],\"ships\":[%s],"
@@ -970,7 +973,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Sci ? Sci->GetTargetShield() : -1.f,
 		Sci ? Sci->GetTargetMaxShield() : -1.f,
 		*MissionName, *Comms,
-		*JsonEscape(ObjectiveName), bEngaged ? TEXT("true") : TEXT("false"), ObjectiveDist,
+		*JsonEscape(ObjectiveName), bEngaged ? TEXT("true") : TEXT("false"), ObjectiveDist, Wave,
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),

@@ -30,6 +30,18 @@ enum class EGamePhase : uint8
 };
 
 /**
+ * Campaign difficulty (M30), chosen at New Game and persisted in the save. Scales hostile
+ * firepower and durability around the Captain baseline.
+ */
+UENUM(BlueprintType)
+enum class EDifficulty : uint8
+{
+	Ensign  UMETA(DisplayName = "Ensign"),  // softer hostiles
+	Captain UMETA(DisplayName = "Captain"), // the tuned baseline
+	Admiral UMETA(DisplayName = "Admiral")  // harder-hitting, tougher hostiles
+};
+
+/**
  * A station contract's kind (M28). One may be active at a time; it persists in the save.
  */
 UENUM(BlueprintType)

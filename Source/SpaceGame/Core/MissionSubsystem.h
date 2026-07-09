@@ -202,6 +202,10 @@ public:
 	/** Wire name for a contract type ("bounty"/"patrol"/"delivery"). */
 	static const TCHAR* ContractTypeName(EContractType Type);
 
+	/** Current skirmish wave number (0 when not in skirmish mode), for the wave HUD (M30). */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	int32 GetSkirmishWave() const { return SkirmishWave; }
+
 private:
 	/** Spawn the friendly starbase just behind the player's start (once per encounter). */
 	void SpawnStation(UWorld& World);
@@ -276,6 +280,23 @@ private:
 	UFUNCTION()
 	void HandleBountyKilled(AActor* DeadActor);
 
+	// --- M30 skirmish + flagship phase ---
+
+	/** Enter skirmish mode at world start: park the ship at Ember and schedule wave 1. */
+	void StartSkirmish(UWorld& World);
+
+	/** Spawn the next wave around Ember (composition scales with the wave number). */
+	void SpawnWave();
+
+	/** Wave wiped: pay the wave bonus, announce, and schedule the next one. */
+	void OnWaveCleared();
+
+	/** Final mission only: make the cruiser a shielded flagship guarded by drone escorts. */
+	void WireFlagshipFight();
+
+	/** How many of the flagship's escort drones are still alive. */
+	int32 CountEscortsAlive() const;
+
 	/** Append a beat to the comms log (once). */
 	void FireBeat(FCommsBeat& Beat);
 
@@ -327,6 +348,24 @@ private:
 	/** Planar range (uu) that counts as "visiting" a contract waypoint. */
 	UPROPERTY(EditAnywhere, Category = "Mission|Contracts")
 	float ContractVisitRange = 9000.f;
+
+	// --- M30 skirmish + flagship state ---
+
+	/** True when this world runs endless waves instead of the campaign (from GI at begin play). */
+	bool bSkirmishMode = false;
+
+	/** Current wave number (1-based once the first wave spawns). */
+	int32 SkirmishWave = 0;
+
+	FTimerHandle WaveTimer;
+
+	/** Seconds between a wave clear and the next wave powering up. */
+	UPROPERTY(EditAnywhere, Category = "Mission|Skirmish")
+	float WaveInterval = 12.f;
+
+	/** The final mission's flagship + its shield-drone escorts (M30 phase fight). */
+	TWeakObjectPtr<AEnemyShip> Flagship;
+	TArray<TWeakObjectPtr<AEnemyShip>> FlagshipEscorts;
 
 	// M27 tunables (first pass): roll cadence + odds, per-event lifetimes, payouts.
 	UPROPERTY(EditAnywhere, Category = "Mission|Events") float EventRollInterval = 25.f;

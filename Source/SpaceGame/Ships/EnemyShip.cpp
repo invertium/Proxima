@@ -10,6 +10,7 @@
 #include "FX/Debris.h"
 #include "FX/ExplosionFx.h"
 #include "FX/TorpedoProjectile.h"
+#include "Core/SpaceGameInstance.h"
 #include "Materials/MaterialInterface.h"
 #include "Sound/SoundBase.h"
 #include "Kismet/GameplayStatics.h"
@@ -156,6 +157,21 @@ void AEnemyShip::ApplyTypePreset()
 	}
 	if (UMaterialInterface* Fx = Cast<UMaterialInterface>(Load(FxPath))) { FxMaterial = Fx; }
 	if (RadarContact) { RadarContact->BlipColor = Blip; }
+
+	// M30 difficulty: scale hostile firepower + durability around the Captain baseline.
+	if (const UWorld* World = GetWorld())
+	{
+		if (const USpaceGameInstance* GI = World->GetGameInstance<USpaceGameInstance>())
+		{
+			EnemyBeamDamage *= GI->GetEnemyDamageMult();
+			TorpedoDamage *= GI->GetEnemyDamageMult();
+			if (HealthComp)
+			{
+				HealthComp->MaxHull *= GI->GetEnemyHullMult();
+				HealthComp->MaxShield *= GI->GetEnemyHullMult();
+			}
+		}
+	}
 
 	// New Max values just landed — refill the pools so the ship starts at full for its type.
 	if (HealthComp) { HealthComp->ResetPools(); }

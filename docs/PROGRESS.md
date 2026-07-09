@@ -1427,3 +1427,37 @@ inert on Weapons; the TACTICAL "Recommend RED ALERT" beat fired on encounter tri
 (Commit: Ships/Spaceship.{h,cpp} + Components/{HealthComponent,PowerComponent}.{h,cpp} +
 Core/{BridgePlayerController.{h,cpp},BridgeHUDWidget.cpp,MenuUI.h,MissionSubsystem.cpp} +
 Net/StationServerSubsystem.{h,cpp} + docs.)
+
+---
+
+## 2026-07-09 — 👑 M30 Final battle v2 + skirmish + difficulty
+
+Q5's closer: the campaign finale becomes a phase fight, and the game grows a post-campaign
+mode and a challenge dial.
+- **Flagship phase fight** (final objective only): the Warlord's cruiser spawns
+  **invulnerable** behind two **AEGIS shield drones** (the mission's scouts, renamed). The
+  director (`WireFlagshipFight`) keeps `SetInvulnerable(true)` until both drones die, then
+  drops the matrix with a SCIENCE comms beat ("She's vulnerable — hit her with everything!").
+  Scanning the shielded flagship calls the tactic out instead of the M26 armor line.
+- **Skirmish mode** (`SKIRMISH` on the main menu): endless waves at Ember — the GI flag
+  routes the director into wave mode at world start (no objectives/events/contracts), parks
+  the ship off the sun, and reuses the campaign spawner per wave. Composition scales
+  (scouts → gunships → cruisers, cap 6; 6 s engage grace), each clear pays a rising bonus
+  (25 cr × wave) + comms, next wave in 12 s (`WaveInterval`). The web footer becomes a
+  **wave HUD**: "● WAVE N — REPEL THE ATTACK" / "◇ WAVE N+1 INBOUND" (`wave` in /api/state).
+  Nothing is saved; defeat + RESTART rebuilds wave 1. NEW GAME/CONTINUE clear the flag.
+- **Difficulty selector** (`EDifficulty`, persisted in the save): a second New Game step
+  after the ship pick — ENSIGN (enemy damage ×0.7, hull ×0.75), CAPTAIN (baseline), ADMIRAL
+  (×1.4 / ×1.3) — applied in `ApplyTypePreset` to every spawned hostile.
+
+**Verified (PIE + /api):** [L] flagship phase exact — 1 000 raw damage (beam + shield-bypass
+torpedo) left LEVIATHAN-1 at 220/220 hull, 110 shield; scan fired the drone callout; killing
+AEGIS-1/2 fired the collapse beat and the next 30 damage landed (shield 110→80). [L] skirmish
+scripted run cleared waves 1–3 (compositions 1/2/3 ships, credits 80→145→315→550 with kill +
+bonus math exact) and wave 4 (5 ships) spawned live; a wave-4 fleet then actually killed the
+idle test ship — defeat screen took over the footer as designed. Admiral scaling exact on a
+live fleet (scout 65/26 hull/shield + 7.0 beam; cruiser 286/143 + 19.6). [S] `wave_hud2.png`:
+the weapons console footer reading "● WAVE 1 — REPEL THE ATTACK". (Commit:
+Core/{StationTypes,SpaceSaveGame,SpaceGameInstance{,.cpp},MissionSubsystem{,.cpp},
+MainMenuWidget{,.cpp}}.h/.cpp + Ships/EnemyShip.{h,cpp} + Components/ScienceComponent.cpp +
+Net/StationServerSubsystem.cpp + docs.)

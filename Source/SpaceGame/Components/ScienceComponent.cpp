@@ -123,13 +123,24 @@ void UScienceComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 			UE_LOG(LogTemp, Log, TEXT("[Science] Scan complete: %s"), *ScanTarget->GetName());
 
 			// M26: scanning an armored cruiser exposes its weakpoint — beams go to full damage,
-			// confirmed on the comms log so the whole bridge hears it.
+			// confirmed on the comms log so the whole bridge hears it. M30: a scan of the
+			// escort-shielded flagship instead calls out the phase tactic.
 			if (AEnemyShip* Enemy = Cast<AEnemyShip>(ScanTarget))
 			{
-				if (Enemy->RevealWeakpoint())
+				UWorld* World = GetWorld();
+				UMissionSubsystem* MS = World ? World->GetSubsystem<UMissionSubsystem>() : nullptr;
+				if (Enemy->IsEscortShielded())
 				{
-					UWorld* World = GetWorld();
-					if (UMissionSubsystem* MS = World ? World->GetSubsystem<UMissionSubsystem>() : nullptr)
+					if (MS)
+					{
+						MS->PostComms(TEXT("SCIENCE"), FString::Printf(
+							TEXT("Scan complete — %s's shield matrix is projected by its escort drones. She's untouchable until the escorts are destroyed!"),
+							*Enemy->GetCallsign()));
+					}
+				}
+				else if (Enemy->RevealWeakpoint())
+				{
+					if (MS)
 					{
 						MS->PostComms(TEXT("SCIENCE"), FString::Printf(
 							TEXT("Scan complete — %s's armor gap is on the tactical grid. Beams to full effect."),

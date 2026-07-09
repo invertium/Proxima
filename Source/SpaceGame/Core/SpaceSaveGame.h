@@ -43,6 +43,10 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Campaign")
 	TArray<EPlayerShipType> OwnedShips;
 
+	/** Campaign difficulty (M30). */
+	UPROPERTY(VisibleAnywhere, Category = "Campaign")
+	EDifficulty Difficulty = EDifficulty::Captain;
+
 	// --- Active station contract (M28); None = no contract running ---
 
 	UPROPERTY(VisibleAnywhere, Category = "Campaign")

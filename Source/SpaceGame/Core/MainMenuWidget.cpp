@@ -81,6 +81,9 @@ void UMainMenuWidget::BuildUI()
 	ContinueLabel = Cast<UTextBlock>(ContinueButton->GetChildAt(0));
 	ContinueButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnContinue);
 
+	UButton* SkirmishBtn = AddMenuButton(WidgetTree, Box, TEXT("SKIRMISH"));
+	SkirmishBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnSkirmish);
+
 	UButton* ControlsBtn = AddMenuButton(WidgetTree, Box, TEXT("CONTROLS"));
 	ControlsBtn->OnClicked.AddDynamic(this, &UMainMenuWidget::OnControls);
 
@@ -135,7 +138,7 @@ void UMainMenuWidget::OnPickInterceptor()
 	{
 		GI->SetPlayerShip(EPlayerShipType::Interceptor);
 	}
-	StartCampaign();
+	ShowDifficultyPanel();
 }
 
 void UMainMenuWidget::OnPickCruiser()
@@ -144,7 +147,58 @@ void UMainMenuWidget::OnPickCruiser()
 	{
 		GI->SetPlayerShip(EPlayerShipType::Cruiser);
 	}
+	ShowDifficultyPanel();
+}
+
+void UMainMenuWidget::ShowDifficultyPanel()
+{
+	// Second New Game step (M30): pick the challenge before the campaign starts.
+	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
+	if (UVerticalBoxSlot* S = Box->AddChildToVerticalBox(
+		MakeText(WidgetTree, FText::FromString(TEXT("SELECT DIFFICULTY")), 36, FLinearColor(0.6f, 0.85f, 1.f, 1.f))))
+	{
+		S->SetPadding(FMargin(0.f, 0.f, 0.f, 24.f));
+		S->SetHorizontalAlignment(HAlign_Center);
+	}
+	AddMenuButton(WidgetTree, Box, TEXT("ENSIGN  —  a gentler frontier"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnPickEnsign);
+	AddMenuButton(WidgetTree, Box, TEXT("CAPTAIN  —  the intended fight"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnPickCaptain);
+	AddMenuButton(WidgetTree, Box, TEXT("ADMIRAL  —  the Pact hits back hard"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnPickAdmiral);
+	AddMenuButton(WidgetTree, Box, TEXT("BACK"))
+		->OnClicked.AddDynamic(this, &UMainMenuWidget::OnBack);
+
+	if (Root) { Root->SetContent(Box); }
+}
+
+void UMainMenuWidget::OnPickEnsign()
+{
+	if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>()) { GI->SetDifficulty(EDifficulty::Ensign); }
 	StartCampaign();
+}
+
+void UMainMenuWidget::OnPickCaptain()
+{
+	if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>()) { GI->SetDifficulty(EDifficulty::Captain); }
+	StartCampaign();
+}
+
+void UMainMenuWidget::OnPickAdmiral()
+{
+	if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>()) { GI->SetDifficulty(EDifficulty::Admiral); }
+	StartCampaign();
+}
+
+void UMainMenuWidget::OnSkirmish()
+{
+	// Endless waves at Ember (M30). Leaves the campaign save untouched; uses the current
+	// ship + difficulty. The GI flag routes the director into wave mode at world start.
+	if (USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>())
+	{
+		GI->SetSkirmish(true);
+	}
+	UGameplayStatics::OpenLevel(this, FName(EncounterMap));
 }
 
 void UMainMenuWidget::OnControls()
@@ -200,6 +254,7 @@ void UMainMenuWidget::OnContinue()
 	USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>();
 	if (GI && GI->LoadCampaign())
 	{
+		GI->SetSkirmish(false); // resuming the campaign always leaves skirmish mode
 		UGameplayStatics::OpenLevel(this, FName(EncounterMap));
 	}
 }

@@ -94,6 +94,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Enemy|AI")
 	void SetAggroRange(float Range) { AggroRange = Range; }
 
+	/** M30 flagship phase: true while escort drones project this hull's shield matrix (the
+	 *  director keeps the HealthComponent invulnerable until the escorts die). Science's
+	 *  scan reads this to call the tactic out on comms. */
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	bool IsEscortShielded() const { return bEscortShielded; }
+
+	UFUNCTION(BlueprintCallable, Category = "Enemy")
+	void SetEscortShielded(bool bShielded) { bEscortShielded = bShielded; }
+
 	/** Archetype, set by the mission spawner before FinishSpawning; applied in BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
 	EEnemyType ShipType = EEnemyType::Gunship;
@@ -244,6 +253,9 @@ private:
 
 	/** True once Science scanned an armored hull — beams land full damage from then on. */
 	bool bWeakpointKnown = false;
+
+	/** M30: escort drones currently project this hull's shield matrix (flagship phase). */
+	bool bEscortShielded = false;
 
 	/** Torpedoes still to launch in the running volley + the gap countdown to the next one. */
 	int32 VolleyRemaining = 0;

@@ -29,6 +29,7 @@ void USpaceGameInstance::ResetCampaign()
 	UpgradeTiers.Reset();
 	OwnedShips.Reset(); // starters stay owned implicitly via the catalogue
 	ClearContract();
+	bSkirmish = false; // a fresh campaign always leaves skirmish mode (difficulty is kept)
 	UE_LOG(LogTemp, Log, TEXT("[Campaign] Reset to mission 0 (wallet + upgrades + hangar + contract cleared)"));
 }
 
@@ -169,6 +170,7 @@ bool USpaceGameInstance::SaveCampaign()
 	Save->XP = XP;
 	Save->UpgradeTiers = UpgradeTiers;
 	Save->OwnedShips = OwnedShips;
+	Save->Difficulty = Difficulty;
 	Save->ContractType = ContractType;
 	Save->ContractTargetA = ContractTargetA;
 	Save->ContractTargetB = ContractTargetB;
@@ -199,6 +201,7 @@ bool USpaceGameInstance::LoadCampaign()
 	XP = FMath::Max(0, Save->XP);
 	UpgradeTiers = Save->UpgradeTiers;
 	OwnedShips = Save->OwnedShips;
+	Difficulty = Save->Difficulty;
 	ContractType = Save->ContractType;
 	ContractTargetA = Save->ContractTargetA;
 	ContractTargetB = Save->ContractTargetB;

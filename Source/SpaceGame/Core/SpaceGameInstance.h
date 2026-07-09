@@ -106,6 +106,35 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Campaign|Hangar")
 	bool SelectShip(EPlayerShipType Ship);
 
+	// --- Difficulty + skirmish (M30) ---
+
+	UFUNCTION(BlueprintPure, Category = "Campaign")
+	EDifficulty GetDifficulty() const { return Difficulty; }
+
+	UFUNCTION(BlueprintCallable, Category = "Campaign")
+	void SetDifficulty(EDifficulty InDifficulty) { Difficulty = InDifficulty; }
+
+	/** Hostile outgoing-damage multiplier for the difficulty (Captain = 1). */
+	UFUNCTION(BlueprintPure, Category = "Campaign")
+	float GetEnemyDamageMult() const
+	{
+		return Difficulty == EDifficulty::Ensign ? 0.7f : Difficulty == EDifficulty::Admiral ? 1.4f : 1.f;
+	}
+
+	/** Hostile hull/shield multiplier for the difficulty (Captain = 1). */
+	UFUNCTION(BlueprintPure, Category = "Campaign")
+	float GetEnemyHullMult() const
+	{
+		return Difficulty == EDifficulty::Ensign ? 0.75f : Difficulty == EDifficulty::Admiral ? 1.3f : 1.f;
+	}
+
+	/** True while running skirmish mode (endless waves at Ember; never saved). */
+	UFUNCTION(BlueprintPure, Category = "Campaign")
+	bool IsSkirmish() const { return bSkirmish; }
+
+	UFUNCTION(BlueprintCallable, Category = "Campaign")
+	void SetSkirmish(bool bInSkirmish) { bSkirmish = bInSkirmish; }
+
 	// --- Station contracts (M28): one active at a time, persisted in the save ---
 
 	UFUNCTION(BlueprintPure, Category = "Campaign|Contracts")
@@ -156,6 +185,14 @@ private:
 	/** Bought non-starter ships (starters are implicitly owned via the catalogue's Cost==0). */
 	UPROPERTY()
 	TArray<EPlayerShipType> OwnedShips;
+
+	/** Campaign difficulty (M30); persisted so CONTINUE keeps the chosen challenge. */
+	UPROPERTY()
+	EDifficulty Difficulty = EDifficulty::Captain;
+
+	/** Skirmish mode flag (M30); session-only, never saved. */
+	UPROPERTY()
+	bool bSkirmish = false;
 
 	// Active station contract (M28); mirrors USpaceSaveGame's contract block.
 	UPROPERTY() EContractType ContractType = EContractType::None;

@@ -39,6 +39,13 @@ private:
 	UFUNCTION() void OnPickCruiser();
 	UFUNCTION() void OnBack();
 
+	// Difficulty select (M30, shown after the ship pick) + skirmish mode.
+	void ShowDifficultyPanel();
+	UFUNCTION() void OnPickEnsign();
+	UFUNCTION() void OnPickCaptain();
+	UFUNCTION() void OnPickAdmiral();
+	UFUNCTION() void OnSkirmish();
+
 	/** Start a fresh campaign with the chosen ship. */
 	void StartCampaign();
 
