@@ -122,7 +122,7 @@ thin for anything paid. Missions are data-in-code (`BuildCampaign()`), so conten
 
 ## R5 — Web console hardening (ship-blocking because it's exposed on LAN)
 
-- [ ] **Access PIN:** the server binds 0.0.0.0 with zero auth, and mutating actions are
+- [x] **Access PIN:** the server binds 0.0.0.0 with zero auth, and mutating actions are
   unauthenticated GETs (`/api/warp`, `/api/buy`, `/api/game?action=restart`). Anyone on the
   LAN (or a malicious webpage doing cross-site GETs from any browser on the LAN — classic
   CSRF against local services) can control or reset the game. Minimum bar: a short session

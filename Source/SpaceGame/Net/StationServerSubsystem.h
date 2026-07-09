@@ -40,6 +40,10 @@ public:
 	 *  LAN adapter was found. Shown on the main/pause menus so nobody has to read the log (R2). */
 	static FString GetCrewUrl();
 
+	/** Session access PIN (R5): 4 digits, generated once per game session. Shown in-game as
+	 *  part of the crew URL; every HTTP route rejects requests that don't carry it. */
+	static const FString& GetSessionPin();
+
 private:
 	// --- Route handlers (all run on the game thread) ---
 	bool HandleIndex(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);

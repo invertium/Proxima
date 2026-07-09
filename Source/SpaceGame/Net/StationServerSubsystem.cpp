@@ -70,8 +70,10 @@ namespace
 <button onclick="if(confirm('Restart the encounter for everyone?'))game('restart')">RESTART</button>
 </div>
 <script>
-function game(a){fetch('/api/game?action='+a);}
-async function poll(){try{const s=await(await fetch('/api/state')).json();const e=document.getElementById('state');
+const PIN=new URLSearchParams(location.search).get('pin')||'';
+for(const a of document.querySelectorAll('a.s')){a.href=a.getAttribute('href')+'?pin='+PIN;}
+function game(a){fetch('/api/game?action='+a+'&pin='+PIN);}
+async function poll(){try{const s=await(await fetch('/api/state?pin='+PIN)).json();const e=document.getElementById('state');
  if(s.phase==='victory'){e.textContent='✔ VICTORY — all hostiles destroyed';e.className='win';}
  else if(s.phase==='defeat'){e.textContent='✖ DEFEAT — ship destroyed';e.className='lose';}
  else if(s.engaged){e.textContent='● ENCOUNTER LIVE';e.className='live';}
@@ -129,20 +131,22 @@ setInterval(poll,500);poll();
 <button onclick="if(confirm('Restart the encounter for everyone?'))post('/api/game?action=restart')">&#8635; RESTART</button></footer>
 <script>
 const $=s=>document.querySelector(s);
-function post(path){fetch(path);}
+const PIN=new URLSearchParams(location.search).get('pin')||'';
+for(const a of document.querySelectorAll('header a')){a.href=a.getAttribute('href')+'?pin='+PIN;}
+function post(path){fetch(path+(path.includes('?')?'&':'?')+'pin='+PIN);}
 function renderFooter(s){const f=$('#gs'),l=$('#gsl');
  if(s.phase==='victory'){l.textContent='✔ VICTORY';f.className='gs win';}
  else if(s.phase==='defeat'){l.textContent='✖ DEFEAT';f.className='gs lose';}
  else if(s.wave>0){l.textContent=s.engaged?('● WAVE '+s.wave+' — REPEL THE ATTACK'):('◇ WAVE '+(s.wave+1)+' INBOUND');f.className='gs live';}
  else if(s.engaged){l.textContent='● ENCOUNTER LIVE';f.className='gs live';}
  else{l.textContent='◇ EN ROUTE — '+(s.objective||'objective');f.className='gs live';}}
-async function poll(){try{const r=await fetch('/api/state');const s=await r.json();
+async function poll(){try{const r=await fetch('/api/state?pin='+PIN);const s=await r.json();
  document.body.classList.toggle('red',s.alert==='red');
  const ab=$('#alertbtn');if(ab){ab.textContent=s.alert==='red'?'⚠ STAND DOWN — GREEN':'⚠ RED ALERT';
   ab.style.borderColor=s.alert==='red'?'#ff3b30':'';ab.style.color=s.alert==='red'?'#ff8d85':'';}
  render(s);renderFooter(s);}catch(e){}}
 let smapTimer=null;
-async function refreshStarmap(){try{const d=await(await fetch('/api/starmap')).json();drawStarmap(d);}catch(e){}}
+async function refreshStarmap(){try{const d=await(await fetch('/api/starmap?pin='+PIN)).json();drawStarmap(d);}catch(e){}}
 function openStarmap(){refreshStarmap();$('#smap').style.display='flex';
  if(smapTimer)clearInterval(smapTimer);smapTimer=setInterval(refreshStarmap,400);}
 function closeStarmap(){$('#smap').style.display='none';if(smapTimer){clearInterval(smapTimer);smapTimer=null;}}
@@ -452,7 +456,7 @@ setInterval(poll,250);poll();
 			"function flash(c){const s=$('#sweep');s.style.boxShadow='0 0 14px '+c;setTimeout(function(){s.style.boxShadow='';},160);}"
 			"function weld(){if(sp>=0.40&&sp<=0.60){post('/api/engineering?action=repair');flash('#43ff7a');}else{flash('#ff5a4a');}}"
 			// Contract board: its own light poll (the board changes on dock/accept, not per-frame).
-			"async function pollContract(){try{const c=await(await fetch('/api/contract')).json();"
+			"async function pollContract(){try{const c=await(await fetch('/api/contract?pin='+PIN)).json();"
 			"const b=$('#cboard'),btn=$('#cbtn');"
 			"if(c.active){b.innerHTML='<span style=\"color:#43d1ff\">ACTIVE</span> &mdash; '+c.active.desc"
 			"+(c.active.stage>0?' <span style=\"color:#43ff7a\">[leg 1 done]</span>':'');btn.style.display='none';}"
@@ -584,12 +588,43 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		return;
 	}
 
+	// Session-PIN gate (R5): the server binds 0.0.0.0, so every route demands ?pin=XXXX (the
+	// in-game crew URL carries it). API calls get an honest JSON rejection; pages get a hint.
+	auto PinGate = [](const FString& Path, const FHttpServerRequest& Req, const FHttpResultCallback& OnComplete) -> bool
+	{
+		const FString* Pin = Req.QueryParams.Find(TEXT("pin"));
+		if (Pin && *Pin == GetSessionPin())
+		{
+			return false; // authorised — fall through to the real handler
+		}
+		if (Path.StartsWith(TEXT("/api")))
+		{
+			OnComplete(MakeVerdict(false, TEXT("invalid pin - open the crew URL shown on the ship's screen")));
+		}
+		else
+		{
+			OnComplete(MakeResponse(TEXT(
+				"<!doctype html><html><body style='background:#05080f;color:#cfe6ff;"
+				"font-family:system-ui;text-align:center;padding-top:20vh'>"
+				"<h2>CREW ACCESS LOCKED</h2>"
+				"<p>Open the exact crew URL shown on the ship's screen &mdash; it carries this session's PIN.</p>"
+				"</body></html>"), TEXT("text/html")));
+		}
+		return true;
+	};
+
 	// Bind GET pages + the state poll, and POST command endpoints. Keep handles to unbind.
-	auto Bind = [this](const TCHAR* Path, EHttpServerRequestVerbs Verb,
+	auto Bind = [this, PinGate](const TCHAR* Path, EHttpServerRequestVerbs Verb,
 		bool (UStationServerSubsystem::*Fn)(const FHttpServerRequest&, const FHttpResultCallback&))
 	{
+		const FString PathStr(Path);
 		FHttpRouteHandle Handle = Router->BindRoute(FHttpPath(Path), Verb,
-			FHttpRequestHandler::CreateUObject(this, Fn));
+			FHttpRequestHandler::CreateWeakLambda(this,
+				[this, Fn, PathStr, PinGate](const FHttpServerRequest& Req, const FHttpResultCallback& OnComplete) -> bool
+				{
+					if (PinGate(PathStr, Req, OnComplete)) { return true; }
+					return (this->*Fn)(Req, OnComplete);
+				}));
 		if (Handle.IsValid())
 		{
 			RouteHandles.Add(Handle);
@@ -602,10 +637,16 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 	// Station pages share one handler; the station id is a bound payload arg so each route
 	// renders the right console (RelativePath is empty for exact-matched routes).
-	auto BindStation = [this](const TCHAR* Path, int32 StationId)
+	auto BindStation = [this, PinGate](const TCHAR* Path, int32 StationId)
 	{
+		const FString PathStr(Path);
 		FHttpRouteHandle Handle = Router->BindRoute(FHttpPath(Path), EHttpServerRequestVerbs::VERB_GET,
-			FHttpRequestHandler::CreateUObject(this, &UStationServerSubsystem::HandleStationPage, StationId));
+			FHttpRequestHandler::CreateWeakLambda(this,
+				[this, StationId, PathStr, PinGate](const FHttpServerRequest& Req, const FHttpResultCallback& OnComplete) -> bool
+				{
+					if (PinGate(PathStr, Req, OnComplete)) { return true; }
+					return HandleStationPage(Req, OnComplete, StationId);
+				}));
 		if (Handle.IsValid()) { RouteHandles.Add(Handle); }
 	};
 	BindStation(TEXT("/helm"), 0);
@@ -652,8 +693,8 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 	const FString Lan = GetLanAddress();
 	const TCHAR* Host = Lan.IsEmpty() ? TEXT("<this-machine-LAN-IP>") : *Lan;
-	UE_LOG(LogTemp, Log, TEXT("[StationServer] bridge stations live at  http://%s:%d/stations   (open on any LAN device)"),
-		Host, Port);
+	UE_LOG(LogTemp, Log, TEXT("[StationServer] bridge stations live at  http://%s:%d/stations?pin=%s   (open on any LAN device; the PIN gates all access)"),
+		Host, Port, *GetSessionPin());
 }
 
 void UStationServerSubsystem::Deinitialize()
@@ -729,7 +770,18 @@ ASpaceship* UStationServerSubsystem::GetCommandShip(FString& OutReason) const
 FString UStationServerSubsystem::GetCrewUrl()
 {
 	const FString Lan = GetLanAddress();
-	return Lan.IsEmpty() ? FString() : FString::Printf(TEXT("http://%s:8080/stations"), *Lan);
+	// The URL carries the session PIN (R5): typing it as shown is all the crew needs, and
+	// anything on the LAN without it is rejected.
+	return Lan.IsEmpty() ? FString()
+		: FString::Printf(TEXT("http://%s:8080/stations?pin=%s"), *Lan, *GetSessionPin());
+}
+
+const FString& UStationServerSubsystem::GetSessionPin()
+{
+	// One PIN per game session (process). 4 digits: trivial to read off the viewscreen and
+	// type on a phone, while stopping drive-by LAN requests and cross-site GETs (CSRF).
+	static const FString Pin = FString::Printf(TEXT("%04d"), FMath::RandRange(0, 9999));
+	return Pin;
 }
 
 FString UStationServerSubsystem::GetLanAddress()

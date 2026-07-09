@@ -1461,3 +1461,28 @@ the weapons console footer reading "● WAVE 1 — REPEL THE ATTACK". (Commit:
 Core/{StationTypes,SpaceSaveGame,SpaceGameInstance{,.cpp},MissionSubsystem{,.cpp},
 MainMenuWidget{,.cpp}}.h/.cpp + Ships/EnemyShip.{h,cpp} + Components/ScienceComponent.cpp +
 Net/StationServerSubsystem.cpp + docs.)
+
+---
+
+## 2026-07-09 — 🔒 R5(a) Web console access PIN
+
+The LAN control surface is no longer wide open: every HTTP route now demands the session PIN.
+- **4-digit session PIN** (`UStationServerSubsystem::GetSessionPin`), generated once per game
+  process. The crew URL everywhere it appears (main menu, pause overlay, startup log) becomes
+  `http://<ip>:8080/stations?pin=XXXX` — typing it as shown is all the crew needs.
+- **Gate on every route** (R5's ship-blocker): the `Bind`/`BindStation` helpers wrap each
+  handler with a PIN check. `/api/*` without the right pin gets an honest
+  `{ok:false, reason:"invalid pin …"}`; pages get a "CREW ACCESS LOCKED" hint page. This
+  also kills cross-site GETs from malicious pages on the LAN (CSRF against local services).
+- **Pages propagate the PIN** client-side: JS reads it from `location.search`, appends it to
+  every fetch (`post()`, state poll, starmap, contract board) and rewrites the station /
+  header links, so navigation keeps working without server-side templating.
+- Note: the `/` → `/stations` redirect (smoke-test #5) is not implementable on UE's HTTP
+  router — `FHttpPath::IsValidPath` rejects the bare root path (pre-existing limitation,
+  documented where the routes bind). Settings toggle (server on/off, loopback-only) still open.
+
+**Verified (PIE + curl):** no pin and wrong pin → JSON rejection on `/api/state`, LOCKED page
+on `/stations`; correct pin (from the startup log URL) → full state JSON, the stations hub,
+and a mutating action (`/api/alert?state=red&pin=…` → `{ok:true}`); the served helm page
+contains the PIN-appending JS at all four fetch sites. (Commit: Net/StationServerSubsystem.{h,cpp}
++ docs.)
