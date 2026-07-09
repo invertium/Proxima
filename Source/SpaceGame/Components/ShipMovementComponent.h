@@ -81,6 +81,13 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<class UPowerComponent> CachedPower;
 
+	/** Lazily-resolved sibling damage control (M25); may stay null (enemies have none). */
+	UPROPERTY(Transient)
+	TObjectPtr<class UDamageControlComponent> CachedDamage;
+
 	/** Engine power multiplier from the power component, or 1.0 if there is none. */
 	float EnginePowerScale() const;
+
+	/** Damaged-engine multiplier from damage control (0.5 while damaged), or 1.0 if none. */
+	float EngineDamageScale() const;
 };

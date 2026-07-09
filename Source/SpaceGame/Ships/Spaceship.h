@@ -56,6 +56,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship")
 	UHealthComponent* GetHealthComp() const { return HealthComp; }
 
+	/** Combat subsystem damage (M25): hull hits can knock out engine/weapons/sensors. */
+	UFUNCTION(BlueprintPure, Category = "Ship")
+	class UDamageControlComponent* GetDamageComp() const { return DamageComp; }
+
 	/** Add camera-shake "trauma" (0..1, clamped); decays each tick. Drives the follow-cam shake. */
 	UFUNCTION(BlueprintCallable, Category = "Ship|Feel")
 	void AddCameraTrauma(float Amount);
@@ -166,6 +170,10 @@ protected:
 	/** Hull + shield-power mitigation (D11); 0 hull triggers the defeat screen. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
 	TObjectPtr<UHealthComponent> HealthComp;
+
+	/** Combat subsystem damage (M25); the Engineering weld sweep repairs it. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ship")
+	TObjectPtr<class UDamageControlComponent> DamageComp;
 
 	// --- Camera shake (trauma model, M14 game-feel) ---
 

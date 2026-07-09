@@ -3,6 +3,7 @@
 #include "Core/EngineeringConsoleWidget.h"
 
 #include "Core/BridgePlayerController.h"
+#include "Components/DamageControlComponent.h"
 #include "Components/PowerComponent.h"
 #include "Ships/Spaceship.h"
 #include "Components/TextBlock.h"
@@ -45,31 +46,43 @@ void UEngineeringConsoleWidget::NativeTick(const FGeometry& MyGeometry, float In
 	const EShipSystem Selected = PC ? PC->GetSelectedSystem() : EShipSystem::Engine;
 	const float MaxPer = FMath::Max(Power->MaxPerSystem, 0.01f);
 
-	auto Apply = [&](EShipSystem Sys, UTextBlock* Label, UProgressBar* Bar, const TCHAR* Name)
+	// Combat damage flags (M25): a damaged system's row goes amber with a DMG marker.
+	const UDamageControlComponent* Dmg = Ship->GetDamageComp();
+	const FLinearColor AmberColor(1.f, 0.65f, 0.1f, 1.f);
+
+	auto Apply = [&](EShipSystem Sys, UTextBlock* Label, UProgressBar* Bar, const TCHAR* Name, bool bDamaged)
 	{
 		const float P = Power->GetSystemPower(Sys);
+		const FLinearColor RowColor = bDamaged ? AmberColor : (Sys == Selected ? SelectedColor : IdleColor);
 		if (Label)
 		{
 			Label->SetText(FText::FromString(
-				FString::Printf(TEXT("%s  %3d%%"), Name, FMath::RoundToInt(P * 100.f))));
-			Label->SetColorAndOpacity(FSlateColor(Sys == Selected ? SelectedColor : IdleColor));
+				FString::Printf(TEXT("%s  %3d%%%s"), Name, FMath::RoundToInt(P * 100.f),
+					bDamaged ? TEXT("  ! DMG") : TEXT(""))));
+			Label->SetColorAndOpacity(FSlateColor(RowColor));
 		}
 		if (Bar)
 		{
 			Bar->SetPercent(P / MaxPer);
-			Bar->SetFillColorAndOpacity(Sys == Selected ? SelectedColor : IdleColor);
+			Bar->SetFillColorAndOpacity(RowColor);
 		}
 	};
 
-	Apply(EShipSystem::Engine,  EngineText,  EngineBar,  TEXT("ENGINE "));
-	Apply(EShipSystem::Weapons, WeaponsText, WeaponsBar, TEXT("WEAPONS"));
-	Apply(EShipSystem::Shields, ShieldsText, ShieldsBar, TEXT("SHIELDS"));
+	Apply(EShipSystem::Engine,  EngineText,  EngineBar,  TEXT("ENGINE "),
+		Dmg && Dmg->IsDamaged(EDamageSystem::Engine));
+	Apply(EShipSystem::Weapons, WeaponsText, WeaponsBar, TEXT("WEAPONS"),
+		Dmg && Dmg->IsDamaged(EDamageSystem::Weapons));
+	Apply(EShipSystem::Shields, ShieldsText, ShieldsBar, TEXT("SHIELDS"), false); // shields take no M25 damage
 
 	if (ReactorText)
 	{
+		// Sensors have no power row, so their damage flag rides the reactor line.
+		const bool bSensorsDown = Dmg && Dmg->IsDamaged(EDamageSystem::Sensors);
 		ReactorText->SetText(FText::FromString(
-			FString::Printf(TEXT("REACTOR LOAD  %3d%% / %3d%%"),
+			FString::Printf(TEXT("REACTOR LOAD  %3d%% / %3d%%%s"),
 				FMath::RoundToInt(Power->GetTotalPower() * 100.f),
-				FMath::RoundToInt(Power->ReactorBudget * 100.f))));
+				FMath::RoundToInt(Power->ReactorBudget * 100.f),
+				bSensorsDown ? TEXT("   ! SENSORS DMG") : TEXT(""))));
+		ReactorText->SetColorAndOpacity(FSlateColor(bSensorsDown ? AmberColor : FLinearColor::White));
 	}
 }

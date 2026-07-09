@@ -97,9 +97,16 @@ private:
 	/** Weapons power multiplier from the sibling power component, or 1.0 if none. */
 	float WeaponPowerScale() const;
 
+	/** Damaged-weapons multiplier from damage control (0.5 while damaged), or 1.0 if none. */
+	float WeaponDamageScale() const;
+
 	/** Lazily-resolved sibling power component; may stay null. */
 	UPROPERTY(Transient)
 	TObjectPtr<UPowerComponent> CachedPower;
+
+	/** Lazily-resolved sibling damage control (M25); may stay null (enemies have none). */
+	UPROPERTY(Transient)
+	TObjectPtr<class UDamageControlComponent> CachedDamage;
 
 	/** Emissive material for the beam FX (cyan), loaded in the constructor. */
 	UPROPERTY()

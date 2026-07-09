@@ -2,6 +2,7 @@
 
 #include "Components/ScienceComponent.h"
 
+#include "Components/DamageControlComponent.h"
 #include "Components/HealthComponent.h"
 #include "Components/RadarContactComponent.h"
 #include "GameFramework/Actor.h"
@@ -55,10 +56,39 @@ void UScienceComponent::CycleTarget()
 	UE_LOG(LogTemp, Log, TEXT("[Science] Scan target -> %s"), *ScanTarget->GetName());
 }
 
+float UScienceComponent::GetEffectiveScanRange() const
+{
+	float Mult = 1.f;
+	if (const AActor* Owner = GetOwner())
+	{
+		if (const UDamageControlComponent* Dmg = Owner->FindComponentByClass<UDamageControlComponent>())
+		{
+			Mult = Dmg->GetMultiplier(EDamageSystem::Sensors);
+		}
+	}
+	return ScanRange * Mult;
+}
+
+bool UScienceComponent::IsTargetInScanRange() const
+{
+	if (!IsValid(ScanTarget) || !GetOwner())
+	{
+		return true; // nothing selected — range isn't the blocker
+	}
+	return FVector::Dist(ScanTarget->GetActorLocation(), GetOwner()->GetActorLocation())
+		<= GetEffectiveScanRange();
+}
+
 void UScienceComponent::BeginScan()
 {
 	if (!ScanTarget || bScanned)
 	{
+		return;
+	}
+	if (!IsTargetInScanRange())
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Science] %s is beyond sensor range (%.0f uu) — close the distance"),
+			*ScanTarget->GetName(), GetEffectiveScanRange());
 		return;
 	}
 	bScanning = true;

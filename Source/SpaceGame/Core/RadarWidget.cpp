@@ -2,6 +2,7 @@
 
 #include "Core/RadarWidget.h"
 
+#include "Components/DamageControlComponent.h"
 #include "Components/RadarContactComponent.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "GameFramework/Pawn.h"
@@ -63,7 +64,14 @@ int32 URadarWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allotte
 	{
 		const FVector PlayerLoc = Player->GetActorLocation();
 		const float YawRad = FMath::DegreesToRadians(Player->GetActorRotation().Yaw);
-		const float Scale = R / FMath::Max(RadarRangeUU, 1.f);
+
+		// Damaged sensors halve the radar's reach (M25) — distant contacts pin to the edge ring.
+		float SensorMult = 1.f;
+		if (const UDamageControlComponent* Dmg = Player->FindComponentByClass<UDamageControlComponent>())
+		{
+			SensorMult = Dmg->GetMultiplier(EDamageSystem::Sensors);
+		}
+		const float Scale = R / FMath::Max(RadarRangeUU * SensorMult, 1.f);
 
 		// world +X = up (-screenY), world +Y = right (+screenX)
 		auto WorldToScreen = [&](const FVector& Delta) -> FVector2D

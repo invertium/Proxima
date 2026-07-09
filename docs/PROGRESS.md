@@ -1255,3 +1255,37 @@ VSlice_Arena→MainMenu; SETTINGS opens/closes over the pause panel.
 was **dropped by user decision** — solo keyboard play is a testing affordance, not the shipped
 mode; the tutorial keeps teaching the crew-console flow. (Commit: Core/SettingsMenuWidget.{h,cpp}
 + Core/SpaceGameInstance.{h,cpp} + Core/MainMenuWidget.{h,cpp} + Core/PauseMenuWidget.{h,cpp} + docs.)
+
+---
+
+## 2026-07-09 — 🔧 M25 Subsystem damage — Engineering matters in combat
+
+Hull hits can now knock out ship systems; the crew feels it and Engineering fixes it.
+- **`UDamageControlComponent`** (new, player ship only — enemies keep flat stats): three
+  damageable systems `EDamageSystem { Engine, Weapons, Sensors }`. On every **hull** hit
+  (shields up = no roll), 35% chance (`DamageChance`) a random still-working system breaks and
+  runs at 50% (`DamagedMultiplier`) with an alarm sting + log line. Consumers use the same
+  lazily-cached `FindComponentByClass` pattern as power scaling, defaulting to 1.0 when the
+  component is absent.
+- **Effects:** Engine → `GetEffectiveMaxSpeed` halves; Weapons → beam recharge halves;
+  Sensors → Helm radar range halves (blips clamp closer) and a new Science `ScanRange`
+  (40 000 uu, `GetEffectiveScanRange`) halves — `BeginScan` and `/api/science?action=scan`
+  refuse targets beyond it ("close the distance").
+- **Repair:** the existing Engineering weld sweep now repairs systems **before** hull —
+  3 welds (`WeldsPerSystemRepair`) fix one system, first-damaged-first (`GetRepairTarget`);
+  hull welds resume once all systems are green. Docking (`Dock()`) repairs everything.
+- **Visibility:** on-ship Engineering console rows and the web engineering page go **amber
+  “⚠ DMG”** on damaged systems; the DAMAGE CONTROL label shows “⚠ REPAIRING: <systems> —
+  WELD ON GREEN”; a “! SENSORS DMG” flag rides the reactor line. `/api/state` gains
+  `dmg:[e,w,s]` + `scanRange`, and `radarRange` reflects the sensors multiplier live.
+
+**Verified (PIE + /api/state + headless-Firefox page shot):** scripted damage halves every
+stat exactly — maxSpeed 2100→1050, radarRange 20000→10000, scanRange 40000→20000, beam
+recharge 0.55→0.275/s (measured 0.275; Interceptor's catalogue rate is 0.55, ×0.5 exact).
+Combat roll fires only on hull hits (shield hits: no roll; first hull hit broke SENSORS).
+Weld sequencing proven: hull frozen at 70.2 through welds 1–3 (ENGINE green), 4–6 (SENSORS
+green), then +8/weld hull repair; scan beyond 20 000 uu returned the range verdict over the
+API. Engineering web page screenshot shows ENGINE “100% ⚠ DMG” amber + the REPAIRING sweep
+label. (Commit: Components/DamageControlComponent.{h,cpp} + Components/{ScienceComponent,
+ShipMovementComponent,WeaponComponent}.{h,cpp} + Core/{EngineeringConsoleWidget,RadarWidget}.cpp
++ Net/StationServerSubsystem.cpp + Ships/Spaceship.{h,cpp} + docs.)

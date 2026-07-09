@@ -2,6 +2,7 @@
 
 #include "Components/ShipMovementComponent.h"
 
+#include "Components/DamageControlComponent.h"
 #include "Components/PowerComponent.h"
 #include "GameFramework/Actor.h"
 
@@ -25,7 +26,20 @@ float UShipMovementComponent::EnginePowerScale() const
 
 float UShipMovementComponent::GetEffectiveMaxSpeed() const
 {
-	return MaxSpeed * EnginePowerScale();
+	return MaxSpeed * EnginePowerScale() * EngineDamageScale();
+}
+
+float UShipMovementComponent::EngineDamageScale() const
+{
+	UShipMovementComponent* MutableThis = const_cast<UShipMovementComponent*>(this);
+	if (!MutableThis->CachedDamage)
+	{
+		if (const AActor* Owner = GetOwner())
+		{
+			MutableThis->CachedDamage = Owner->FindComponentByClass<UDamageControlComponent>();
+		}
+	}
+	return CachedDamage ? CachedDamage->GetMultiplier(EDamageSystem::Engine) : 1.0f;
 }
 
 void UShipMovementComponent::SetThrottle(float InThrottle)

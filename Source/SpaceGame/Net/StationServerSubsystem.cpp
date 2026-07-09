@@ -2,6 +2,7 @@
 
 #include "Net/StationServerSubsystem.h"
 
+#include "Components/DamageControlComponent.h"
 #include "Components/HealthComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/RadarContactComponent.h"
@@ -343,7 +344,7 @@ setInterval(poll,250);poll();
 			     "<div class='stat'><b>HULL</b><span id='hull' class='big'>-</span></div>")
 			+ Sys(TEXT("ENGINE"), 0) + Sys(TEXT("WEAPONS"), 1) + Sys(TEXT("SHIELDS"), 2)
 			+ TEXT(
-			     "<label>DAMAGE CONTROL &mdash; WELD WHEN THE MARKER HITS THE GREEN</label>"
+			     "<label id='dclab'>DAMAGE CONTROL &mdash; WELD WHEN THE MARKER HITS THE GREEN</label>"
 			     "<div id='sweep' style='position:relative;height:46px;margin-top:10px;background:#0b1220;"
 			     "border:1px solid #33425c;border-radius:8px;overflow:hidden'>"
 			     "<div style='position:absolute;left:40%;width:20%;top:0;bottom:0;background:rgba(67,255,122,.18);"
@@ -365,6 +366,15 @@ setInterval(poll,250);poll();
 			"function render(s){$('#p0').textContent=Math.round(s.power[0]*100)+'%';"
 			"$('#p1').textContent=Math.round(s.power[1]*100)+'%';"
 			"$('#p2').textContent=Math.round(s.power[2]*100)+'%';"
+			// Combat damage flags (M25): amber DMG on the engine/weapons rows; the weld sweep's
+			// label retargets to the damaged system(s) (sensors included) until they're fixed.
+			"const dmg=s.dmg||[false,false,false];"
+			"$('#p0').style.color=dmg[0]?'#ffa626':'';if(dmg[0])$('#p0').textContent+=' \\u26a0 DMG';"
+			"$('#p1').style.color=dmg[1]?'#ffa626':'';if(dmg[1])$('#p1').textContent+=' \\u26a0 DMG';"
+			"const dl=$('#dclab');if(dl){const dn=['ENGINE','WEAPONS','SENSORS'];"
+			"const broke=[];for(let i=0;i<3;i++){if(dmg[i])broke.push(dn[i]);}"
+			"if(broke.length){dl.textContent='DAMAGE CONTROL \\u2014 \\u26a0 REPAIRING: '+broke.join(', ')+' \\u2014 WELD ON GREEN';dl.style.color='#ffa626';}"
+			"else{dl.textContent='DAMAGE CONTROL \\u2014 WELD WHEN THE MARKER HITS THE GREEN';dl.style.color='';}}"
 			"const ld=$('#load');ld.textContent=s.reactorLoad.toFixed(1)+' / '+s.reactorBudget.toFixed(1);"
 			"const cap=s.reactorLoad>=s.reactorBudget-0.001;"
 			"ld.style.color=cap?'#ffb300':'';ld.title=cap?'Reactor at capacity \\u2014 boost one system and another drops':'';"
@@ -729,6 +739,13 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	const UScienceComponent* Sci = Ship ? Ship->GetScienceComp() : nullptr;
 	const UPowerComponent* Power = Ship ? Ship->GetPowerComp() : nullptr;
 	const UHealthComponent* Health = Ship ? Ship->GetHealthComp() : nullptr;
+	const UDamageControlComponent* Dmg = Ship ? Ship->GetDamageComp() : nullptr;
+
+	// Combat subsystem damage (M25): flags + the sensor multiplier that shrinks the radar.
+	const bool bDmgEngine  = Dmg && Dmg->IsDamaged(EDamageSystem::Engine);
+	const bool bDmgWeapons = Dmg && Dmg->IsDamaged(EDamageSystem::Weapons);
+	const bool bDmgSensors = Dmg && Dmg->IsDamaged(EDamageSystem::Sensors);
+	const float SensorMult = Dmg ? Dmg->GetMultiplier(EDamageSystem::Sensors) : 1.f;
 
 	// Hostiles read out by radio callsign (e.g. "VIPER-2"); the friendly base by its name.
 	auto DisplayName = [](const AActor* A) -> FString
@@ -870,6 +887,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
 		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,"
 		"\"warpCharge\":%.3f,\"warpReady\":%s,\"upgrades\":[%s],\"ships\":[%s],"
+		"\"dmg\":[%s,%s,%s],\"scanRange\":%.0f,"
 		"\"heading\":%.1f,\"radarRange\":%.0f,\"px\":%.1f,\"py\":%.1f,\"contacts\":[%s]}"),
 		PhaseStr,
 		Move ? Move->GetSpeed() : 0.f,
@@ -909,7 +927,11 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Ship ? Ship->GetWarpCharge() : 0.f,
 		(Ship && Ship->IsWarpReady()) ? TEXT("true") : TEXT("false"),
 		*Upgrades, *Ships,
-		Heading, HelmRadarRangeUU, PlayerLoc.X, PlayerLoc.Y, *Contacts);
+		bDmgEngine ? TEXT("true") : TEXT("false"),
+		bDmgWeapons ? TEXT("true") : TEXT("false"),
+		bDmgSensors ? TEXT("true") : TEXT("false"),
+		Sci ? Sci->GetEffectiveScanRange() : -1.f,
+		Heading, HelmRadarRangeUU * SensorMult, PlayerLoc.X, PlayerLoc.Y, *Contacts);
 
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
 	return true;
@@ -1257,6 +1279,11 @@ bool UStationServerSubsystem::HandleScience(const FHttpServerRequest& Request, c
 			OnComplete(MakeVerdict(false, TEXT("no scan contact - cycle to a target first")));
 			return true;
 		}
+		if (!Sci->IsTargetInScanRange())
+		{
+			OnComplete(MakeVerdict(false, TEXT("target beyond sensor range - close the distance")));
+			return true;
+		}
 		Sci->BeginScan();
 	}
 	else
@@ -1298,6 +1325,17 @@ bool UStationServerSubsystem::HandleEngineering(const FHttpServerRequest& Reques
 		return true;
 	}
 	LastRepairTime = Now;
+
+	// Damaged systems take priority (M25): the sweep welds the broken system back to life
+	// first; only once everything runs clean does the weld restore hull plating.
+	if (UDamageControlComponent* Dmg = Ship->GetDamageComp())
+	{
+		if (Dmg->CreditRepairWeld())
+		{
+			OnComplete(MakeVerdict(true));
+			return true;
+		}
+	}
 	Health->RepairHull(RepairPerHit);
 	OnComplete(MakeVerdict(true));
 	return true;

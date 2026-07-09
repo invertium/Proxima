@@ -2,6 +2,7 @@
 
 #include "Components/WeaponComponent.h"
 
+#include "Components/DamageControlComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/RadarContactComponent.h"
 #include "Components/HealthComponent.h"
@@ -39,6 +40,19 @@ float UWeaponComponent::WeaponPowerScale() const
 		}
 	}
 	return CachedPower ? CachedPower->GetSystemPower(EShipSystem::Weapons) : 1.0f;
+}
+
+float UWeaponComponent::WeaponDamageScale() const
+{
+	UWeaponComponent* MutableThis = const_cast<UWeaponComponent*>(this);
+	if (!MutableThis->CachedDamage)
+	{
+		if (const AActor* Owner = GetOwner())
+		{
+			MutableThis->CachedDamage = Owner->FindComponentByClass<UDamageControlComponent>();
+		}
+	}
+	return CachedDamage ? CachedDamage->GetMultiplier(EDamageSystem::Weapons) : 1.0f;
 }
 
 float UWeaponComponent::GetTargetRange() const
@@ -196,6 +210,7 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		UE_LOG(LogTemp, Log, TEXT("[Weapon] Target destroyed — lock cleared"));
 	}
 
-	// Recharge, scaled by Weapons power (0 power → never charges).
-	Charge = FMath::Clamp(Charge + BaseRechargeRate * WeaponPowerScale() * DeltaTime, 0.f, 1.f);
+	// Recharge, scaled by Weapons power (0 power → never charges) and combat damage (M25:
+	// a damaged weapons system recharges at half rate until Engineering repairs it).
+	Charge = FMath::Clamp(Charge + BaseRechargeRate * WeaponPowerScale() * WeaponDamageScale() * DeltaTime, 0.f, 1.f);
 }

@@ -4,6 +4,7 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/AudioComponent.h"
+#include "Components/DamageControlComponent.h"
 #include "Components/HealthComponent.h"
 #include "Components/PowerComponent.h"
 #include "Components/ShipMovementComponent.h"
@@ -91,6 +92,8 @@ ASpaceship::ASpaceship()
 	// Shields-power mitigation (D11), so the absorb pool is zero — damage hits hull,
 	// softened by shield power. Enemy beams drain this; 0 hull triggers the defeat screen.
 	HealthComp = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComp"));
+
+	DamageComp = CreateDefaultSubobject<UDamageControlComponent>(TEXT("DamageComp"));
 	HealthComp->MaxHull = 100.f;
 	HealthComp->MaxShield = 0.f;
 
@@ -271,6 +274,7 @@ bool ASpaceship::Dock()
 		HealthComp->ResetPools(); // refill hull + shield
 	}
 	if (TorpedoComp) { TorpedoComp->Resupply(); }
+	if (DamageComp) { DamageComp->RepairAll(); } // station crews fix damaged systems too (M25)
 
 	UE_LOG(LogTemp, Log, TEXT("[Dock] Docked — repaired + restocked, combat-safe"));
 	return true;

@@ -63,6 +63,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Science")
 	float ScanDuration = 2.5f;
 
+	/** Sensor reach (uu): BeginScan refuses targets beyond this. Damaged sensors halve it (M25). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Science")
+	float ScanRange = 40000.f;
+
+	/** ScanRange after the damage-control multiplier (M25). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Science")
+	float GetEffectiveScanRange() const;
+
+	/** True if the current scan target sits within the effective sensor range (true when none). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Science")
+	bool IsTargetInScanRange() const;
+
 protected:
 	// --- Authoritative runtime state (replication-ready, D7) ---
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Science")
