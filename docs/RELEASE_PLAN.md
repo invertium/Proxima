@@ -114,11 +114,11 @@ A stranger with no README must be able to play.
 The campaign is ~45–90 minutes. That's shippable for a free/itch release if framed honestly,
 thin for anything paid. Missions are data-in-code (`BuildCampaign()`), so content is cheap:
 
-- [ ] Option A (minimum): keep 4 missions; add a post-campaign **free-play/skirmish mode**
+- [x] Option A (minimum): keep 4 missions; add a post-campaign **free-play/skirmish mode**
   (endless waves at chosen landmark, reusing the director + fleet archetypes) for replay value.
 - [ ] Option B (better): extend to 6–8 missions with 1–2 new wrinkles (escort/defend-the-station
   beat, an ambush that starts at red alert), plus skirmish.
-- [ ] Either way: a difficulty selector (enemy damage/HP multipliers) on new game.
+- [x] Either way: a difficulty selector (enemy damage/HP multipliers) on new game.
 
 ## R5 — Web console hardening (ship-blocking because it's exposed on LAN)
 

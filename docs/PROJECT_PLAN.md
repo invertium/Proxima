@@ -66,35 +66,35 @@ Execution order + workflow: docs/OPUS_BRIEF.md. Release chores: docs/RELEASE_PLA
   after an encounter triggers; `WarpToObjective` standoff = `max(4000, bodyRadius + 3000)`.
   Done when: [S] death burst with enemies ceased firing; [L] no `[EnemyAI] FIRE` lines after
   `Phase -> Defeat`; [L] target cleared on kill; [L] sun-warp lands outside the body.
-- [ ] **M25 Subsystem damage — Engineering matters in combat:** hull hits (shields down) roll a
+- [x] **M25 Subsystem damage — Engineering matters in combat:** hull hits (shields down) roll a
   chance to damage a ship system (Engine/Weapons/Sensors): damaged Engine halves max speed,
   Weapons halves recharge, Sensors halves radar+scan range. The M17.3 repair minigame
   retargets to the damaged system (sweep success repairs it); alarm + amber flag on the
   Engineering console + web page + `/api/state`. Done when: [L] scripted hit damages a system
   and the stat drop is measurable; repair restores it; [S] console shows the damaged flag.
-- [ ] **M26 Enemy archetype behaviors — Helm & Science matter:** the three archetypes get real
+- [x] **M26 Enemy archetype behaviors — Helm & Science matter:** the three archetypes get real
   behavior: **interceptor** strafe runs (fly past, overshoot, loop back — no static standoff);
   **frigate** fires slow torpedo volleys the helm can outrun/evade; **cruiser** is armored —
   beams deal 50% until Science completes a scan (scan reveals the weakpoint: full damage +
   comms confirm). Mission defs mix archetypes. Done when: [L] distinct per-type behavior
   logs; [L] scan flips the cruiser damage multiplier; [S] a strafing pass caught on screen.
-- [ ] **M27 Living sector — travel events:** while not engaged, the director rolls every
+- [x] **M27 Living sector — travel events:** while not engaged, the director rolls every
   ~25s for at most one live event: **distress call** (timed side objective at a nearby
   landmark — clear a small fleet for bonus credits), **pirate interdiction** (2-ship ambush
   spawns near the ship's path), or **salvage cache** (free-floating pickup: credits or a
   torpedo, collected by proximity). Comms announce; nav map + radar mark the event. Done
   when: [L] each event type triggers, resolves, and pays out; [S] nav-map event marker.
-- [ ] **M28 Station contracts:** while docked, a contract board (web console + Science comms)
+- [x] **M28 Station contracts:** while docked, a contract board (web console + Science comms)
   offers one of: **bounty** (kill a named ship loitering at a landmark), **patrol** (visit two
   named landmarks), **delivery** (dock, fly to a landmark, return). One active contract;
   credits/XP on completion; persists in the save. Done when: [L] accept→complete→payout for
   each type across a save/load; [S] contract board on the station page.
-- [ ] **M29 Red alert & power doctrine:** an alert state (green/red) toggled from Helm/web:
+- [x] **M29 Red alert & power doctrine:** an alert state (green/red) toggled from Helm/web:
   red alert tints consoles, plays a sting, and is required for shields to charge (shields
   bleed at green); Engineering gains one-tap power presets (COMBAT / TRAVEL / BALANCED).
   Encounter trigger auto-suggests red alert via comms. Done when: [L] shield charge gated by
   alert state; [L] presets set the expected power triple; [S] red-alert console tint.
-- [ ] **M30 Final battle v2 + skirmish + difficulty:** Warlord flagship encounter becomes
+- [x] **M30 Final battle v2 + skirmish + difficulty:** Warlord flagship encounter becomes
   multi-phase (two shield-drone escorts make the flagship invulnerable until destroyed —
   Science scan calls it out); post-campaign **skirmish mode** from the main menu (endless
   waves at Ember, wave counter, credits between waves); **difficulty selector** on new game
