@@ -46,6 +46,11 @@ UWeaponComponent* UTorpedoLauncherComponent::GetWeapon() const
 
 bool UTorpedoLauncherComponent::IsReady() const
 {
+	const ASpaceship* OwnerShip = Cast<ASpaceship>(GetOwner());
+	if (OwnerShip && OwnerShip->IsDocked())
+	{
+		return false; // docked = weapons offline (mirrors the beam)
+	}
 	const UWeaponComponent* Weapon = GetWeapon();
 	return Ammo > 0 && ReloadTimer <= 0.f && Weapon
 		&& Weapon->GetCurrentTarget() != nullptr && Weapon->IsTargetWithinArc(FireArcDeg);
@@ -61,6 +66,16 @@ bool UTorpedoLauncherComponent::Fire()
 {
 	const AActor* Owner = GetOwner();
 	if (!Owner) { return false; }
+
+	// Docked = combat-safe both ways (the beam has the same gate): no launches from the dock.
+	if (const ASpaceship* OwnerShip = Cast<ASpaceship>(Owner))
+	{
+		if (OwnerShip->IsDocked())
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Torpedo] Fire blocked — weapons offline while docked"));
+			return false;
+		}
+	}
 
 	if (Ammo <= 0)
 	{

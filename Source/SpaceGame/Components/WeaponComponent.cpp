@@ -146,6 +146,16 @@ bool UWeaponComponent::FireBeam()
 	{
 		return false;
 	}
+	// Docked = combat-safe both ways: the ship is invulnerable at the station, so its weapons
+	// are offline too — no sniping enemies from inside the dock's protection.
+	if (const ASpaceship* OwnerShip = Cast<ASpaceship>(Owner))
+	{
+		if (OwnerShip->IsDocked())
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Weapon] Fire blocked — weapons offline while docked"));
+			return false;
+		}
+	}
 	if (Charge < 1.f)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[Weapon] Fire blocked — charge %.0f%%"), Charge * 100.f);

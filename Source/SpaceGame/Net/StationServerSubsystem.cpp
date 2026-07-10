@@ -333,13 +333,15 @@ setInterval(poll,250);poll();
 			"$('#ina').textContent=s.inArc?'YES':'no';$('#ina').style.color=s.target!=='none'&&!s.inArc?'#ffb300':'';"
 			"$('#ammo').textContent=s.ammo+' / '+s.maxAmmo;"
 			"const fb=$('#fire');"
-			"if(s.target==='none'){fb.textContent='NO TARGET';fb.className='blk';}"
+			"if(s.docked){fb.textContent='DOCKED \\u2014 OFFLINE';fb.className='blk';}"
+			"else if(s.target==='none'){fb.textContent='NO TARGET';fb.className='blk';}"
 			"else if(s.charge<1){fb.textContent='CHARGING '+Math.round(s.charge*100)+'%';fb.className='blk';}"
 			"else if(!s.inRange){fb.textContent='OUT OF RANGE';fb.className='blk';}"
 			"else if(!s.inArc){fb.textContent='TURN TO TARGET';fb.className='blk';}"
 			"else{fb.textContent='● FIRE BEAM';fb.className='rdy';}"
 			"const tb=$('#torp');"
-			"if(s.ammo<=0){tb.textContent='NO TORPEDOES';tb.className='blk';}"
+			"if(s.docked){tb.textContent='DOCKED \\u2014 OFFLINE';tb.className='blk';}"
+			"else if(s.ammo<=0){tb.textContent='NO TORPEDOES';tb.className='blk';}"
 			"else if(s.target==='none'){tb.textContent='NO TARGET';tb.className='blk';}"
 			"else if(s.torpedoReload<1){tb.textContent='RELOADING '+Math.round(s.torpedoReload*100)+'%';tb.className='blk';}"
 			"else if(!s.inArcTorp){tb.textContent='TURN TO TARGET';tb.className='blk';}"
@@ -1387,6 +1389,7 @@ bool UStationServerSubsystem::HandleWeapons(const FHttpServerRequest& Request, c
 		{
 			// Mirror FireBeam's own gate order so the console shows why the shot was refused.
 			const TCHAR* Why =
+				Ship->IsDocked()            ? TEXT("weapons offline while docked") :
 				Weap->GetCharge() < 1.f     ? TEXT("beam still charging") :
 				!Weap->GetCurrentTarget()   ? TEXT("no target") :
 				!Weap->IsTargetInRange()    ? TEXT("target out of range") :
@@ -1400,7 +1403,9 @@ bool UStationServerSubsystem::HandleWeapons(const FHttpServerRequest& Request, c
 		UTorpedoLauncherComponent* Torp = Ship->GetTorpedoComp();
 		if (!Torp || !Torp->Fire())
 		{
-			OnComplete(MakeVerdict(false, TEXT("torpedo blocked - check reload, ammo, target, and arc")));
+			OnComplete(MakeVerdict(false, Ship->IsDocked()
+				? TEXT("weapons offline while docked")
+				: TEXT("torpedo blocked - check reload, ammo, target, and arc")));
 			return true;
 		}
 	}

@@ -158,6 +158,13 @@ void USpaceGameInstance::ClearContract()
 
 bool USpaceGameInstance::SaveCampaign()
 {
+	// Skirmish is a sandbox: wave-farmed credits/XP (and anything bought with them) must never
+	// bleed into the campaign save — pause-menu SAVE and drydock purchases route through here.
+	if (bSkirmish)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Campaign] Save skipped — skirmish mode never persists"));
+		return false;
+	}
 	USpaceSaveGame* Save = Cast<USpaceSaveGame>(
 		UGameplayStatics::CreateSaveGameObject(USpaceSaveGame::StaticClass()));
 	if (!Save)

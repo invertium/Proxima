@@ -253,6 +253,9 @@ float ASpaceship::GetStationRange() const
 bool ASpaceship::CanDock() const
 {
 	if (bDocked) { return false; }
+	// A destroyed hull can't dock: Dock()'s ResetPools() would refill it and clear the death
+	// latch — resurrecting the wreck mid-defeat.
+	if (HealthComp && !HealthComp->IsAlive()) { return false; }
 	const AStation* S = NearestStation();
 	if (!S) { return false; }
 	if (FVector::Dist(GetActorLocation(), S->GetActorLocation()) > S->GetDockRange()) { return false; }
@@ -400,6 +403,14 @@ void ASpaceship::SpawnImpactSparks(const FVector& Location, bool bShieldHit)
 		ABeamFx::Spawn(World, Location, Location + Dir * Len, Mat,
 			FMath::FRandRange(7.f, 13.f), FMath::FRandRange(0.12f, 0.22f));
 	}
+}
+
+bool ASpaceship::IsWarpReady() const
+{
+	// Fully charged, not docked, and alive — a dead hull's drive is gone with the ship (the
+	// wreck must not warp around during the defeat beat).
+	if (bDocked || WarpCharge < 1.f) { return false; }
+	return !HealthComp || HealthComp->IsAlive();
 }
 
 bool ASpaceship::Warp()
@@ -561,7 +572,8 @@ void ASpaceship::Tick(float DeltaSeconds)
 	UpdateAmbientAudio();
 
 	// Warp drive trickle-charges over time, faster with engine power routed (Engineering synergy).
-	if (!bDocked)
+	// A dead hull stops charging — the HUD must not tick toward "warp ready" on a wreck.
+	if (!bDocked && (!HealthComp || HealthComp->IsAlive()))
 	{
 		const float EnginePower = PowerComp ? PowerComp->GetSystemPower(EShipSystem::Engine) : 1.f;
 		WarpCharge = FMath::Clamp(WarpCharge + WarpChargeRate * EnginePower * DeltaSeconds, 0.f, 1.f);

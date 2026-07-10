@@ -1486,3 +1486,51 @@ on `/stations`; correct pin (from the startup log URL) → full state JSON, the 
 and a mutating action (`/api/alert?state=red&pin=…` → `{ok:true}`); the served helm page
 contains the PIN-appending JS at all four fetch sites. (Commit: Net/StationServerSubsystem.{h,cpp}
 + docs.)
+
+---
+
+## 2026-07-10 — 🔍 Full gameplay audit: six logic holes closed
+
+A systematic read of every gameplay-relevant source file (ships, components, director,
+controller, game instance, web server) hunting for exploits and logic holes. Six confirmed,
+all fixed:
+
+1. **Dead ship could dock — and resurrect.** `CanDock()` never checked the ship was alive,
+   and `Dock()`'s `ResetPools()` refills hull *and clears the death latch*: pressing F beside
+   the starbase during the defeat beat un-killed the wreck. `CanDock()` now requires a live
+   hull.
+2. **Dead ship could warp.** `IsWarpReady()` only checked docked+charge; the R/G hotkeys
+   teleported the wreck around during the defeat sequence, and warp charge kept building
+   after death. Alive-gated (readiness + charge accrual); moved `IsWarpReady` to the .cpp.
+3. **Docked-invulnerability weapons exploit.** A docked ship is invulnerable and
+   auto-repaired, but beams/torpedoes had no docked gate — lure a chaser (bounty leash
+   15 000 uu, distress events spawn near home) to the starbase, dock, snipe with impunity.
+   `FireBeam()`, torpedo `Fire()` and `IsReady()` now refuse while docked; `/api/weapons`
+   returns `weapons offline while docked` and the weapons console buttons read
+   "DOCKED — OFFLINE".
+4. **Skirmish leaked into the campaign save.** ESC → SAVE and drydock buys called
+   `SaveCampaign()` during skirmish, persisting wave-farmed credits/XP into the campaign.
+   `SaveCampaign()` now no-ops (returns false, logged) while `bSkirmish` — skirmish is
+   genuinely session-only.
+5. **Skirmish wave spawned onto the defeat screen.** A wave timer pending when the player
+   died still fired, spawning ships + "WAVE N inbound" comms over the DEFEAT overlay.
+   `SpawnWave()` bails when the player is dead.
+6. **The wreck ran errands.** Contract waypoints/deliveries and salvage-pod collection kept
+   progressing (with payout comms) while the ship was destroyed. `CheckContract()` and the
+   salvage branch of `CheckEvent()` are alive-gated; the contract itself survives in the
+   save for the retry.
+
+Also removed the dead `FMissionDef::bAutoLaunch` field (set by the tutorial, read nowhere
+since staging was removed in M23 — the home zone's TriggerRadius covers the player start).
+
+**Verified [L] (PIE via MCP):** parked at the station warp-ready (`charge=1.00
+warpReady=True canDock=True`), killed the ship (99999 bypass) → `canDock=False dockOk=False
+warpReady=False warpOk=False movedBy=0uu`, hull stays 0.0, not docked. Docked with a locked
+live target at full charge → `beam=False torpedo=False torpReady=False` with both "Fire
+blocked — weapons offline while docked" log lines; after undock + facing the target the same
+beam fired (`beam=True`, charge 1.00→0.00). `SaveCampaign` → `normal=True skirmish=False`.
+**[S] (curl, live PIN):** `/api/dock?action=dock` → `{ok:true}`, then `/api/weapons?action=
+fire` and `?action=torpedo` both → `{"ok":false,"reason":"weapons offline while docked"}`,
+state showed `"docked":true`, undock → `{ok:true}`. (Commit: Ships/Spaceship.{h,cpp} +
+Components/{WeaponComponent,TorpedoLauncherComponent}.cpp + Core/{MissionSubsystem{.h,.cpp},
+SpaceGameInstance.cpp} + Net/StationServerSubsystem.cpp + docs.)

@@ -111,9 +111,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Warp")
 	float GetWarpCharge() const { return WarpCharge; }
 
-	/** True when a warp can be triggered (fully charged, not docked). */
+	/** True when a warp can be triggered (fully charged, not docked, ship alive). */
 	UFUNCTION(BlueprintPure, Category = "Ship|Warp")
-	bool IsWarpReady() const { return !bDocked && WarpCharge >= 1.f; }
+	bool IsWarpReady() const;
 
 	/** Jump WarpDistance along the bow if charged; spends the charge. Returns true if it jumped. */
 	UFUNCTION(BlueprintCallable, Category = "Ship|Warp")

@@ -67,10 +67,6 @@ struct FMissionDef
 	/** If >= 0, every spawned hostile holds fire this many seconds (tutorial uses a huge value to
 	 *  field a passive target drone). -1 keeps each archetype's own EngageDelay. */
 	UPROPERTY() float EngageDelayOverride = -1.f;
-
-	/** When true the fleet spawns immediately (no staging) — used by the tutorial. Combat missions
-	 *  leave this false so they open in a staging phase: dock + outfit, then launch when ready. */
-	UPROPERTY() bool bAutoLaunch = false;
 };
 
 /** A transmission shown on the Science comms log. */

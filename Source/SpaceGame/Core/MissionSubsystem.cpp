@@ -43,8 +43,9 @@ namespace
 		Tut.Name = TEXT("Shakedown Cruise");
 		Tut.Enemies = { EEnemyType::Scout };
 		Tut.EngageDelayOverride = 100000.f; // the drone holds fire all mission — a safe target
-		Tut.bAutoLaunch = true;             // tutorial skips staging: the (passive) drone is up at once
 		Tut.MapX = 0.16f; Tut.MapY = 0.52f; // home space, near the friendly core of the sector
+		// (No staging flag needed: the home zone's TriggerRadius covers the player start, so the
+		// tutorial encounter arms itself the moment the sector loads.)
 		Tut.LandmarkName = TEXT("Haven"); Tut.LandmarkKind = ELandmarkKind::Planet;
 		Tut.LandmarkColor = FLinearColor(0.35f, 0.6f, 1.0f, 1.f); Tut.LandmarkScale = 1.0f;
 		{
@@ -600,12 +601,14 @@ void UMissionSubsystem::CheckEvent()
 	const UWorld* World = GetWorld();
 	if (!World) { return; }
 
-	// Salvage: collected by flying close to the pod.
+	// Salvage: collected by flying close to the pod. A dead ship's drifting wreck doesn't
+	// tractor cargo — no payout comms over the defeat screen.
 	if (ActiveEvent == ESectorEvent::Salvage)
 	{
 		const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0);
+		const UHealthComponent* PlayerHealth = Player ? Player->FindComponentByClass<UHealthComponent>() : nullptr;
 		const ASalvageCache* Pod = SalvagePod.Get();
-		if (Player && Pod
+		if (Player && (!PlayerHealth || PlayerHealth->IsAlive()) && Pod
 			&& FVector::Dist2D(Player->GetActorLocation(), Pod->GetActorLocation()) <= SalvageCollectRange)
 		{
 			ResolveEvent(true);
@@ -862,6 +865,12 @@ void UMissionSubsystem::CheckContract()
 	if (!GI || !Ship)
 	{
 		return;
+	}
+	// A destroyed ship runs no errands: its wreck must not sweep waypoints or close deliveries
+	// while the defeat beat plays out (the contract survives in the save for the retry).
+	if (const UHealthComponent* Health = Ship->GetHealthComp())
+	{
+		if (!Health->IsAlive()) { return; }
 	}
 
 	// Refresh the board on each fresh docking (only while no contract is running).
@@ -1144,6 +1153,12 @@ void UMissionSubsystem::SpawnWave()
 {
 	UWorld* World = GetWorld();
 	if (!World || !bSkirmishMode) { return; }
+
+	// A wave scheduled before the player died must not spawn onto the defeat screen — the run
+	// is over; a retry reloads the level and restarts from wave 1.
+	const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0);
+	const UHealthComponent* PlayerHealth = Player ? Player->FindComponentByClass<UHealthComponent>() : nullptr;
+	if (!Player || (PlayerHealth && !PlayerHealth->IsAlive())) { return; }
 
 	++SkirmishWave;
 
