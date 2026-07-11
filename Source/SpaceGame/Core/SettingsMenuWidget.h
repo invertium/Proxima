@@ -28,6 +28,12 @@ public:
 	/** Apply the persisted master volume to the app (called from USpaceGameInstance::Init). */
 	static void ApplyPersistedAudio();
 
+	/** First-launch only: default to vsync on + a 60 FPS cap so the game presents smoothly on a
+	 *  60 Hz display (uncapped ~600 fps hitches under fullscreen vsync). Guarded by a one-shot flag
+	 *  so it never overrides a choice the player later makes via the VSYNC / MAX FRAMERATE rows.
+	 *  Called from USpaceGameInstance::Init. */
+	static void SeedVideoDefaults();
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 
@@ -37,6 +43,8 @@ private:
 	UFUNCTION() void OnCycleWindowMode();
 	UFUNCTION() void OnCycleResolution();
 	UFUNCTION() void OnCycleQuality();
+	UFUNCTION() void OnToggleVSync();
+	UFUNCTION() void OnCycleFrameLimit();
 	UFUNCTION() void OnCycleVolume();
 	UFUNCTION() void OnBack();
 
@@ -49,5 +57,7 @@ private:
 	UPROPERTY() TObjectPtr<UTextBlock> WindowModeLabel;
 	UPROPERTY() TObjectPtr<UTextBlock> ResolutionLabel;
 	UPROPERTY() TObjectPtr<UTextBlock> QualityLabel;
+	UPROPERTY() TObjectPtr<UTextBlock> VSyncLabel;
+	UPROPERTY() TObjectPtr<UTextBlock> FrameLimitLabel;
 	UPROPERTY() TObjectPtr<UTextBlock> VolumeLabel;
 };

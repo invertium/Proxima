@@ -21,6 +21,8 @@ namespace
 {
 	const TCHAR* AudioConfigSection = TEXT("SpaceGame.Audio");
 	const TCHAR* AudioConfigKey = TEXT("MasterVolume");
+	const TCHAR* VideoConfigSection = TEXT("SpaceGame.Video");
+	const TCHAR* VideoSeededKey = TEXT("DefaultsSeeded");
 
 	/** Volume moves in 10% steps; a click cycles down and wraps 0 → 100. */
 	constexpr float VolumeStep = 0.1f;
@@ -48,6 +50,16 @@ namespace
 		default: return TEXT("CUSTOM");
 		}
 	}
+
+	/** MAX FRAMERATE cycle options. 0 = uncapped. On a 60 Hz display an uncapped ~600 fps
+	 *  render floods the compositor and hitches under fullscreen vsync — capping to the refresh
+	 *  gives a steady present cadence, so 60 leads the list. */
+	const TArray<float> FrameLimitOptions = { 60.f, 120.f, 144.f, 240.f, 0.f, 30.f };
+
+	FString FrameLimitName(float Limit)
+	{
+		return Limit <= 0.f ? TEXT("UNLIMITED") : FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(Limit));
+	}
 }
 
 float USettingsMenuWidget::LoadMasterVolume()
@@ -63,6 +75,24 @@ float USettingsMenuWidget::LoadMasterVolume()
 void USettingsMenuWidget::ApplyPersistedAudio()
 {
 	FApp::SetVolumeMultiplier(LoadMasterVolume());
+}
+
+void USettingsMenuWidget::SeedVideoDefaults()
+{
+	if (!GConfig) { return; }
+	bool bSeeded = false;
+	GConfig->GetBool(VideoConfigSection, VideoSeededKey, bSeeded, GGameUserSettingsIni);
+	if (bSeeded) { return; } // player has launched before — respect whatever they've set since
+
+	if (UGameUserSettings* S = Settings())
+	{
+		S->SetVSyncEnabled(true);
+		S->SetFrameRateLimit(60.f);
+		S->ApplyNonResolutionSettings(); // pushes r.VSync + t.MaxFPS now, without touching resolution
+		S->SaveSettings();
+	}
+	GConfig->SetBool(VideoConfigSection, VideoSeededKey, true, GGameUserSettingsIni);
+	GConfig->Flush(false, GGameUserSettingsIni);
 }
 
 TSharedRef<SWidget> USettingsMenuWidget::RebuildWidget()
@@ -119,6 +149,14 @@ void USettingsMenuWidget::BuildUI()
 	QualityLabel = Cast<UTextBlock>(QualityBtn->GetChildAt(0));
 	QualityBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnCycleQuality);
 
+	UButton* VSyncBtn = AddFlatButton(WidgetTree, Box, TEXT(""));
+	VSyncLabel = Cast<UTextBlock>(VSyncBtn->GetChildAt(0));
+	VSyncBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnToggleVSync);
+
+	UButton* FrameLimitBtn = AddFlatButton(WidgetTree, Box, TEXT(""));
+	FrameLimitLabel = Cast<UTextBlock>(FrameLimitBtn->GetChildAt(0));
+	FrameLimitBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnCycleFrameLimit);
+
 	UButton* VolumeBtn = AddFlatButton(WidgetTree, Box, TEXT(""));
 	VolumeLabel = Cast<UTextBlock>(VolumeBtn->GetChildAt(0));
 	VolumeBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnCycleVolume);
@@ -153,6 +191,16 @@ void USettingsMenuWidget::UpdateLabels()
 	{
 		QualityLabel->SetText(FText::FromString(
 			FString::Printf(TEXT("QUALITY   —   %s"), *QualityName(S->GetOverallScalabilityLevel()))));
+	}
+	if (VSyncLabel)
+	{
+		VSyncLabel->SetText(FText::FromString(
+			FString::Printf(TEXT("VSYNC   —   %s"), S->IsVSyncEnabled() ? TEXT("ON") : TEXT("OFF"))));
+	}
+	if (FrameLimitLabel)
+	{
+		FrameLimitLabel->SetText(FText::FromString(
+			FString::Printf(TEXT("MAX FRAMERATE   —   %s"), *FrameLimitName(S->GetFrameRateLimit()))));
 	}
 	if (VolumeLabel)
 	{
@@ -192,6 +240,31 @@ void USettingsMenuWidget::OnCycleQuality()
 	const int32 Next = (S->GetOverallScalabilityLevel() + 1) % 4;
 	S->SetOverallScalabilityLevel(FMath::Max(0, Next));
 	S->ApplySettings(false);
+	S->SaveSettings();
+	UpdateLabels();
+}
+
+void USettingsMenuWidget::OnToggleVSync()
+{
+	UGameUserSettings* S = Settings();
+	if (!S) { return; }
+	S->SetVSyncEnabled(!S->IsVSyncEnabled());
+	S->ApplySettings(false); // pushes r.VSync
+	S->SaveSettings();
+	UpdateLabels();
+}
+
+void USettingsMenuWidget::OnCycleFrameLimit()
+{
+	UGameUserSettings* S = Settings();
+	if (!S || FrameLimitOptions.IsEmpty()) { return; }
+	// Find the current cap in the list (tolerant match), then step to the next.
+	const float Cur = S->GetFrameRateLimit();
+	int32 Idx = FrameLimitOptions.IndexOfByPredicate(
+		[Cur](float V) { return FMath::IsNearlyEqual(V, Cur, 0.5f); });
+	if (Idx == INDEX_NONE) { Idx = -1; } // an off-list value (e.g. baked 0) advances to the first option
+	S->SetFrameRateLimit(FrameLimitOptions[(Idx + 1) % FrameLimitOptions.Num()]);
+	S->ApplySettings(false); // pushes t.MaxFPS
 	S->SaveSettings();
 	UpdateLabels();
 }

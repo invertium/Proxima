@@ -1580,3 +1580,30 @@ here:** the *felt* smoothness — frame hitches can't be observed over the LAN A
 turning improvement needs an in-game re-test. If precaching alone isn't enough, the definitive
 fix is a bundled PSO cache recorded from a playthrough (`r.ShaderPipelineCache`), a follow-up.
 (Commit: Config/DefaultEngine.ini + Ships/Spaceship.{h,cpp} + docs.)
+
+## 2026-07-11 — 🎛️ Settings: VSYNC + MAX FRAMERATE options, and smooth-by-default
+
+Profiling (see prior entry's method) proved the "lag" was never workload: offscreen 1080p and
+windowed 720p both ran ~600 fps with zero real hitches (89 draw calls, 45k prims). The stutter
+was isolated to the **fullscreen present path** — on a 60 Hz display the engine floods the
+compositor with ~10× the frames it can show, so the vsync'd present beats irregularly (KDE
+Wayland / XWayland / RADV). Capping to the refresh + vsync fixes it (user-confirmed live via
+`t.MaxFPS 60`).
+
+- **Two new SETTINGS rows** in `USettingsMenuWidget`: **VSYNC** (on/off) and **MAX FRAMERATE**
+  (60/120/144/240/UNLIMITED/30), wired exactly like the existing rows — `SetVSyncEnabled` /
+  `SetFrameRateLimit` → `ApplySettings(false)` → `SaveSettings()`. (Confirmed the pre-existing
+  WINDOW MODE / RESOLUTION / QUALITY / VOLUME rows are all real `UGameUserSettings` calls too;
+  QUALITY just doesn't move fps because nothing is GPU-bound, and VOLUME only bites with audio.)
+- **Smooth by default:** `USettingsMenuWidget::SeedVideoDefaults()` (called from
+  `USpaceGameInstance::Init`) seeds vsync on + a 60 FPS cap on first launch, guarded by a one-shot
+  `[SpaceGame.Video] DefaultsSeeded` flag so it never overrides a later player choice. (A
+  `Config/DefaultGameUserSettings.ini` seed was tried first but doesn't apply in cooked builds —
+  the runtime file came back without the keys — so the reliable code path replaced it.)
+
+**Verified [L]:** editor compiles clean (13.4 s). Fresh Development package, Saved config wiped →
+first launch wrote `bUseVSync=True` + `FrameRateLimit=60.000000`, and the CSV capture confirms the
+cap holds: **16.80 ms / 59.5 fps** steady (was ~600 fps uncapped), game/render/GPU at 3.1/5.4/2.3
+ms with headroom to spare. Fullscreen judder itself can't be measured headlessly — that needs an
+in-game re-test on the 60 Hz display. (Commit: Core/SettingsMenuWidget.{h,cpp} +
+Core/SpaceGameInstance.cpp + docs.)

@@ -18,6 +18,7 @@ namespace
 void USpaceGameInstance::Init()
 {
 	Super::Init();
+	USettingsMenuWidget::SeedVideoDefaults(); // first-run smooth defaults: vsync on + 60 FPS cap
 	USettingsMenuWidget::ApplyPersistedAudio();
 }
 
