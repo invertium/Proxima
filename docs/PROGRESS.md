@@ -1534,3 +1534,23 @@ fire` and `?action=torpedo` both → `{"ok":false,"reason":"weapons offline whil
 state showed `"docked":true`, undock → `{ok:true}`. (Commit: Ships/Spaceship.{h,cpp} +
 Components/{WeaponComponent,TorpedoLauncherComponent}.cpp + Core/{MissionSubsystem{.h,.cpp},
 SpaceGameInstance.cpp} + Net/StationServerSubsystem.cpp + docs.)
+
+## 2026-07-11 — 🛠️ justfile: one-command standalone packaging (Linux/Win/Mac)
+
+Added a `justfile` wrapping `RunUAT.sh BuildCookRun` into three recipes — `package-linux`,
+`package-windows`, `package-mac` — plus `run-linux` and `clean`. Config is overridable
+(`config=Development just package-linux`); Shipping is the default, cooking MainMenu +
+VSlice_Arena. Header documents the cross-compile reality (Linux host → Linux only; Windows →
+Win+Linux; macOS → Mac only) so the Win/Mac recipes are labelled run-on-that-host. Editor-only
+plugins (VibeUE/UnrealClaude/ModelingToolsEditorMode, all `TargetAllowList=Editor`) drop out
+of packages automatically; `Build.cs` already lists `HTTPServer/Sockets/Networking`, so the LAN
+server cooks into Shipping. `Packaged*/` is gitignored — nothing build-output committed.
+
+**Verified [L] (real package + run, this Linux box):** `just package-linux` (Shipping) →
+`BUILD SUCCESSFUL`, `AutomationTool exiting with ExitCode=0`, cook clean (0 errors, 1 warning =
+the editor-only UnrealClaude cook-commandlet tag, absent from the game). Staged
+`Packaged/Linux/SpaceGame.sh` + `SpaceGame-Linux-Shipping` (160 MB). Launched the packaged
+binary → LAN server bound `:8080` in ~2 s. **[S] (curl against the shipped build):** `GET /` →
+`301 → /stations`, `GET /stations` → `HTTP 200` (262 B), `GET /api/state` → `HTTP 200
+{"ok":false,"reason":"invalid pin ..."}` (R5(a) PIN gate live in Shipping). No fatal/assert in
+the boot log; process shut down cleanly, port down. (Commit: justfile + docs.)
