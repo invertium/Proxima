@@ -285,6 +285,15 @@ private:
 	/** Enemies currently in contact this frame, so a single collision only damages once. */
 	TSet<TWeakObjectPtr<AActor>> TouchingActors;
 
+	/** Collision candidate lists, refreshed on an interval instead of a full-world actor scan every
+	 *  tick. Positions are read live off the (weak) pointers each frame; only set membership is
+	 *  cached, so a ship that spawns/dies is picked up within CollisionScanInterval — imperceptible
+	 *  for ram detection but it drops two GetAllActorsOfClass sweeps per frame off the hot path. */
+	TArray<TWeakObjectPtr<AActor>> CachedRamTargets;
+	TArray<TWeakObjectPtr<AActor>> CachedBodies;
+	float CollisionScanAccum = 0.f;
+	static constexpr float CollisionScanInterval = 0.25f;
+
 	/** Emissive material for the warp flash + shield-impact sparks (cyan), loaded in the constructor. */
 	UPROPERTY()
 	TObjectPtr<class UMaterialInterface> WarpFxMaterial;

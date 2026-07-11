@@ -1554,3 +1554,29 @@ binary → LAN server bound `:8080` in ~2 s. **[S] (curl against the shipped bui
 `301 → /stations`, `GET /stations` → `HTTP 200` (262 B), `GET /api/state` → `HTTP 200
 {"ok":false,"reason":"invalid pin ..."}` (R5(a) PIN gate live in Shipping). No fatal/assert in
 the boot log; process shut down cleanly, port down. (Commit: justfile + docs.)
+
+## 2026-07-11 — ⚡ Performance: PSO precaching + drop the per-frame collision actor scans
+
+Chasing reported stutter when turning the ship fast. Two independent causes:
+
+1. **Render-side (the stutter itself).** No PSO/pipeline caching was configured, so an
+   off-screen mesh/material rotating into the frustum had its graphics pipeline compiled
+   *inline on the render thread* the first time it drew — a classic turn-hitch, worst on the
+   Vulkan build. Added a `[SystemSettings]` block to `DefaultEngine.ini`: `r.PSOPrecaching=1`,
+   `r.PSOPrecache.Components=1`, `r.PSOPrecache.Resources=1`, and
+   `r.PSOPrecache.ProxyCreationWhenPSOReady=1` (defer a mesh's first draw until its PSO is
+   ready — a frame-late pop-in instead of a frame stall).
+2. **CPU headroom.** `ASpaceship::HandleCollisions()` ran *every tick* and did two full-world
+   `GetAllActorsOfClass` sweeps (all enemies + all landmarks). Landmarks are spawned once at
+   begin play and never change; enemies come and go slowly. Now the candidate lists are cached
+   as weak pointers and refreshed on a 0.25 s interval (`CollisionScanInterval`), while live
+   positions are still read off the cached pointers every frame — so ram detection is unchanged
+   but two per-frame world scans leave the hot path.
+
+**Verified [L]:** editor target compiles clean (13.4 s, Spaceship.cpp rebuilt); `just
+package-linux` (Shipping) → `BUILD SUCCESSFUL`, `ExitCode=0`; the repackaged binary boots and
+the LAN server binds `:8080` (~3 s), no fatal in the log, clean shutdown. **Not verifiable from
+here:** the *felt* smoothness — frame hitches can't be observed over the LAN API, so the
+turning improvement needs an in-game re-test. If precaching alone isn't enough, the definitive
+fix is a bundled PSO cache recorded from a playthrough (`r.ShaderPipelineCache`), a follow-up.
+(Commit: Config/DefaultEngine.ini + Ships/Spaceship.{h,cpp} + docs.)

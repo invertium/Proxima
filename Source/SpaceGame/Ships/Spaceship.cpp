@@ -319,13 +319,27 @@ void ASpaceship::HandleCollisions(float DeltaSeconds)
 	const float Impact = RamDamage * (0.5f + FMath::Clamp(Speed / MaxSpeed, 0.f, 1.f));
 	const bool bMyShield = HealthComp && HealthComp->GetShield() > 0.f;
 
-	TArray<AActor*> Enemies;
-	UGameplayStatics::GetAllActorsOfClass(World, AEnemyShip::StaticClass(), Enemies);
+	// Refresh the candidate lists on an interval rather than sweeping every actor in the world twice
+	// per frame. Landmarks are spawned once at begin play; enemies come and go slowly relative to the
+	// 0.25 s cadence, and we still read their live positions off the cached pointers below.
+	CollisionScanAccum += DeltaSeconds;
+	if (CollisionScanAccum >= CollisionScanInterval || CachedRamTargets.Num() == 0)
+	{
+		CollisionScanAccum = 0.f;
+		TArray<AActor*> Found;
+		UGameplayStatics::GetAllActorsOfClass(World, AEnemyShip::StaticClass(), Found);
+		CachedRamTargets.Reset(Found.Num());
+		for (AActor* A : Found) { CachedRamTargets.Add(A); }
+
+		UGameplayStatics::GetAllActorsOfClass(World, AWorldLandmark::StaticClass(), Found);
+		CachedBodies.Reset(Found.Num());
+		for (AActor* A : Found) { CachedBodies.Add(A); }
+	}
 
 	TSet<TWeakObjectPtr<AActor>> StillTouching;
-	for (AActor* A : Enemies)
+	for (const TWeakObjectPtr<AActor>& Weak : CachedRamTargets)
 	{
-		AEnemyShip* Enemy = Cast<AEnemyShip>(A);
+		AEnemyShip* Enemy = Cast<AEnemyShip>(Weak.Get());
 		UHealthComponent* EnemyHealth = Enemy ? Enemy->GetHealthComp() : nullptr;
 		if (!EnemyHealth || !EnemyHealth->IsAlive()) { continue; }
 
