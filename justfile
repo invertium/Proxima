@@ -1,7 +1,7 @@
 # SpaceGame — packaging recipes (Unreal 5.7 BuildCookRun via UAT)
 #
 # Cross-compile reality: a host can only package for some targets.
-#   Linux host  -> Linux only          (this machine)
+#   Linux host  -> Linux only
 #   Windows host-> Windows and Linux
 #   macOS host  -> macOS only          (Apple toolchain / signing is Mac-locked)
 # So `package-windows` / `package-mac` are here for use ON those hosts; they
@@ -10,19 +10,25 @@
 #
 # The editor MUST be closed while packaging (UBT build mutex).
 
-# --- Tunables (override on the CLI, e.g. `just config=Development package-linux`) ---
-engine     := "/home/julian/UnrealEngine/UE_5.7"
+# --- Tunables (override on the CLI, e.g. `just config=Development package-mac`) ---
+engine     := if os() == "macos" { "/Users/Shared/Epic Games/UE_5.7" } else { "/home/julian/UnrealEngine/UE_5.7" }
 project    := justfile_directory() / "SpaceGame.uproject"
 archive    := justfile_directory() / "Packaged"
 config     := "Shipping"                 # Shipping | Development | Debug
 maps       := "/Game/Maps/MainMenu+/Game/Maps/VSlice_Arena"
 
 uat        := engine / "Engine/Build/BatchFiles/RunUAT.sh"
-_flags     := "-noP4 -build -cook -stage -pak -archive -unattended -nocompileeditor"
+build      := engine / "Engine/Build/BatchFiles" / if os() == "macos" { "Mac/Build.sh" } else { "Linux/Build.sh" }
+host       := if os() == "macos" { "Mac" } else { "Linux" }
+_flags     := "-noP4 -build -cook -stage -pak -package -archive -unattended -nocompileeditor"
 
 # Default: list recipes
 default:
     @just --list
+
+# Compile the editor target for the current host platform.
+build-editor:
+    "{{build}}" SpaceGameEditor {{host}} Development -Project="{{project}}" -WaitMutex
 
 # Package a standalone Linux build -> Packaged/Linux/  (run ./SpaceGame.sh)
 package-linux:

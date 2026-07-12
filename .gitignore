@@ -1,6 +1,11 @@
 # Unreal Engine generated/build artifacts
 Binaries/
-Build/
+Build/*
+!Build/Mac/
+Build/Mac/*
+!Build/Mac/Resources/
+Build/Mac/Resources/*
+!Build/Mac/Resources/Sandbox.Server.entitlements
 DerivedDataCache/
 Intermediate/
 Saved/
