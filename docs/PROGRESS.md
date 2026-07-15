@@ -1607,3 +1607,25 @@ cap holds: **16.80 ms / 59.5 fps** steady (was ~600 fps uncapped), game/render/G
 ms with headroom to spare. Fullscreen judder itself can't be measured headlessly — that needs an
 in-game re-test on the 60 Hz display. (Commit: Core/SettingsMenuWidget.{h,cpp} +
 Core/SpaceGameInstance.cpp + docs.)
+
+## 2026-07-15 — ✅ FIX: damage beep only when the hull is critical
+
+The bridge alarm beeped on **every** subsystem knockout — `UDamageControlComponent::DamageSystem`
+fired `S_Alarm` unconditionally, and since `HandleOwnerDamaged` rolls `DamageChance` (0.35) on every
+unshielded hull hit, routine chip damage at 90% hull beeped just as loudly as a real emergency. It
+read as "beeping on damage" and was pure noise.
+
+- **Gated the beep on hull state:** new `IsHullCritical()` helper reads the sibling
+  `UHealthComponent` and compares hull fraction against a new `AlarmHullFraction` tunable
+  (EditAnywhere, default **0.3** — deliberately matching `ASpaceship::LowHullFraction`, the
+  threshold the looping low-hull klaxon already uses). The alarm now plays only at/below it.
+- **Healthy hull:** a knocked-out system still logs and flags amber on the Engineering console, the
+  web page, and `/api/state` — it just doesn't beep. The information is still there, visually.
+- **Critical hull:** the beep returns, punctuating the continuous klaxon that's already running down
+  there, so audio escalates only when the situation genuinely warrants it.
+
+Untouched: the per-hit `S_Hit` impact thud, the one-shot red-alert sting, and the low-hull klaxon
+loop itself. Enemies never had a `DamageControlComponent` (`AEnemyShip` is a plain `APawn`), so this
+alarm was always player-only — the non-spatial `PlaySound2D` was never an enemy leaking into the mix.
+
+**Verified [L]:** editor compiles clean (13.8 s, `Result: Succeeded`).

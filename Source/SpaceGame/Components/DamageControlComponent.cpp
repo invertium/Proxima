@@ -63,10 +63,24 @@ void UDamageControlComponent::DamageSystem(EDamageSystem System)
 	UE_LOG(LogTemp, Log, TEXT("[DamageCtl] %s DAMAGED — running at %d%%"),
 		SystemName(System), FMath::RoundToInt(DamagedMultiplier * 100.f));
 
-	if (AlarmSound)
+	// Only beep when the ship is already in the red. Routine system knockouts at healthy hull
+	// flag amber silently — the low-hull klaxon owns the continuous critical alarm, so this
+	// punctuates it rather than beeping on every scratch.
+	if (AlarmSound && IsHullCritical())
 	{
 		UGameplayStatics::PlaySound2D(this, AlarmSound, 0.6f);
 	}
+}
+
+bool UDamageControlComponent::IsHullCritical() const
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner) { return false; }
+	const UHealthComponent* Health = Owner->FindComponentByClass<UHealthComponent>();
+	if (!Health) { return false; }
+	const float MaxHull = Health->GetMaxHull();
+	const float Frac = MaxHull > 0.f ? Health->GetHull() / MaxHull : 0.f;
+	return Frac <= AlarmHullFraction;
 }
 
 void UDamageControlComponent::RepairSystem(EDamageSystem System)

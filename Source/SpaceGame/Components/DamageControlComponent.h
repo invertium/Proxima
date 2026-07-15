@@ -86,6 +86,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Damage")
 	int32 WeldsPerSystemRepair = 3;
 
+	/** Only sound the system-damage alarm when hull is at/below this fraction (matches the ship's
+	 *  low-hull klaxon). Above it a knocked-out system flags amber silently — no beep per scratch. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Damage")
+	float AlarmHullFraction = 0.3f;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -102,6 +107,9 @@ protected:
 	int32 RepairWelds = 0;
 
 private:
+	/** True when the owner's hull is at/below AlarmHullFraction (gates the system-damage beep). */
+	bool IsHullCritical() const;
+
 	/** Short alarm burst on system damage (shares the S_Alarm asset with the low-hull klaxon). */
 	UPROPERTY()
 	TObjectPtr<USoundBase> AlarmSound;
