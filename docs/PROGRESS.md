@@ -1629,3 +1629,30 @@ loop itself. Enemies never had a `DamageControlComponent` (`AEnemyShip` is a pla
 alarm was always player-only — the non-spatial `PlaySound2D` was never an enemy leaking into the mix.
 
 **Verified [L]:** editor compiles clean (13.8 s, `Result: Succeeded`).
+
+## 2026-07-15 — ✅ FIX: ship SM5 alongside SM6 so the build runs on non-SM6 GPUs
+
+The v0.9.0 Linux release died on a tester's machine with **"Vulkan device could not be created at
+the project's supported feature levels"**. Cause: `Config/DefaultEngine.ini` dropped the engine's
+default Linux RHI and cooked **SM6 only**:
+
+```
+[/Script/LinuxTargetPlatform.LinuxTargetSettings]
+-TargetedRHIs=SF_VULKAN_SM5     ; removed the BaseEngine.ini default
++TargetedRHIs=SF_VULKAN_SM6
+```
+
+`LinuxDynamicRHI.cpp::PlatformCreateDynamicRHI` reads `TargetedRHIs`, sorts, and walks from the
+highest feature level down calling `IsSupported()`, logging `Skipping <format>...` on each miss. With
+SM6 as the only entry, a GPU/driver without SM6 has nothing to fall back to → `bVulkanSMFailed` →
+that error. It never showed up here because this box is an RX 9070 XT on Mesa 26.1 / Vulkan 1.4.
+
+- **Fix:** target **both** `SF_VULKAN_SM5` + `SF_VULKAN_SM6`. SM6 is still preferred where supported;
+  SM5 is the fallback. Verified both shader sets are now cooked into the pak (was SM6-only).
+- **Why it matters:** the SM5 path negotiates **Vulkan API 1.1**, where SM6 demands **1.3** — that
+  gap is precisely what older drivers fail on.
+
+**Verified [L]:** `-sm5` (a real RHI force via `LinuxDynamicRHI.cpp`, not just the NullRHI path)
+boots as `SF_VULKAN_SM5`, initializes the engine, loads `VSlice_Arena`, and runs 987 frames with
+**0** missing-shader/fatal errors, at `Using API Version 1.1`. Unforced still selects SM6 (no
+regression). Package re-scanned: no `VibeUEApiKey`, no credential-format strings.
