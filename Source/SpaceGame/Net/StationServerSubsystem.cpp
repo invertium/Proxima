@@ -660,6 +660,7 @@ setInterval(poll,250);poll();
 // The port the crew server actually bound this session (picked at begin play). Static so the
 // menus' GetCrewUrl() can advertise the right one even though it's not the compile-time default.
 int32 UStationServerSubsystem::BoundPort = -1; // -1 = not yet bound this process (see OnWorldBeginPlay)
+TSet<int32> UStationServerSubsystem::ActivePorts;
 
 bool UStationServerSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
@@ -682,21 +683,25 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// module reuses its retained listener for that port. Re-probing would see our own retained
 	// listeners as "busy" and, after ~8 world transitions, walk off the end of the range and wrongly
 	// disable the crew server (review P1). Only the very first world probes for a free port.
-	if (BoundPort > 0)
+	if (BoundPort > 0 && !ActivePorts.Contains(BoundPort))
 	{
+		// Sequential world: the prior world exited, its listener is retained and free to reclaim.
 		Port = BoundPort;
 	}
 	else
 	{
+		// First world, or a concurrent world whose predecessor still holds BoundPort — take a fresh port.
 		Port = FindFreePort(8080, 8);
 		if (Port < 0)
 		{
-			// Genuinely nothing free on first start — don't advertise a server that can't bind (BUG-10).
+			// Genuinely nothing free — don't advertise a server that can't bind (BUG-10).
 			UE_LOG(LogTemp, Warning, TEXT("[StationServer] ports 8080-8087 all busy — crew server not started"));
 			return;
 		}
 		BoundPort = Port;
 	}
+	ActivePorts.Add(Port);
+	bStarted = true;
 	{
 		TArray<FString> Overrides;
 		Overrides.Add(FString::Printf(TEXT("(Port=%d,BindAddress=any,ReuseAddressAndPort=true)"), Port));
@@ -841,6 +846,14 @@ void UStationServerSubsystem::Deinitialize()
 	RouteHandles.Reset();
 	RootRedirectHandle.Reset();
 	Router.Reset();
+
+	// Release our port so a later sequential world may reclaim it (review P2c). The listener itself
+	// stays bound (we deliberately don't StopAllListeners) and is reused when that port is reclaimed.
+	if (bStarted)
+	{
+		ActivePorts.Remove(Port);
+		bStarted = false;
+	}
 
 	// Deliberately NOT calling StopAllListeners(): it's global (it would also stop other
 	// modules' listeners, e.g. the editor's on :3000), and tearing the socket down here only
@@ -1480,8 +1493,12 @@ bool UStationServerSubsystem::HandleWarp(const FHttpServerRequest& Request, cons
 	}
 	if (!bJumped)
 	{
-		OnComplete(MakeVerdict(false, Ship->IsDocked()
-			? TEXT("warp offline while docked") : TEXT("warp drive still charging")));
+		// A charged, undocked drive that still didn't jump means the objective was already within
+		// standoff — report that, not a false "still charging" (review P2b).
+		const TCHAR* Why = Ship->IsDocked() ? TEXT("warp offline while docked")
+			: !Ship->IsWarpReady() ? TEXT("warp drive still charging")
+			: TEXT("already at the objective");
+		OnComplete(MakeVerdict(false, Why));
 		return true;
 	}
 	OnComplete(MakeVerdict(true));

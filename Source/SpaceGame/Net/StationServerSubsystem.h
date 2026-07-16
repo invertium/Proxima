@@ -99,6 +99,14 @@ private:
 	/** Static mirror of the bound port so the static GetCrewUrl() can advertise the right one. */
 	static int32 BoundPort;
 
+	/** Ports currently owned by a *live* server instance. A new world reuses BoundPort only when no
+	 *  live world still holds it (sequential worlds); a concurrent world takes its own free port so it
+	 *  doesn't steal a live world's router (review P2c). */
+	static TSet<int32> ActivePorts;
+
+	/** True once this instance successfully claimed a port (gates ActivePorts cleanup in Deinitialize). */
+	bool bStarted = false;
+
 	/** World-time of the last credited repair, to throttle the Engineering weld minigame. */
 	double LastRepairTime = 0.0;
 };

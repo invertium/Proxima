@@ -1183,11 +1183,13 @@ void UMissionSubsystem::StartSkirmish(UWorld& World)
 	bSkirmishMode = true;
 	SkirmishWave = 0;
 
-	// The arena is the Pact staging point: park the ship off Ember so wave 1 is right there.
+	// The arena is the Pact staging point: park the ship off Ember so wave 1 is right there. Keep it
+	// well clear of the sun — spawns clamp to Ember's ~15000 uu surface shell, so parking at 16000
+	// would drop wave 1 in ram range; 26000 leaves ~11000 uu of standoff (review P2).
 	const FVector Arena = GetSystemLocation(MissionCount() - 1);
 	if (APawn* Player = UGameplayStatics::GetPlayerPawn(&World, 0))
 	{
-		Player->SetActorLocation(Arena - FVector(16000.f, 0.f, 0.f), false, nullptr,
+		Player->SetActorLocation(Arena - FVector(26000.f, 0.f, 0.f), false, nullptr,
 			ETeleportType::TeleportPhysics);
 	}
 

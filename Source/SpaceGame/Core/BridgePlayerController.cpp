@@ -414,7 +414,8 @@ void ABridgePlayerController::HelmWarpToObjective()
 	if (!Ship->WarpToObjective(Target))
 	{
 		UE_LOG(LogTemp, Log, TEXT("[Bridge] Lay-in-course refused — %s"),
-			Ship->IsDocked() ? TEXT("docked") : TEXT("warp still charging"));
+			Ship->IsDocked() ? TEXT("docked")
+			: !Ship->IsWarpReady() ? TEXT("warp still charging") : TEXT("already at the objective"));
 	}
 }
 

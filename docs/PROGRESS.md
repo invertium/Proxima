@@ -1874,3 +1874,14 @@ trusted-LAN PIN design were left as-is per the triage.
 
 **Verified [L]:** builds clean; server still starts; BUG-08 rejections confirmed over the API
 (bad alert/preset/system/ship all `ok:false`, valid commands `ok:true`).
+
+## PR #12 codex re-review fixes (2026-07-17)
+
+Three P2 regressions from the audit fixes, caught by codex:
+- **Skirmish spawn (P2a):** the BUG-01 body clamp pushed wave-1 spawns to Ember's ~15000 uu shell while
+  the skirmish player parked at 16000 — ~1000 uu apart, in ram range. Park the player at 26000 instead.
+- **Warp reason (P2b):** BUG-07's `false` return for an already-arrived warp was reported as "still
+  charging". Callers now check `IsWarpReady()` and report "already at the objective" instead.
+- **Crew port ownership (P2c):** reusing `BoundPort` unconditionally let a concurrent PIE world steal a
+  live world's router. Track `ActivePorts` (ports held by live instances) and reuse `BoundPort` only
+  when no live world holds it; concurrent worlds take their own free port. Released in Deinitialize.
