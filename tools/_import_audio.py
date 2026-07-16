@@ -1,4 +1,5 @@
 """Import the 4 SFX WAVs as SoundWave assets into /Game/Audio."""
+import os
 import unreal
 
 # Be safe re: the Interchange async-import crash (audio likely legacy, but disable anyway).
@@ -7,7 +8,8 @@ for c in ("Interchange.FeatureFlags.Import.FBX 0",):
 
 at = unreal.AssetToolsHelpers.get_asset_tools()
 eal = unreal.EditorAssetLibrary
-BASE = "/home/julian/gitrepos/spaceGame/_assets_dl/audio/wav"
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE = os.path.join(_REPO, "_assets_dl", "audio", "wav")
 
 for name in ("S_BeamFire", "S_EnemyFire", "S_Hit", "S_Explosion"):
     t = unreal.AssetImportTask()

@@ -8,7 +8,7 @@ Each milestone needs a concrete "done when…" check confirmable via screenshot 
 
 ## Phase 0 — Environment & setup  [~]
 - [x] Audit OS/GPU/display/toolchain (see PROGRESS 2026-06-17)
-- [x] Install UE 5.7 on Linux — binary 5.7.4 at /home/julian/UnrealEngine/UE_5.7, verified runnable (2026-06-18)
+- [x] Install UE 5.7 on Linux — binary 5.7.4 at ~/UnrealEngine/UE_5.7, verified runnable (2026-06-18)
 - [x] Create SpaceGame C++ project + clone UnrealClaude & VibeUE into Plugins/ (2026-06-18)
 - [x] Build plugins — SpaceGameEditor build Succeeded; all 3 module .so built (patched VibeUE -Wcomment bug)
 - [x] Headless load verification — both plugins mount/init, no crash; UnrealClaude registered capture_viewport + actor tools

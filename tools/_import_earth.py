@@ -12,10 +12,12 @@ Key gotchas learned:
     importers first so the legacy synchronous factory is used. See
     memory: fbx-import-interchange-crash.
 """
+import os
 import sys
 
-BLEND = "/home/julian/gitrepos/spaceGame/_assets_dl/earth.blend"
-EXPORT = "/home/julian/gitrepos/spaceGame/_assets_dl/earth_export"
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BLEND = os.path.join(_REPO, "_assets_dl", "earth.blend")
+EXPORT = os.path.join(_REPO, "_assets_dl", "earth_export")
 
 
 def stage_a_blender():

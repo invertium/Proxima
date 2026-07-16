@@ -8,7 +8,7 @@ Terse, factual, newest at bottom. Update at end of every step/session.
 
 **Done & verified (hard facts from system probes):**
 - OS: CachyOS Linux (Arch-based), kernel 7.0.12-1-cachyos, x86_64
-- Host: julian-gaming-cachy
+- Host: dev-host
 - CPU: 12 logical cores
 - RAM: 31 GiB total, ~25 GiB available
 - Disk: /home on nvme0n1p2, 607 GB free of 928 GB
@@ -20,7 +20,7 @@ Terse, factual, newest at bottom. Update at end of every step/session.
 
 **Decisions this session:**
 - Target UE **5.7** (not 5.8) — user directive. Reason: both required plugins officially support 5.7; 5.8 (released today 2026-06-17) is unverified for these plugins.
-- Project root: /home/julian/gitrepos/spaceGame
+- Project root: ~/spaceGame
 
 **Blocked on user (GUI/manual actions):**
 - Install UE 5.7 on Linux
@@ -33,7 +33,7 @@ Terse, factual, newest at bottom. Update at end of every step/session.
 
 ## 2026-06-18 — UE 5.7 installed (binary) & verified
 
-- User installed **precompiled binary** UE **5.7.4** at `/home/julian/UnrealEngine/UE_5.7` (65 GB). Source zip: `~/Downloads/Linux_Unreal_Engine_5.7.4.zip` (30 GB).
+- User installed **precompiled binary** UE **5.7.4** at `~/UnrealEngine/UE_5.7` (65 GB). Source zip: `~/Downloads/Linux_Unreal_Engine_5.7.4.zip` (30 GB).
 - Went binary route → **GitHub↔Epic source-access gate is now moot** (only needed for source build).
 - Verified runnable:
   - `UnrealEditor` + `UnrealEditor-Cmd` present & executable; `ldd` → all libs resolved ✅
@@ -1656,3 +1656,21 @@ that error. It never showed up here because this box is an RX 9070 XT on Mesa 26
 boots as `SF_VULKAN_SM5`, initializes the engine, loads `VSlice_Arena`, and runs 987 frames with
 **0** missing-shader/fatal errors, at `Using API Version 1.1`. Unforced still selects SM6 (no
 regression). Package re-scanned: no `VibeUEApiKey`, no credential-format strings.
+
+---
+
+## Public-repo hygiene + license (2026-07-16)
+
+Repo went public. Cleanup pass so nothing machine-specific or secret ships:
+- **Secret:** blanked the committed AndroidFileServer `SecurityToken` in `Config/DefaultEngine.ini`
+  (auto-generated dev token, `bIncludeInShipping=False` — never shipped; editor regenerates on demand).
+- **Paths / username:** replaced hardcoded `/home/julian/...` and the `julian-gaming-cachy` hostname
+  across `README.md`, `justfile` (now `UE_ROOT`-overridable, defaults to `$HOME/UnrealEngine/UE_5.7`),
+  `tools/_import_*.py` (anchored to the repo via `__file__`), and `docs/*`.
+- **License:** added `LICENSE` — **PolyForm Noncommercial License 1.0.0** (noncommercial use allowed,
+  commercial use forbidden) + a README License section.
+
+**History scan:** searched all 90 commits for credential formats (`sk-ant-`/`ghp_`/`github_pat_`/
+`AKIA…`/PRIVATE KEY) and for any committed `VibeUEApiKey=`/`ApiKey=` value — **none found**. The only
+secret ever in history is the AndroidFileServer token above, present since the baseline commit
+`deb059d`; it's inert (dev-only, unshipped) so history was left intact rather than force-rewritten.

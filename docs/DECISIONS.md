@@ -13,7 +13,7 @@ Append decisions; don't re-litigate. Newest at bottom.
 - **Implication:** Screenshot capture is engine-internal (Slate viewport render), not OS screen-grab, so it works as long as the GPU/Vulkan context is live. Real Wayland+XWayland display is present.
 
 ### D3 — Project root & docs
-- Project root: `/home/julian/gitrepos/spaceGame`
+- Project root: `~/spaceGame`
 - Living state in `docs/`: PROJECT_PLAN.md, PROGRESS.md, DECISIONS.md. Read these first every session.
 
 ### D4 — AI tooling

@@ -26,15 +26,15 @@ sun, trigger encounters by proximity, warp to travel, dock to repair and buy upg
 
 ```ini
 [Installations]
-UE_5.7=/home/julian/UnrealEngine/UE_5.7
+UE_5.7=/home/<you>/UnrealEngine/UE_5.7
 ```
 
 If yours differs, substitute your path for `$UE` below.
 
 ```fish
 # set once per shell (fish syntax; use `export` for bash)
-set -x UE /home/julian/UnrealEngine/UE_5.7
-set -x PROJ /home/julian/gitrepos/spaceGame/SpaceGame.uproject
+set -x UE $HOME/UnrealEngine/UE_5.7
+set -x PROJ (pwd)/SpaceGame.uproject   # run from the repo root
 ```
 
 ---
@@ -162,6 +162,15 @@ docs/
 
 Development follows a **one-commit-per-feature** cadence; `docs/PROGRESS.md` is the running history
 of what was built and how it was verified.
+
+---
+
+## 9. License
+
+Licensed under the **[PolyForm Noncommercial License 1.0.0](LICENSE)** — free to use, modify, and
+share for any **noncommercial** purpose (personal, hobby, research, education); **commercial use is
+not permitted**. This covers the SpaceGame source, content, and docs. Unreal Engine (UE EULA), the
+bundled dev-tooling plugins, and any downloaded art assets keep their own separate licenses.
 
 ### A note for contributors / agents
 

@@ -11,7 +11,8 @@
 # The editor MUST be closed while packaging (UBT build mutex).
 
 # --- Tunables (override on the CLI, e.g. `just config=Development package-mac`) ---
-engine     := if os() == "macos" { "/Users/Shared/Epic Games/UE_5.7" } else { "/home/julian/UnrealEngine/UE_5.7" }
+# Override the engine location with `UE_ROOT=/path just …`; the defaults match a stock install.
+engine     := env_var_or_default("UE_ROOT", if os() == "macos" { "/Users/Shared/Epic Games/UE_5.7" } else { env_var("HOME") / "UnrealEngine/UE_5.7" })
 project    := justfile_directory() / "SpaceGame.uproject"
 archive    := justfile_directory() / "Packaged"
 config     := "Shipping"                 # Shipping | Development | Debug

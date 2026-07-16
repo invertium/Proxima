@@ -15,7 +15,8 @@ for _cmd in (
     except Exception as _e:
         print("cvar skip:", _cmd, _e)
 
-BASE = "/home/julian/gitrepos/spaceGame/_assets_dl/Ultimate Spaceships - May 2021"
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE = os.path.join(_REPO, "_assets_dl", "Ultimate Spaceships - May 2021")
 
 # (ship folder, color variant, content name)
 SHIPS = [

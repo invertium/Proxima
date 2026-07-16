@@ -33,13 +33,13 @@ ps -eo comm | grep -i UnrealEditor
 # kill if needed: kill <pids from pgrep -x UnrealEditor>, then kill -9 stragglers.
 
 # 1. Build:
-/home/julian/UnrealEngine/UE_5.7/Engine/Build/BatchFiles/Linux/Build.sh \
+~/UnrealEngine/UE_5.7/Engine/Build/BatchFiles/Linux/Build.sh \
   SpaceGameEditor Linux Development \
-  -Project=/home/julian/gitrepos/spaceGame/SpaceGame.uproject -WaitMutex
+  -Project=~/spaceGame/SpaceGame.uproject -WaitMutex
 
 # 2. Launch editor (background), then poll VibeUE MCP until ready (~60-120s):
-nohup /home/julian/UnrealEngine/UE_5.7/Engine/Binaries/Linux/UnrealEditor \
-  /home/julian/gitrepos/spaceGame/SpaceGame.uproject > /tmp/spacegame_editor.log 2>&1 &
+nohup ~/UnrealEngine/UE_5.7/Engine/Binaries/Linux/UnrealEditor \
+  ~/spaceGame/SpaceGame.uproject > /tmp/spacegame_editor.log 2>&1 &
 # poll http://127.0.0.1:8088/mcp until it answers.
 
 # 3. Drive the editor with Python: write a .py file, then
