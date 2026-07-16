@@ -35,6 +35,10 @@ void ATorpedoProjectile::Activate(const FVector& Start, AActor* InTarget, UMater
 	MaxLifetime = InLifetime;
 	LastTargetLoc = InTarget ? InTarget->GetActorLocation() : Start;
 
+	// Launch bearing: point at the target now; the limited-turn steering takes over from here.
+	Heading = (LastTargetLoc - Start).GetSafeNormal();
+	if (Heading.IsNearlyZero()) { Heading = FVector::ForwardVector; }
+
 	if (Material)
 	{
 		Mesh->SetMaterial(0, Material);
@@ -111,11 +115,14 @@ void ATorpedoProjectile::Tick(float DeltaSeconds)
 		return;
 	}
 
-	const FVector Step = ToTarget.GetSafeNormal() * Speed * DeltaSeconds;
-	if (Step.Size() >= Dist)
+	// Steer toward the target, but only at TurnRateDeg/s — the torpedo can't snap around to chase
+	// a warp jump or a hard juke (issue #2). If it can't turn tight enough it flies straight past
+	// and fizzles at MaxLifetime (Detonate only lands the payload within BlastRadius).
+	const FVector Desired = ToTarget.GetSafeNormal();
+	if (!Desired.IsNearlyZero())
 	{
-		Detonate(LastTargetLoc);
-		return;
+		Heading = FMath::VInterpNormalRotationTo(Heading, Desired, DeltaSeconds, TurnRateDeg);
 	}
-	SetActorLocation(Loc + Step);
+	SetActorLocation(Loc + Heading * Speed * DeltaSeconds);
+	SetActorRotation(Heading.Rotation()); // orient along travel (cosmetic for the sphere slug)
 }

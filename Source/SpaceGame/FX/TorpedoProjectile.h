@@ -49,4 +49,13 @@ private:
 	float HitRadius = 350.f;     // detonation proximity (uu)
 	float BlastRadius = 700.f;   // payload only lands if the target is inside this (M26: evadable)
 	FVector LastTargetLoc = FVector::ZeroVector;
+
+	/** Current travel direction (unit). The torpedo steers this toward the target at TurnRateDeg
+	 *  per second rather than snapping straight at it — so a hard turn or a warp jump slips it
+	 *  (issue #2: no instant 180s, no guaranteed hit). Set to the launch bearing on Activate. */
+	FVector Heading = FVector::ForwardVector;
+
+	/** Max steering rate (deg/s). ~75 lets it gently track a maneuvering ship but never reverse
+	 *  fast enough to re-acquire a target that jumps or juke away. */
+	float TurnRateDeg = 75.f;
 };
