@@ -43,6 +43,7 @@ float UHealthComponent::ApplyDamage(float Amount, bool bBypassShield)
 		return Hull;
 	}
 
+	const float PreHull = Hull;
 	float Effective;
 	float Mitigation = 0.f;
 	if (bBypassShield)
@@ -70,8 +71,9 @@ float UHealthComponent::ApplyDamage(float Amount, bool bBypassShield)
 		Owner ? *Owner->GetName() : TEXT("?"), Amount, bBypassShield ? TEXT(" [TORPEDO]") : TEXT(""),
 		Mitigation * 100.f, Effective, Shield, MaxShield, Hull, MaxHull);
 
-	// Per-hit feedback hook (camera shake, hit FX). Effective>0 here by construction.
-	OnDamaged.Broadcast(Effective, Hull);
+	// Per-hit feedback hook (camera shake, hit FX). Effective>0 here by construction; HullDamage is
+	// what actually reached hull (0 for a shield-only hit — see audit BUG-06).
+	OnDamaged.Broadcast(Effective, PreHull - Hull, Hull);
 
 	if (Hull <= 0.f && !bDeathBroadcast)
 	{

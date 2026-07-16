@@ -614,7 +614,13 @@ setInterval(poll,250);poll();
 	{
 		if (const FString* Val = Request.QueryParams.Find(Key))
 		{
-			return FCString::Atof(**Val);
+			// Reject non-numeric / NaN / Inf so a malformed param falls back instead of silently
+			// coercing to 0 or poisoning the sim with a non-finite value (audit BUG-08).
+			if (Val->IsNumeric())
+			{
+				const float Parsed = FCString::Atof(**Val);
+				if (FMath::IsFinite(Parsed)) { return Parsed; }
+			}
 		}
 		return Default;
 	}
@@ -641,7 +647,13 @@ setInterval(poll,250);poll();
 			if (bFree) { return P; }
 			UE_LOG(LogTemp, Log, TEXT("[StationServer] port %d busy — trying next"), P);
 		}
-		return Start;
+		return -1; // none free — caller must not advertise a server that can't bind (audit BUG-10)
+	}
+
+	// Wrap an IPv6 literal in [] so it forms a valid URL authority; IPv4/hostnames pass through.
+	FString UrlHost(const FString& Addr)
+	{
+		return Addr.Contains(TEXT(":")) ? FString::Printf(TEXT("[%s]"), *Addr) : Addr;
 	}
 }
 
@@ -668,6 +680,13 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// Pick a free port at/after 8080 so we never fight another service already on it (the user's
 	// machine had one). The chosen port is stored statically so GetCrewUrl() advertises it.
 	Port = FindFreePort(8080, 8);
+	if (Port < 0)
+	{
+		// Every candidate was busy — don't stand up (and advertise) a server that can't bind (BUG-10).
+		BoundPort = -1;
+		UE_LOG(LogTemp, Warning, TEXT("[StationServer] ports 8080-8087 all busy — crew server not started"));
+		return;
+	}
 	BoundPort = Port;
 	{
 		TArray<FString> Overrides;
@@ -789,9 +808,9 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Http.StartAllListeners();
 
 	const FString Lan = GetLanAddress();
-	const TCHAR* Host = Lan.IsEmpty() ? TEXT("<this-machine-LAN-IP>") : *Lan;
+	const FString Host = Lan.IsEmpty() ? FString(TEXT("<this-machine-LAN-IP>")) : UrlHost(Lan);
 	UE_LOG(LogTemp, Log, TEXT("[StationServer] bridge stations live at  http://%s:%d/stations?pin=%s   (open on any LAN device; the PIN gates all access)"),
-		Host, Port, *GetSessionPin());
+		*Host, Port, *GetSessionPin());
 }
 
 void UStationServerSubsystem::Deinitialize()
@@ -869,8 +888,8 @@ FString UStationServerSubsystem::GetCrewUrl()
 	const FString Lan = GetLanAddress();
 	// The URL carries the session PIN (R5): typing it as shown is all the crew needs, and
 	// anything on the LAN without it is rejected.
-	return Lan.IsEmpty() ? FString()
-		: FString::Printf(TEXT("http://%s:%d/stations?pin=%s"), *Lan, BoundPort, *GetSessionPin());
+	return (Lan.IsEmpty() || BoundPort < 0) ? FString()
+		: FString::Printf(TEXT("http://%s:%d/stations?pin=%s"), *UrlHost(Lan), BoundPort, *GetSessionPin());
 }
 
 const FString& UStationServerSubsystem::GetSessionPin()
@@ -890,6 +909,7 @@ FString UStationServerSubsystem::GetLanAddress()
 	}
 
 	TArray<TSharedPtr<FInternetAddr>> Addresses;
+	FString Ipv6Fallback;
 	if (Sockets->GetLocalAdapterAddresses(Addresses))
 	{
 		for (const TSharedPtr<FInternetAddr>& Addr : Addresses)
@@ -897,14 +917,19 @@ FString UStationServerSubsystem::GetLanAddress()
 			if (Addr.IsValid() && Addr->IsValid())
 			{
 				const FString Str = Addr->ToString(false); // host only, no port
-				if (!Str.StartsWith(TEXT("127."))) // skip loopback
+				if (Str.StartsWith(TEXT("127."))) { continue; } // skip loopback
+				// Prefer an IPv4 adapter (crew devices reach it directly); keep IPv6 only as a
+				// last resort so an IPv6-first host doesn't publish an unreachable URL (BUG-10).
+				if (Str.Contains(TEXT(":")))
 				{
-					return Str;
+					if (Ipv6Fallback.IsEmpty()) { Ipv6Fallback = Str; }
+					continue;
 				}
+				return Str;
 			}
 		}
 	}
-	return FString();
+	return Ipv6Fallback;
 }
 
 bool UStationServerSubsystem::HandleIndex(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
@@ -1162,9 +1187,14 @@ bool UStationServerSubsystem::HandleAlert(const FHttpServerRequest& Request, con
 		return true;
 	}
 	const FString* State = Request.QueryParams.Find(TEXT("state"));
-	if (State && *State == TEXT("red"))        { Ship->SetRedAlert(true); }
-	else if (State && *State == TEXT("green")) { Ship->SetRedAlert(false); }
-	else                                       { Ship->ToggleRedAlert(); }
+	if (State && *State == TEXT("red"))                 { Ship->SetRedAlert(true); }
+	else if (State && *State == TEXT("green"))          { Ship->SetRedAlert(false); }
+	else if (!State || *State == TEXT("toggle"))        { Ship->ToggleRedAlert(); }
+	else // a present-but-unrecognised state is an error, not a silent toggle (audit BUG-08)
+	{
+		OnComplete(MakeVerdict(false, TEXT("unknown alert state (want red|green|toggle)")));
+		return true;
+	}
 	OnComplete(MakeVerdict(true));
 	return true;
 }
@@ -1504,8 +1534,19 @@ bool UStationServerSubsystem::HandleShip(const FHttpServerRequest& Request, cons
 		OnComplete(MakeVerdict(false, TEXT("not docked - the hangar is at a station")));
 		return true;
 	}
-	USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr;
+	// Validate the id is a real ship enum member, not just any integer (audit BUG-08).
+	if (!IdStr->IsNumeric())
+	{
+		OnComplete(MakeVerdict(false, TEXT("invalid ship id")));
+		return true;
+	}
 	const EPlayerShipType Type = (EPlayerShipType)FCString::Atoi(**IdStr);
+	if (!ShipCatalogue::Find(Type))
+	{
+		OnComplete(MakeVerdict(false, TEXT("unknown ship id")));
+		return true;
+	}
+	USpaceGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<USpaceGameInstance>() : nullptr;
 	if (GI && *Action == TEXT("buy"))
 	{
 		if (!GI->BuyShip(Type))
@@ -1602,9 +1643,15 @@ bool UStationServerSubsystem::HandlePower(const FHttpServerRequest& Request, con
 	{
 		if (const FString* Preset = Request.QueryParams.Find(TEXT("preset")))
 		{
-			EPowerPreset Pick = EPowerPreset::Balanced;
-			if (*Preset == TEXT("combat")) { Pick = EPowerPreset::Combat; }
-			if (*Preset == TEXT("travel")) { Pick = EPowerPreset::Travel; }
+			EPowerPreset Pick;
+			if (*Preset == TEXT("combat"))        { Pick = EPowerPreset::Combat; }
+			else if (*Preset == TEXT("travel"))   { Pick = EPowerPreset::Travel; }
+			else if (*Preset == TEXT("balanced")) { Pick = EPowerPreset::Balanced; }
+			else // unknown presets are rejected rather than silently applying Balanced (audit BUG-08)
+			{
+				OnComplete(MakeVerdict(false, TEXT("unknown power preset (want combat|travel|balanced)")));
+				return true;
+			}
 			Power->ApplyPreset(Pick);
 			OnComplete(MakeVerdict(true));
 			return true;
@@ -1615,7 +1662,13 @@ bool UStationServerSubsystem::HandlePower(const FHttpServerRequest& Request, con
 		OnComplete(MakeVerdict(false, TEXT("missing system")));
 		return true;
 	}
-	const int32 Sys = FMath::Clamp((int32)QueryFloat(Request, TEXT("system"), -1.f), 0, 2);
+	// Validate the system index instead of clamping garbage into Engine (audit BUG-08).
+	const int32 Sys = (int32)QueryFloat(Request, TEXT("system"), -1.f);
+	if (Sys < 0 || Sys > 2)
+	{
+		OnComplete(MakeVerdict(false, TEXT("invalid system (want 0-2)")));
+		return true;
+	}
 	Power->AdjustSystemPower((EShipSystem)Sys, QueryFloat(Request, TEXT("delta"), 0.f));
 	OnComplete(MakeVerdict(true));
 	return true;

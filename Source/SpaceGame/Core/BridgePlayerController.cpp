@@ -131,16 +131,25 @@ void ABridgePlayerController::HandleEnemyDeath(AActor* DeadActor)
 	// and calls OnCampaignComplete() on the *final* clear. This handler only banks salvage + game-feel.
 }
 
-void ABridgePlayerController::OnCampaignComplete()
+bool ABridgePlayerController::TryLatchOutcome(EOutcomeKind Kind)
 {
-	// If the player died on the same beat (defeat overlay already up), don't also bank a win.
-	if (Outcome) { return; }
-
-	UE_LOG(LogTemp, Log, TEXT("[Bridge] VICTORY — campaign complete"));
+	if (bOutcomeLatched) { return false; } // first terminal event already won
+	bOutcomeLatched = true;
+	OutcomeKind = Kind;
 	if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
 	{
-		GM->SetPhase(EGamePhase::Victory);
+		GM->SetPhase(Kind == EOutcomeKind::Defeat ? EGamePhase::Defeat : EGamePhase::Victory);
 	}
+	return true;
+}
+
+void ABridgePlayerController::OnCampaignComplete()
+{
+	// Claim the terminal outcome. If the player already died this beat, defeat latched first and this
+	// win is dropped — no victory-over-a-wreck race (audit BUG-03).
+	if (!TryLatchOutcome(EOutcomeKind::VictoryComplete)) { return; }
+
+	UE_LOG(LogTemp, Log, TEXT("[Bridge] VICTORY — campaign complete"));
 
 	// Salvage standing for the epilogue (the director already advanced + saved the campaign).
 	const USpaceGameInstance* GI = GetGameInstance<USpaceGameInstance>();
@@ -489,14 +498,14 @@ void ABridgePlayerController::OnPossess(APawn* InPawn)
 
 void ABridgePlayerController::HandlePlayerDeath(AActor* DeadActor)
 {
+	// Claim the terminal outcome (latches Defeat + sets the phase synchronously). If victory already
+	// latched this beat, the ship dying just after the final clear doesn't undo the win (audit BUG-03).
+	if (!TryLatchOutcome(EOutcomeKind::Defeat)) { return; }
+
 	UE_LOG(LogTemp, Log, TEXT("[Bridge] PLAYER DEFEATED — ship destroyed"));
 
-	// Phase flips right away (hostiles stand down off it; the web API reports Defeat), but the
-	// overlay waits a short beat so the crew watches the ship go up instead of an instant menu (M24).
-	if (ASpaceGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ASpaceGameMode>() : nullptr)
-	{
-		GM->SetPhase(EGamePhase::Defeat);
-	}
+	// Phase already flipped to Defeat in the latch (hostiles stand down off it; the web API reports
+	// Defeat), but the overlay waits a short beat so the crew watches the ship go up (M24).
 	GetWorldTimerManager().SetTimer(DefeatBeatTimer, this,
 		&ABridgePlayerController::ShowDefeatOutcome, DefeatBeatSeconds, false);
 }

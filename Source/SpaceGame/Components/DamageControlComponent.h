@@ -96,7 +96,7 @@ protected:
 
 	/** Bound to the sibling health's OnDamaged: rolls system damage on hull hits. */
 	UFUNCTION()
-	void HandleOwnerDamaged(float EffectiveDamage, float HullRemaining);
+	void HandleOwnerDamaged(float EffectiveDamage, float HullDamage, float HullRemaining);
 
 	/** Per-system damage flags, indexed by EDamageSystem. */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Damage")

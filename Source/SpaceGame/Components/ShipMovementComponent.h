@@ -49,6 +49,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
 	float GetSpeed() const { return CurrentSpeed; }
 
+	/** Total planar speed (uu/s) combining forward/reverse and lateral strafe — the real ground speed,
+	 *  used by docking so a full-strafe approach can't dock (audit BUG-04). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
+	float GetPlanarSpeed() const { return FMath::Sqrt(CurrentSpeed * CurrentSpeed + CurrentStrafeSpeed * CurrentStrafeSpeed); }
+
 	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
 	float GetThrottle() const { return ThrottleInput; }
 

@@ -127,22 +127,18 @@ bool UDamageControlComponent::CreditRepairWeld()
 	return true;
 }
 
-void UDamageControlComponent::HandleOwnerDamaged(float EffectiveDamage, float HullRemaining)
+void UDamageControlComponent::HandleOwnerDamaged(float EffectiveDamage, float HullDamage, float HullRemaining)
 {
-	// Only hull hits threaten systems: with shields still up the pool soaked the blow.
 	if (HullRemaining <= 0.f)
 	{
 		return; // dead — the defeat flow owns what happens next
 	}
-	if (const AActor* Owner = GetOwner())
+	// Only hits that actually reach hull threaten systems. Using the real hull-damage amount (not
+	// "is any shield left?") means an exactly-shield-depleting hit no longer knocks out a subsystem,
+	// while a shield-bypassing torpedo correctly can (audit BUG-06).
+	if (HullDamage <= 0.f)
 	{
-		if (const UHealthComponent* Health = Owner->FindComponentByClass<UHealthComponent>())
-		{
-			if (Health->GetShield() > 0.f)
-			{
-				return;
-			}
-		}
+		return;
 	}
 	if (FMath::FRand() >= DamageChance)
 	{

@@ -16,6 +16,7 @@
 #include "World/SalvageCache.h"
 #include "World/Station.h"
 #include "World/WorldLandmark.h"
+#include "World/GravityField.h"
 
 namespace
 {
@@ -593,7 +594,7 @@ void UMissionSubsystem::SpawnEventShips(UWorld& World, const FVector& Center, co
 	{
 		const float T = (Types.Num() <= 1) ? 0.f : ((float)i / (float)(Types.Num() - 1) - 0.5f);
 		const FVector Dir = FaceDir.RotateAngleAxis(T * 50.f, FVector::UpVector);
-		const FVector Loc = Center + Dir * (3500.f + (i % 2) * 1800.f);
+		const FVector Loc = GravityField::ClampOutsideBodies(&World, Center + Dir * (3500.f + (i % 2) * 1800.f), 2500.f);
 		FTransform Xform((PlayerLoc - Loc).Rotation(), Loc);
 		AEnemyShip* Enemy = World.SpawnActorDeferred<AEnemyShip>(
 			AEnemyShip::StaticClass(), Xform, nullptr, nullptr,
@@ -864,7 +865,8 @@ void UMissionSubsystem::SpawnBountyShip()
 		return;
 	}
 
-	const FVector Loc = GetSystemLocation(GI->GetContractTargetA()) + FVector(4500.f, -4500.f, 0.f);
+	const FVector Loc = GravityField::ClampOutsideBodies(World,
+		GetSystemLocation(GI->GetContractTargetA()) + FVector(4500.f, -4500.f, 0.f), 2500.f); // audit BUG-01
 	FTransform Xform(FRotator::ZeroRotator, Loc);
 	AEnemyShip* Enemy = World->SpawnActorDeferred<AEnemyShip>(
 		AEnemyShip::StaticClass(), Xform, nullptr, nullptr,
@@ -1086,7 +1088,9 @@ void UMissionSubsystem::SpawnFleet(UWorld& World)
 		const float AngleDeg = T * 70.f;
 		const float Dist = 6000.f + (i % 2) * 2600.f;
 		const FVector Dir = FaceDir.RotateAngleAxis(AngleDeg, FVector::UpVector);
-		const FVector Loc = Center + Dir * Dist;
+		// Keep the spawn outside any solid body: the sun's radius (~12500) exceeds these formation
+		// distances, so a fleet at Ember would otherwise power up *inside* the star (audit BUG-01).
+		const FVector Loc = GravityField::ClampOutsideBodies(&World, Center + Dir * Dist, 2500.f);
 		const FRotator Rot = (PlayerLoc - Loc).Rotation(); // face the incoming player
 
 		FTransform Xform(Rot, Loc);

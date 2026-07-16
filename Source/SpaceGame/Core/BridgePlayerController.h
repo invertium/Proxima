@@ -177,6 +177,11 @@ private:
 	/** What the outcome overlay's primary button does. */
 	enum class EOutcomeKind : uint8 { VictoryNext, VictoryComplete, Defeat };
 
+	/** Atomically claim the single terminal outcome (audit BUG-03). The first terminal event (player
+	 *  death or final clear) wins: this latches the kind, sets the matching game phase, and returns
+	 *  true; every later terminal event returns false so victory/defeat can't race or disagree. */
+	bool TryLatchOutcome(EOutcomeKind Kind);
+
 	UPROPERTY()
 	TObjectPtr<UBridgeHUDWidget> HUDWidget;
 
@@ -184,6 +189,9 @@ private:
 	TObjectPtr<UOutcomeMenuWidget> Outcome;
 
 	EOutcomeKind OutcomeKind = EOutcomeKind::Defeat;
+
+	/** Set once the terminal outcome is claimed (guards the victory/defeat race, BUG-03). */
+	bool bOutcomeLatched = false;
 
 	/** Salvage banked this encounter (per-kill), shown on the victory screen (M19). */
 	int32 EarnedCredits = 0;

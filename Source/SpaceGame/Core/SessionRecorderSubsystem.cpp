@@ -153,7 +153,14 @@ void USessionRecorderSubsystem::StartRecording(const ASpaceship* Ship)
 	IPlatformFile& PF = FPlatformFileManager::Get().GetPlatformFile();
 	PF.CreateDirectoryTree(*Dir);
 
-	FilePath = Dir / FString::Printf(TEXT("session_%s.jsonl"), *Now.ToString(TEXT("%Y%m%d_%H%M%S")));
+	// Millisecond precision + an existence-checked suffix so a rapid off/on toggle or two concurrent
+	// PIE worlds can't pick the same path and truncate a prior recording (audit BUG-09).
+	const FString Stamp = Now.ToString(TEXT("%Y%m%d_%H%M%S")) + FString::Printf(TEXT("_%03d"), Now.GetMillisecond());
+	FilePath = Dir / FString::Printf(TEXT("session_%s.jsonl"), *Stamp);
+	for (int32 Suffix = 1; PF.FileExists(*FilePath); ++Suffix)
+	{
+		FilePath = Dir / FString::Printf(TEXT("session_%s_%d.jsonl"), *Stamp, Suffix);
+	}
 	FileHandle.Reset(PF.OpenWrite(*FilePath, /*bAppend*/ false, /*bAllowRead*/ true));
 	if (!FileHandle)
 	{
