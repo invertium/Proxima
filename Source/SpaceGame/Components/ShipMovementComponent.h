@@ -47,6 +47,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
 	float GetThrottle() const { return ThrottleInput; }
 
+	/** Lower bound for throttle input (negative = reverse allowed). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
+	float GetReverseThrottleMin() const { return ReverseThrottleMin; }
+
 	/** Max speed after Engineering power scaling (MaxSpeed * engine power; MaxSpeed if no power comp). */
 	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
 	float GetEffectiveMaxSpeed() const;
@@ -60,6 +64,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Movement")
 	float MaxTurnRate = 60.f; // deg/s at full turn
+
+	/** Most negative throttle allowed — reverse thrust (issue #4). Reverse is a maneuvering burn to
+	 *  back off incoming fire, so it's capped well short of full ahead (a fraction of MaxSpeed), not
+	 *  a second forward gear. Set to 0 to disable reverse. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Movement")
+	float ReverseThrottleMin = -0.35f;
 
 protected:
 	// --- Authoritative runtime state (replication-ready) ---

@@ -88,8 +88,12 @@ private:
 	/** Request preprocessor that bounces "/" to /stations (the router can't route the bare root). */
 	FDelegateHandle RootRedirectHandle;
 
-	/** Port the router is bound to. */
+	/** Port the router is bound to this session (chosen at begin play — 8080, or the next free port
+	 *  if something else already holds it). */
 	int32 Port = 8080;
+
+	/** Static mirror of the bound port so the static GetCrewUrl() can advertise the right one. */
+	static int32 BoundPort;
 
 	/** World-time of the last credited repair, to throttle the Engineering weld minigame. */
 	double LastRepairTime = 0.0;

@@ -224,14 +224,18 @@ void ABridgePlayerController::ApplyThrottle()
 void ABridgePlayerController::ThrottleUp()
 {
 	if (CurrentStation != EStation::Helm) { return; }
-	ThrottleLevel = FMath::Clamp(ThrottleLevel + ThrottleStep, 0.f, 1.f);
+	// Lower bound allows reverse (issue #4): S can back the ship past a full stop into reverse
+	// thrust, W brings it forward again through zero.
+	const float MinT = GetShipMovement() ? GetShipMovement()->GetReverseThrottleMin() : 0.f;
+	ThrottleLevel = FMath::Clamp(ThrottleLevel + ThrottleStep, MinT, 1.f);
 	ApplyThrottle();
 }
 
 void ABridgePlayerController::ThrottleDown()
 {
 	if (CurrentStation != EStation::Helm) { return; }
-	ThrottleLevel = FMath::Clamp(ThrottleLevel - ThrottleStep, 0.f, 1.f);
+	const float MinT = GetShipMovement() ? GetShipMovement()->GetReverseThrottleMin() : 0.f;
+	ThrottleLevel = FMath::Clamp(ThrottleLevel - ThrottleStep, MinT, 1.f);
 	ApplyThrottle();
 }
 

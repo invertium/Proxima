@@ -45,7 +45,9 @@ float UShipMovementComponent::EngineDamageScale() const
 void UShipMovementComponent::SetThrottle(float InThrottle)
 {
 	if (bInputLocked) { return; }
-	ThrottleInput = FMath::Clamp(InThrottle, 0.f, 1.f);
+	// Reverse thrust (issue #4): throttle may go negative down to ReverseThrottleMin. The Tick's
+	// translation is forward * CurrentSpeed, so a negative CurrentSpeed simply backs the ship up.
+	ThrottleInput = FMath::Clamp(InThrottle, ReverseThrottleMin, 1.f);
 	UE_LOG(LogTemp, Log, TEXT("[ShipMovement] Throttle set to %.2f (target speed %.0f uu/s)"),
 		ThrottleInput, ThrottleInput * MaxSpeed);
 }

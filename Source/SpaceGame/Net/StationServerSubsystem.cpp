@@ -28,6 +28,7 @@
 #include "World/Station.h"
 #include "World/WorldLandmark.h"
 #include "SocketSubsystem.h"
+#include "Sockets.h"
 #include "UObject/UObjectIterator.h"
 
 // World distance (uu) from the Helm map centre to the outer ring — mirrors URadarWidget::RadarRangeUU.
@@ -236,8 +237,8 @@ setInterval(poll,250);poll();
 			"<button id='warpbtn' onclick=\"post('/api/warp')\">WARP</button>"
 			"<button id='courlbtn' onclick=\"post('/api/warp?mode=objective')\" "
 			"style='border-color:#7ad0ff;color:#cdefff'>&#9654; COURSE</button></div>"
-			"<label>THROTTLE</label>"
-			"<input id='t' type='range' min='0' max='100' value='0' "
+			"<label>THROTTLE (&#9664; reverse)</label>"
+			"<input id='t' type='range' min='-35' max='100' value='0' "
 			"oninput=\"post('/api/helm?throttle='+(this.value/100))\">"
 			"<label>TURN</label>"
 			"<div class='row'>"
@@ -558,7 +559,36 @@ setInterval(poll,250);poll();
 		}
 		return Default;
 	}
+
+	// Find the first free TCP port at/after Start (scanning Count ports) so the crew server never
+	// collides with something else already on 8080 (another dev server, a previous session, etc.).
+	// Probes with a plain exclusive bind — no address reuse — so an existing listener reliably
+	// reports the port as taken. Returns Start as a last resort if none are free.
+	int32 FindFreePort(int32 Start, int32 Count)
+	{
+		ISocketSubsystem* SS = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+		if (!SS) { return Start; }
+		for (int32 P = Start; P < Start + Count; ++P)
+		{
+			const TSharedRef<FInternetAddr> Addr = SS->CreateInternetAddr();
+			Addr->SetAnyAddress(); // 0.0.0.0 — match the server's bind-all
+			Addr->SetPort(P);
+			FSocket* Probe = SS->CreateSocket(NAME_Stream, TEXT("SGPortProbe"), Addr->GetProtocolType());
+			if (!Probe) { continue; }
+			Probe->SetReuseAddr(false);
+			const bool bFree = Probe->Bind(*Addr);
+			Probe->Close();
+			SS->DestroySocket(Probe);
+			if (bFree) { return P; }
+			UE_LOG(LogTemp, Log, TEXT("[StationServer] port %d busy — trying next"), P);
+		}
+		return Start;
+	}
 }
+
+// The port the crew server actually bound this session (picked at begin play). Static so the
+// menus' GetCrewUrl() can advertise the right one even though it's not the compile-time default.
+int32 UStationServerSubsystem::BoundPort = 8080;
 
 bool UStationServerSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
@@ -576,6 +606,10 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// NB: only takes effect when a *fresh* listener is created for the port — i.e. on the
 	// first PIE after an editor launch (an already-listening loopback listener would be reused
 	// as-is), so a full editor restart is needed the first time this lands.
+	// Pick a free port at/after 8080 so we never fight another service already on it (the user's
+	// machine had one). The chosen port is stored statically so GetCrewUrl() advertises it.
+	Port = FindFreePort(8080, 8);
+	BoundPort = Port;
 	{
 		TArray<FString> Overrides;
 		Overrides.Add(FString::Printf(TEXT("(Port=%d,BindAddress=any,ReuseAddressAndPort=true)"), Port));
@@ -775,7 +809,7 @@ FString UStationServerSubsystem::GetCrewUrl()
 	// The URL carries the session PIN (R5): typing it as shown is all the crew needs, and
 	// anything on the LAN without it is rejected.
 	return Lan.IsEmpty() ? FString()
-		: FString::Printf(TEXT("http://%s:8080/stations?pin=%s"), *Lan, *GetSessionPin());
+		: FString::Printf(TEXT("http://%s:%d/stations?pin=%s"), *Lan, BoundPort, *GetSessionPin());
 }
 
 const FString& UStationServerSubsystem::GetSessionPin()

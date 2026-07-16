@@ -1699,3 +1699,31 @@ real play data (feeds the GitHub issue work).
 (v0.9.1 / VSlice_Arena / Captain), 111 well-formed samples with live hull/shield/mission/objDist, and
 a correctly-derived `engage` event when a fleet spawned. `timeout`-killed mid-run (no `end` line) yet
 the file parsed fine and `analyse_session.py` produced a clean report — crash-resilience confirmed.
+
+---
+
+## Crew web server: auto-pick a free port (2026-07-16)
+
+The LAN station server hard-bound `0.0.0.0:8080`; if anything else already held 8080 (another dev
+server on the host, a lingering previous session) it silently failed to bind and the consoles were
+unreachable. Now `UStationServerSubsystem` probes 8080..8087 at begin play (plain exclusive bind, no
+address reuse, so an existing listener reads as busy) and uses the first free port. The chosen port is
+mirrored in a static so `GetCrewUrl()` / the logged crew URL advertise the right one.
+
+**Verified [L]:** headless run with 8080 occupied → log `port 8080 busy — trying next` → bound 8081
+(and 8082 when 8081 also lingered); the API answered `{"ok":true}` on the chosen port.
+
+## Reverse thrust — issue #4 (2026-07-16)
+
+"How the fuck do i move away from bullets and fire back?" — the ship could only go forward, so you had
+to turn away (and lose your guns) to retreat. Throttle may now go negative down to
+`ReverseThrottleMin` (default −0.35, a maneuvering burn capped well short of full ahead). The Tick's
+translation is already `forward * CurrentSpeed`, so a negative speed simply backs the ship straight up
+while it keeps facing — and firing at — the enemy.
+- `UShipMovementComponent::SetThrottle` clamps to `[ReverseThrottleMin, 1]` (was `[0,1]`).
+- Keyboard: `S` steps past a full stop into reverse; `W` brings it forward through zero.
+- Web Helm: the throttle slider now runs `-35..100` and is labelled "(◄ reverse)".
+
+**Verified [L]:** headless arena, commanded `throttle=-0.3` over the API → recorder track shows the ship
+holding **−630 uu/s** and travelling from px 0 → −10923 (backward along its +X heading) while heading
+stayed 0. Forward (throttle 0.5) unaffected.
