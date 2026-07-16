@@ -659,7 +659,7 @@ setInterval(poll,250);poll();
 
 // The port the crew server actually bound this session (picked at begin play). Static so the
 // menus' GetCrewUrl() can advertise the right one even though it's not the compile-time default.
-int32 UStationServerSubsystem::BoundPort = 8080;
+int32 UStationServerSubsystem::BoundPort = -1; // -1 = not yet bound this process (see OnWorldBeginPlay)
 
 bool UStationServerSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
@@ -677,17 +677,26 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	// NB: only takes effect when a *fresh* listener is created for the port — i.e. on the
 	// first PIE after an editor launch (an already-listening loopback listener would be reused
 	// as-is), so a full editor restart is needed the first time this lands.
-	// Pick a free port at/after 8080 so we never fight another service already on it (the user's
-	// machine had one). The chosen port is stored statically so GetCrewUrl() advertises it.
-	Port = FindFreePort(8080, 8);
-	if (Port < 0)
+	// Port selection. Deinitialize() deliberately leaves the HTTP listener bound between worlds
+	// (avoids TIME_WAIT churn), so once we've picked a port this process we must REUSE it — the
+	// module reuses its retained listener for that port. Re-probing would see our own retained
+	// listeners as "busy" and, after ~8 world transitions, walk off the end of the range and wrongly
+	// disable the crew server (review P1). Only the very first world probes for a free port.
+	if (BoundPort > 0)
 	{
-		// Every candidate was busy — don't stand up (and advertise) a server that can't bind (BUG-10).
-		BoundPort = -1;
-		UE_LOG(LogTemp, Warning, TEXT("[StationServer] ports 8080-8087 all busy — crew server not started"));
-		return;
+		Port = BoundPort;
 	}
-	BoundPort = Port;
+	else
+	{
+		Port = FindFreePort(8080, 8);
+		if (Port < 0)
+		{
+			// Genuinely nothing free on first start — don't advertise a server that can't bind (BUG-10).
+			UE_LOG(LogTemp, Warning, TEXT("[StationServer] ports 8080-8087 all busy — crew server not started"));
+			return;
+		}
+		BoundPort = Port;
+	}
 	{
 		TArray<FString> Overrides;
 		Overrides.Add(FString::Printf(TEXT("(Port=%d,BindAddress=any,ReuseAddressAndPort=true)"), Port));
