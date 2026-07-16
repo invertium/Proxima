@@ -120,7 +120,10 @@ void AEnemyShip::ApplyTypePreset()
 		MatPath  = TEXT("/Game/Art/Materials/M_Insurgent.M_Insurgent");
 		FxPath   = TEXT("/Game/Art/Materials/M_GlowCyan.M_GlowCyan");
 		Scale = 0.4f;
-		Blip = FLinearColor(0.3f, 0.9f, 1.0f, 1.f);
+		// Hostile amber blip (issue #9). The hull glows cyan, but a cool-coloured radar blip read as
+		// "friendly" — every hostile now blips in the warm red/orange band, distinct from the green
+		// starbase and the amber cargo pods.
+		Blip = FLinearColor(1.0f, 0.5f, 0.12f, 1.f);
 		MoveSpeed = 1900.f; TurnRateDeg = 80.f; StandoffDistance = 4500.f;
 		EngageRange = 10000.f; FireInterval = 1.6f; EnemyBeamDamage = 5.f;
 		bStrafeRuns = true; // M26: interceptor strafe runs — no static standoff
@@ -373,6 +376,16 @@ void AEnemyShip::Tick(float DeltaSeconds)
 	else
 	{
 		SetAIState(EEnemyAIState::Engage);
+	}
+
+	// Collision avoidance (issue #9): never bore through the player. If a move brought this ship
+	// inside MinSeparation, slide it straight back out — harder the closer it got — so it veers
+	// around the hull instead of ramming. Planar (yaw-plane) like the rest of the AI.
+	if (Distance > 1.f && Distance < MinSeparation)
+	{
+		const FVector Away = FVector(-ToPlayer.X, -ToPlayer.Y, 0.f).GetSafeNormal();
+		const float Encroach = (MinSeparation - Distance) / MinSeparation; // 0 at the edge → 1 on contact
+		AddActorWorldOffset(Away * MoveSpeed * Encroach * DeltaSeconds, /*bSweep=*/true);
 	}
 
 	// Spawn grace: close in, but hold fire until it elapses (gives the player a beat at start).

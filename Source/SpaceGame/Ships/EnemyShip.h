@@ -146,6 +146,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
 	float StandoffDistance = 6000.f;
 
+	/** Never crowd closer than this to the player's hull (uu) — the ship steers straight out when it
+	 *  encroaches, so moving ships veer around you instead of ramming through (issue #9). Well above
+	 *  the ram-collision radius so contact damage becomes the exception, not the rule. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
+	float MinSeparation = 1300.f;
+
 	/** Begins firing once the player is within this range (uu). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|AI")
 	float EngageRange = 12000.f;
