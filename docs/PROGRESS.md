@@ -1727,3 +1727,32 @@ while it keeps facing — and firing at — the enemy.
 **Verified [L]:** headless arena, commanded `throttle=-0.3` over the API → recorder track shows the ship
 holding **−630 uu/s** and travelling from px 0 → −10923 (backward along its +X heading) while heading
 stayed 0. Forward (throttle 0.5) unaffected.
+
+---
+
+## Torpedo turn-rate limit — issue #2 (2026-07-16)
+
+Torpedoes were *perfect* homers — every tick they re-aimed straight at the target, so they could snap
+180° and always connect (and chase you through a warp jump). Now `ATorpedoProjectile` carries a
+`Heading` steered toward the target at `TurnRateDeg` (75°/s): it can gently track a maneuvering ship
+but can't reverse fast enough to re-acquire a target that warps or hard-jukes. A missed torpedo flies
+straight on and fizzles at `MaxLifetime` (`Detonate` only lands the payload within `BlastRadius`).
+Applies to both player and enemy torpedoes → skill shots, not guaranteed hits. **Verified:** builds clean.
+
+## Evasive strafe / side-thrusters — issue #7 (2026-07-16)
+
+Added lateral thrust so the helm can dodge without turning the bow off-target. `UShipMovementComponent`
+gains `SetStrafe(-1..1)` → eased `CurrentStrafeSpeed` (cap `MaxStrafeSpeed` 950 uu/s, scaled by engine
+power/damage) translated along the ship's right vector. Controls: keyboard **Q/E** (held), and web Helm
+**STRAFE ◄◄ PORT / STBD ►►** hold-buttons (`/api/helm?strafe=`).
+**Verified [L]:** commanded `strafe=1` headless → recorded track shows **py 0 → 11299 at 950 uu/s** while
+heading held **0.0°** and px stayed ~236 — a pure side-slip.
+
+## Enemies avoid you + clear friend/foe blips — issue #9 (2026-07-16)
+
+- **Avoidance:** `AEnemyShip` now steers straight out when it encroaches within `MinSeparation` (1300 uu,
+  well above the ram-collision radius), harder the closer it gets — moving ships veer around the hull
+  instead of boring through it. Ram contact becomes the exception, not the rule.
+- **Friend/foe clarity:** the Scout's radar blip was **cyan** (read as friendly). Every hostile now blips
+  in the warm red/orange band (Scout → amber-orange), unmistakable against the green starbase and amber
+  cargo pods. **Verified:** builds clean.
