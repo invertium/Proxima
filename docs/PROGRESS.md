@@ -1674,3 +1674,28 @@ Repo went public. Cleanup pass so nothing machine-specific or secret ships:
 `AKIA…`/PRIVATE KEY) and for any committed `VibeUEApiKey=`/`ApiKey=` value — **none found**. The only
 secret ever in history is the AndroidFileServer token above, present since the baseline commit
 `deb059d`; it's inert (dev-only, unshipped) so history was left intact rather than force-rewritten.
+
+---
+
+## Session recording ("analysis mode") (2026-07-16)
+
+New opt-in telemetry recorder so played sessions can be analysed offline to tune the game against
+real play data (feeds the GitHub issue work).
+
+- **`USessionRecorderSubsystem`** (`Core/SessionRecorderSubsystem.{h,cpp}`) — a `UTickableWorldSubsystem`
+  (Game/PIE worlds only). Off by default; armed by CVar `sg.RecordSession 1` (settable live from the
+  console) or the `-recordsession` launch flag. Samples ship + mission + campaign state every
+  `sg.RecordSampleInterval` s (default 0.5 = 2 Hz) to `Saved/SessionLogs/session_<ts>.jsonl`.
+- **Format:** one JSON object per line, tagged by kind — `meta` header, `s` samples (pos/heading/speed,
+  hull/shield, target/ammo, mission/objective/engaged/objDist, enemies alive, credits/xp/rank), `e`
+  events **derived by diffing successive samples** (damage, death, kill, engage, mission-advance,
+  victory/defeat, dock/undock, warp — so gameplay code needs no hooks), and an `end` footer. Per-line
+  flush → a crash still leaves a valid, parseable log.
+- **`tools/analyse_session.py`** — prints a per-session digest (duration, distance flown, hull damage
+  taken, event tallies, per-mission timings, outcome); `--json` for a machine digest; newest log by default.
+
+**Verified [L]:** built clean (editor target, `Result: Succeeded`). Ran the arena headless
+(`-game -nullrhi -recordsession`, no window) ~27 s → wrote a 113-line JSONL: correct `meta`
+(v0.9.1 / VSlice_Arena / Captain), 111 well-formed samples with live hull/shield/mission/objDist, and
+a correctly-derived `engage` event when a fleet spawned. `timeout`-killed mid-run (no `end` line) yet
+the file parsed fine and `analyse_session.py` produced a clean report — crash-resilience confirmed.

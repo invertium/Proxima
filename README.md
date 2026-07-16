@@ -177,3 +177,10 @@ bundled dev-tooling plugins, and any downloaded art assets keep their own separa
 The VibeUE agent tooling uses an API key stored in
 `Saved/Config/LinuxEditor/EditorPerProjectUserSettings.ini`, which is **gitignored and must never be
 committed**. Nothing there is needed to compile or play the game.
+
+**Session recording (analysis mode).** An opt-in telemetry recorder captures a played session for
+offline analysis (movement, combat, hull loss, mission pacing). Enable it from the console with
+`sg.RecordSession 1` (or launch with `-recordsession`); it writes newline-delimited JSON to
+`Saved/SessionLogs/session_*.jsonl`, one file per recording. Analyse it with
+`python3 tools/analyse_session.py` (newest log by default). Off by default; nothing is recorded unless
+you turn it on.
