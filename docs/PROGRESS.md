@@ -1802,3 +1802,25 @@ the player, only a slight pull, no damage, always escapable with moderate thrust
 **Verified [L]:** `gravityPull` reads 78–94 uu/s near the home world; fly out + release → the ship
 drifts back (px 7773 → 7204, pull rising 78→87 as it nears) and thrust escapes freely; GRAVITY toggle
 → pull 0; REC LOG toggle → recording on.
+
+---
+
+## Drydock modules: Auto-Turret + Maneuvering Thrusters — issues #5, #7 (2026-07-16)
+
+Two one-time drydock purchases (MaxTier 1) the starter hull doesn't carry, added to `UpgradeCatalogue`
+so they appear in the Engineering drydock automatically:
+
+- **Auto-Turret (#5):** `UWeaponComponent` gains a turret that auto-fires at the Weapons-locked target
+  on its own cooldown **regardless of the ship's heading** (no arc constraint), within `TurretRange` —
+  so the helm can dodge/reposition while it keeps shooting. `TurretDamage` 0 = not installed; the
+  "Auto-Turret" module sets it. Offline while docked; respects weapon power + armor mitigation.
+- **Maneuvering Thrusters (#7 follow-up):** per wz-stabl, strafe is no longer free — `MaxStrafeSpeed`
+  now defaults to **0** (Q/E and the web STRAFE buttons do nothing) until the "Maneuvering Thrusters"
+  module is bought, which sets it to 950 uu/s.
+
+Both are wired through the existing `ApplyShipPreset` reset + `ApplyUpgrades` path (idempotent across
+drydock refreshes / ship switches).
+
+**Verified [L]:** `/api/state` lists both modules in the drydock (strafe 160cr, turret 240cr, maxTier 1);
+with gravity isolated off, commanding strafe on an un-upgraded ship moves it **0.0 uu** — correctly
+disabled until purchased.

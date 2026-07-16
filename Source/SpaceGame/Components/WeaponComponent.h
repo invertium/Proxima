@@ -85,6 +85,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon")
 	float FireTrauma = 0.28f;
 
+	// --- Auto-turret (issue #5): a bought module that fires at the locked target regardless of the
+	//     ship's heading, on its own cooldown, so the helm can maneuver while it keeps shooting.
+	//     TurretDamage 0 = not installed (starter hulls have none; buy "Auto-Turret" at the drydock). ---
+
+	/** Per-shot turret damage (0 = no turret). Set by the drydock Auto-Turret module. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon|Turret")
+	float TurretDamage = 0.f;
+
+	/** Turret reach (uu) — it auto-fires at the locked target within this range, ignoring the arc. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon|Turret")
+	float TurretRange = 12000.f;
+
+	/** Seconds between automatic turret shots. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Weapon|Turret")
+	float TurretInterval = 1.6f;
+
+	/** True when the Auto-Turret module is installed. */
+	UFUNCTION(BlueprintPure, Category = "Ship|Weapon|Turret")
+	bool HasTurret() const { return TurretDamage > 0.f; }
+
 protected:
 	// --- Authoritative runtime state (replication-ready, D7) ---
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Weapon")
@@ -94,6 +114,12 @@ protected:
 	TObjectPtr<AActor> CurrentTarget;
 
 private:
+	/** Auto-turret: draw + land a turret shot on the current target (no arc/charge constraint). */
+	void FireTurretShot();
+
+	/** Counts down to the next automatic turret shot. */
+	float TurretCooldown = 0.f;
+
 	/** Weapons power multiplier from the sibling power component, or 1.0 if none. */
 	float WeaponPowerScale() const;
 

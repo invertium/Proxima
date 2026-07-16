@@ -157,9 +157,10 @@ void ASpaceship::ApplyShipPreset()
 
 	// Reset the stats not carried in FShipDef, so ApplyUpgrades() always adds from a clean base —
 	// re-applying (drydock RefreshLoadout / ship switch) stays idempotent.
-	if (WeaponComp) { WeaponComp->FireArcDeg = 70.f; }
+	if (WeaponComp) { WeaponComp->FireArcDeg = 70.f; WeaponComp->TurretDamage = 0.f; }
 	if (HealthComp) { HealthComp->MaxShield = 50.f; }
 	if (PowerComp)  { PowerComp->ReactorBudget = 3.0f; }
+	if (MovementComp) { MovementComp->MaxStrafeSpeed = 0.f; } // side-thrusters are a bought module (#7)
 
 	if (MovementComp) { MovementComp->MaxSpeed = Def->MaxSpeed; MovementComp->Acceleration = Def->Acceleration; MovementComp->MaxTurnRate = Def->TurnRate; }
 	if (HealthComp)   { HealthComp->MaxHull = Def->MaxHull; }
@@ -206,6 +207,8 @@ void ASpaceship::ApplyUpgrades()
 		case EUpgradeStat::MaxShield:     if (HealthComp)  { HealthComp->MaxShield += Add; } break;
 		case EUpgradeStat::TorpedoAmmo:   if (TorpedoComp) { TorpedoComp->MaxAmmo += FMath::RoundToInt(Add); } break;
 		case EUpgradeStat::ReactorBudget: if (PowerComp)   { PowerComp->ReactorBudget += Add; } break;
+		case EUpgradeStat::StrafeSpeed:   if (MovementComp){ MovementComp->MaxStrafeSpeed += Add; } break; // #7
+		case EUpgradeStat::Turret:        if (WeaponComp)  { WeaponComp->TurretDamage += Add; } break;      // #5
 		}
 	}
 }
