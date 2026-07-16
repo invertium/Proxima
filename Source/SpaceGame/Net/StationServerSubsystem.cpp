@@ -29,6 +29,8 @@
 #include "World/WorldLandmark.h"
 #include "SocketSubsystem.h"
 #include "Sockets.h"
+#include "World/GravityField.h"
+#include "HAL/IConsoleManager.h"
 #include "UObject/UObjectIterator.h"
 
 // World distance (uu) from the Helm map centre to the outer ring — mirrors URadarWidget::RadarRangeUU.
@@ -260,6 +262,12 @@ setInterval(poll,250);poll();
 			"ontouchend=\"post('/api/helm?strafe=0')\" onmouseup=\"post('/api/helm?strafe=0')\">&#9664;&#9664; PORT</button>"
 			"<button ontouchstart=\"post('/api/helm?strafe=1')\" onmousedown=\"post('/api/helm?strafe=1')\" "
 			"ontouchend=\"post('/api/helm?strafe=0')\" onmouseup=\"post('/api/helm?strafe=0')\">STBD &#9654;&#9654;</button>"
+			"</div>"
+			// Dev/analysis toggles: gravity sim on/off + session logging for post-play analysis.
+			"<label>SIM &amp; ANALYSIS</label>"
+			"<div class='row'>"
+			"<button id='gravbtn' onclick=\"post('/api/toggle?what=gravity')\">GRAVITY</button>"
+			"<button id='recbtn' onclick=\"post('/api/toggle?what=recording')\">&#9210; REC LOG</button>"
 			"</div>");
 		// world +X = up (-screenY), world +Y = right (+screenX) — same mapping as RadarWidget.
 		const FString Script = TEXT(
@@ -278,6 +286,10 @@ setInterval(poll,250);poll();
 			":s.offered?(s.objective||'')+' \\u2014 ORDERS PENDING'"
 			":(s.objective||'')+(s.objectiveDist>=0?' \\u2014 '+Math.round(s.objectiveDist/100)/10+'k uu':'');"
 			"var ab=$('#acceptbtn');if(ab)ab.style.display=(s.offered&&!s.engaged)?'block':'none';"
+			"var gb=$('#gravbtn');if(gb){gb.textContent='GRAVITY '+(s.gravity?'ON':'OFF')"
+			"+(s.gravity&&s.gravityPull>0?' ('+Math.round(s.gravityPull)+')':'');gb.className=s.gravity?'rdy':'blk';}"
+			"var rb=$('#recbtn');if(rb){rb.textContent=s.recording?'\\u23fa REC LOG ON':'\\u23fa REC LOG';"
+			"rb.className=s.recording?'rdy':'';}"
 			"const wc=Math.round((s.warpCharge||0)*100),wb=$('#warpbtn');"
 			"$('#warp').textContent=s.docked?'offline (docked)':(s.warpReady?'READY':wc+'%');"
 			"wb.textContent=s.warpReady?'\\u27a4 WARP JUMP':'CHARGING '+wc+'%';"
@@ -575,6 +587,28 @@ setInterval(poll,250);poll();
 		return FHttpServerResponse::Create(Json, TEXT("application/json"));
 	}
 
+	// Current int value of a console variable (0 if it doesn't exist).
+	int32 CVarInt(const TCHAR* Name)
+	{
+		if (const IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name))
+		{
+			return CVar->GetInt();
+		}
+		return 0;
+	}
+
+	// Flip a 0/1 console variable and return its new value (-1 if it doesn't exist).
+	int32 ToggleCVar(const TCHAR* Name)
+	{
+		if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name))
+		{
+			const int32 NewVal = CVar->GetInt() != 0 ? 0 : 1;
+			CVar->Set(NewVal, ECVF_SetByConsole);
+			return NewVal;
+		}
+		return -1;
+	}
+
 	// Read a numeric query param (defaulting if missing/unparseable).
 	float QueryFloat(const FHttpServerRequest& Request, const FString& Key, float Default)
 	{
@@ -722,6 +756,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/contract"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleContract);
 	Bind(TEXT("/api/alert"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleAlert);
 	Bind(TEXT("/api/mission"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleMission);
+	Bind(TEXT("/api/toggle"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleToggle);
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
 	Bind(TEXT("/api/warp"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWarp);
@@ -943,6 +978,11 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	const FVector PlayerLoc = Ship ? Ship->GetActorLocation() : FVector::ZeroVector;
 	const float Heading = Ship ? Ship->GetActorRotation().Yaw : 0.f;
 
+	// Toggle states + live gravity pull (for the Helm GRAVITY / REC buttons and feedback).
+	const int32 GravOn = CVarInt(TEXT("sg.Gravity"));
+	const int32 RecOn = CVarInt(TEXT("sg.RecordSession"));
+	const float GravPull = Ship ? GravityField::PullVelocityAt(GetWorld(), PlayerLoc).Size() : 0.f;
+
 	FString Contacts;
 	if (const UWorld* World = GetWorld())
 	{
@@ -1051,6 +1091,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
 		"\"objective\":\"%s\",\"engaged\":%s,\"offered\":%s,\"objectiveDist\":%.0f,\"wave\":%d,"
+		"\"gravity\":%d,\"recording\":%d,\"gravityPull\":%.0f,"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
 		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,"
 		"\"warpCharge\":%.3f,\"warpReady\":%s,\"upgrades\":[%s],\"ships\":[%s],"
@@ -1091,6 +1132,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		*MissionName, *Comms,
 		*JsonEscape(ObjectiveName), bEngaged ? TEXT("true") : TEXT("false"),
 		bOffered ? TEXT("true") : TEXT("false"), ObjectiveDist, Wave,
+		GravOn, RecOn, GravPull,
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),
@@ -1153,6 +1195,23 @@ bool UStationServerSubsystem::HandleMission(const FHttpServerRequest& Request, c
 		return true;
 	}
 	OnComplete(MakeVerdict(false, TEXT("unknown action")));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleToggle(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Dev/analysis toggles: gravity sim + session logging. No ship gate — flip them any time.
+	const FString* What = Request.QueryParams.Find(TEXT("what"));
+	const TCHAR* Name = nullptr;
+	if (What && *What == TEXT("gravity"))        { Name = TEXT("sg.Gravity"); }
+	else if (What && *What == TEXT("recording")) { Name = TEXT("sg.RecordSession"); }
+	if (!Name)
+	{
+		OnComplete(MakeVerdict(false, TEXT("unknown toggle (want gravity|recording)")));
+		return true;
+	}
+	const int32 NewVal = ToggleCVar(Name);
+	OnComplete(NewVal >= 0 ? MakeVerdict(true) : MakeVerdict(false, TEXT("toggle unavailable")));
 	return true;
 }
 

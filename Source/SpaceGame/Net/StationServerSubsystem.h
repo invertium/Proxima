@@ -69,6 +69,8 @@ private:
 	bool HandleAlert(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	// ACCEPT ORDERS gate (issue #8): open the offered encounter on the crew's command.
 	bool HandleMission(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	// Dev/analysis toggles: gravity sim + session logging (?what=gravity|recording).
+	bool HandleToggle(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 
 	/** Resolve the local player ship in this world, or null if not spawned yet. */
 	ASpaceship* GetShip() const;

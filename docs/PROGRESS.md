@@ -1780,3 +1780,25 @@ director so encounters are deliberate and the map/story are legible.
 **Verified [L]:** headless arena — `Objective 0 OFFERED — awaiting ACCEPT ORDERS` fired at spawn with
 **no** encounter; `/api/state` read `offered:true, engaged:false`; `POST /api/mission?action=accept`
 → `{"ok":true}` → `engaged:true` (fleet spawned). Landmarks spread at span 160000.
+
+---
+
+## Celestial gravity + toggles + analysis buttons — issues #1/#3 (2026-07-16)
+
+Gentle gravity that pulls the player *and* enemies toward planets/suns (per wz-stabl on #3: affects
+the player, only a slight pull, no damage, always escapable with moderate thrust).
+
+- **`AWorldLandmark`** gains a mass-driven well: `GravityMass` (the "predefined mass parameter" of #1,
+  set from kind+scale — a sun ~8× a planet), sizing `InfluenceRadius` and `PeakPull` (capped 420 uu/s,
+  far under ~1800 uu/s thrust, easing quadratically to 0 at the influence edge).
+- **`World/GravityField`** sums every well into a planar drift velocity; applied each tick to the
+  player (`UShipMovementComponent`, suppressed while docked) and enemies (`AEnemyShip`, weak enough
+  they never get trapped).
+- **Toggleable:** CVar `sg.Gravity` (default on). Web Helm **GRAVITY** button flips it live
+  (`/api/toggle?what=gravity`) and shows the current pull; `/api/state` exposes `gravity`/`gravityPull`.
+- **Analysis logging button:** web Helm **REC LOG** button toggles session recording
+  (`/api/toggle?what=recording` → `sg.RecordSession`); `/api/state` exposes `recording`.
+
+**Verified [L]:** `gravityPull` reads 78–94 uu/s near the home world; fly out + release → the ship
+drifts back (px 7773 → 7204, pull rising 78→87 as it nears) and thrust escapes freely; GRAVITY toggle
+→ pull 0; REC LOG toggle → recording on.
