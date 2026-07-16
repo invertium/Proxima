@@ -22,4 +22,9 @@ namespace GravityField
 	 *  OutDistance/OutCenter describe that body's planar range + centre when non-null. */
 	AWorldLandmark* DominantBody(const UWorld* World, const FVector& Location,
 		float& OutDistance, FVector& OutCenter);
+
+	/** Push Location out of any landmark it has sunk inside — the bodies have no collision of their
+	 *  own, so gravity-drifted enemies would otherwise vanish inside an opaque planet (review P2).
+	 *  Returns a location kept at least Margin beyond each body's surface. Planar. */
+	FVector ClampOutsideBodies(const UWorld* World, const FVector& Location, float Margin);
 }

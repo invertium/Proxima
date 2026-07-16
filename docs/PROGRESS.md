@@ -1824,3 +1824,22 @@ drydock refreshes / ship switches).
 **Verified [L]:** `/api/state` lists both modules in the drydock (strafe 160cr, turret 240cr, maxTier 1);
 with gravity isolated off, commanding strafe on an un-upgraded ship moves it **0.0 uu** — correctly
 disabled until purchased.
+
+---
+
+## PR #11 codex-review fixes (2026-07-16)
+
+Addressed all three findings from codex's review of the gravity/modules branch:
+- **[P1] Gravity surface-pin.** Changed the well falloff to a band profile (`4·d·(1-d)`) — pull is now
+  **0 at the body surface** (and at the influence edge), peaking mid-well. A ship resting on a body is
+  no longer dragged back in each frame while collision zeroes its throttle. Verified: pull peaks ~190
+  mid-well, tapers to ~175 as the ship nears the surface, and still pulls a released ship back.
+- **[P1] Turret firing after death.** `UWeaponComponent` turret tick now gates on the owner's
+  `HealthComponent::IsAlive()`, so a destroyed ship can't auto-fire during the defeat beat (which could
+  award a kill / flip Defeat to Victory).
+- **[P2] Enemies buried in planets.** Added `GravityField::ClampOutsideBodies`; `AEnemyShip` clamps
+  itself out of the collision-less landmark meshes each tick (enemies had no body clearance of their own).
+
+**#6 orbit button deferred:** built an orbit-assist autopilot but it spiralled outward while reporting
+"stable" (radius not held). Reverted it from this PR rather than ship a broken control; it's a clean
+follow-up (the `GravityField::DominantBody` groundwork stays for it).

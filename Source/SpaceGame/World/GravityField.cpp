@@ -31,10 +31,12 @@ FVector GravityField::PullVelocityAt(const UWorld* World, const FVector& Locatio
 		const float Dist = To.Size();
 		if (Dist >= Infl || Dist <= 1.f) { continue; }
 
-		// Ease from full pull at the surface to zero at the influence edge (quadratic falloff).
+		// Band profile: pull is 0 right at the surface (so it never pins a ship against a body it's
+		// already resting on — review P1) and 0 at the influence edge, peaking through the mid-well.
 		const float Surface = B->GetBodyRadius();
-		const float T = FMath::Clamp(1.f - (Dist - Surface) / FMath::Max(1.f, Infl - Surface), 0.f, 1.f);
-		Pull += (To / Dist) * (B->GetPeakPull() * T * T);
+		const float D = FMath::Clamp((Dist - Surface) / FMath::Max(1.f, Infl - Surface), 0.f, 1.f);
+		const float Falloff = 4.f * D * (1.f - D);
+		Pull += (To / Dist) * (B->GetPeakPull() * Falloff);
 	}
 	return Pull;
 }
@@ -61,8 +63,8 @@ AWorldLandmark* GravityField::DominantBody(const UWorld* World, const FVector& L
 		if (Dist >= Infl || Dist <= 1.f) { continue; }
 
 		const float Surface = B->GetBodyRadius();
-		const float T = FMath::Clamp(1.f - (Dist - Surface) / FMath::Max(1.f, Infl - Surface), 0.f, 1.f);
-		const float Strength = B->GetPeakPull() * T * T;
+		const float D = FMath::Clamp((Dist - Surface) / FMath::Max(1.f, Infl - Surface), 0.f, 1.f);
+		const float Strength = B->GetPeakPull() * (4.f * D * (1.f - D));
 		if (Strength > BestPull)
 		{
 			BestPull = Strength;
@@ -72,4 +74,25 @@ AWorldLandmark* GravityField::DominantBody(const UWorld* World, const FVector& L
 		}
 	}
 	return Best;
+}
+
+FVector GravityField::ClampOutsideBodies(const UWorld* World, const FVector& Location, float Margin)
+{
+	FVector Out = Location;
+	if (!World) { return Out; }
+
+	for (TActorIterator<AWorldLandmark> It(World); It; ++It)
+	{
+		const AWorldLandmark* B = *It;
+		if (!IsValid(B)) { continue; }
+		const float Surface = B->GetBodyRadius() + Margin;
+		FVector To = Out - B->GetActorLocation();
+		To.Z = 0.f;
+		const float Dist = To.Size();
+		if (Dist < Surface && Dist > 1.f)
+		{
+			Out += (To / Dist) * (Surface - Dist); // push out to the clearance shell
+		}
+	}
+	return Out;
 }

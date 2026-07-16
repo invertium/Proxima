@@ -441,4 +441,12 @@ void AEnemyShip::Tick(float DeltaSeconds)
 	{
 		AddActorWorldOffset(Pull * DeltaSeconds, /*bSweep=*/true);
 	}
+
+	// Enemies carry no body collision of their own, so keep them out of the (opaque, collision-less)
+	// planet meshes — gravity or a head-on approach could otherwise bury one inside a body (review P2).
+	const FVector Clamped = GravityField::ClampOutsideBodies(GetWorld(), GetActorLocation(), 400.f);
+	if (!Clamped.Equals(GetActorLocation(), 1.f))
+	{
+		SetActorLocation(Clamped);
+	}
 }

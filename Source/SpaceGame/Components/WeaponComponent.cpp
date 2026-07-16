@@ -243,9 +243,14 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	if (HasTurret())
 	{
 		TurretCooldown = FMath::Max(0.f, TurretCooldown - DeltaTime);
-		const ASpaceship* OwnerShip = Cast<ASpaceship>(GetOwner());
+		const AActor* Owner = GetOwner();
+		const ASpaceship* OwnerShip = Cast<ASpaceship>(Owner);
 		const bool bDocked = OwnerShip && OwnerShip->IsDocked();
-		if (!bDocked && TurretCooldown <= 0.f && CurrentTarget && IsValid(CurrentTarget))
+		// Dead ships don't shoot: the pawn is kept alive through the defeat beat, but a turret firing
+		// then could award a kill / advance the mission / flip Defeat to Victory (review P1).
+		const UHealthComponent* OwnerHealth = Owner ? Owner->FindComponentByClass<UHealthComponent>() : nullptr;
+		const bool bAlive = !OwnerHealth || OwnerHealth->IsAlive();
+		if (bAlive && !bDocked && TurretCooldown <= 0.f && CurrentTarget && IsValid(CurrentTarget))
 		{
 			const float Range = GetTargetRange();
 			if (Range >= 0.f && Range <= TurretRange)
