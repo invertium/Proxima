@@ -177,6 +177,11 @@ void ABridgePlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::A, IE_Released, this, &ABridgePlayerController::TurnStop);
 	InputComponent->BindKey(EKeys::D, IE_Pressed,  this, &ABridgePlayerController::TurnRight);
 	InputComponent->BindKey(EKeys::D, IE_Released, this, &ABridgePlayerController::TurnStop);
+	// Q/E strafe the ship sideways (held) — evasive side-slip that keeps the bow on target (#7).
+	InputComponent->BindKey(EKeys::Q, IE_Pressed,  this, &ABridgePlayerController::StrafeLeft);
+	InputComponent->BindKey(EKeys::Q, IE_Released, this, &ABridgePlayerController::StrafeStop);
+	InputComponent->BindKey(EKeys::E, IE_Pressed,  this, &ABridgePlayerController::StrafeRight);
+	InputComponent->BindKey(EKeys::E, IE_Released, this, &ABridgePlayerController::StrafeStop);
 
 	// Engineering: arrows select a system (Left/Right) + reallocate its power (Up/Down).
 	// Gated to the Engineering station, so they don't clash with Helm's WASD.
@@ -249,6 +254,23 @@ void ABridgePlayerController::TurnRight()
 {
 	if (CurrentStation != EStation::Helm) { return; }
 	if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetTurn(1.f); }
+}
+
+void ABridgePlayerController::StrafeLeft()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetStrafe(-1.f); }
+}
+
+void ABridgePlayerController::StrafeRight()
+{
+	if (CurrentStation != EStation::Helm) { return; }
+	if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetStrafe(1.f); }
+}
+
+void ABridgePlayerController::StrafeStop()
+{
+	if (UShipMovementComponent* Move = GetShipMovement()) { Move->SetStrafe(0.f); }
 }
 
 void ABridgePlayerController::TurnStop()

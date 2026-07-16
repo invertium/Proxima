@@ -246,6 +246,14 @@ setInterval(poll,250);poll();
 			"ontouchend=\"post('/api/helm?turn=0')\" onmouseup=\"post('/api/helm?turn=0')\">&#9664; PORT</button>"
 			"<button ontouchstart=\"post('/api/helm?turn=1')\" onmousedown=\"post('/api/helm?turn=1')\" "
 			"ontouchend=\"post('/api/helm?turn=0')\" onmouseup=\"post('/api/helm?turn=0')\">STBD &#9654;</button>"
+			"</div>"
+			// Lateral strafe (issue #7): hold to side-slip without turning the bow off target.
+			"<label>STRAFE (side-slip)</label>"
+			"<div class='row'>"
+			"<button ontouchstart=\"post('/api/helm?strafe=-1')\" onmousedown=\"post('/api/helm?strafe=-1')\" "
+			"ontouchend=\"post('/api/helm?strafe=0')\" onmouseup=\"post('/api/helm?strafe=0')\">&#9664;&#9664; PORT</button>"
+			"<button ontouchstart=\"post('/api/helm?strafe=1')\" onmousedown=\"post('/api/helm?strafe=1')\" "
+			"ontouchend=\"post('/api/helm?strafe=0')\" onmouseup=\"post('/api/helm?strafe=0')\">STBD &#9654;&#9654;</button>"
 			"</div>");
 		// world +X = up (-screenY), world +Y = right (+screenX) — same mapping as RadarWidget.
 		const FString Script = TEXT(
@@ -1222,9 +1230,10 @@ bool UStationServerSubsystem::HandleHelm(const FHttpServerRequest& Request, cons
 	UShipMovementComponent* Move = Ship->GetMovementComp();
 	const bool bHasThrottle = Request.QueryParams.Contains(TEXT("throttle"));
 	const bool bHasTurn = Request.QueryParams.Contains(TEXT("turn"));
-	if (!Move || (!bHasThrottle && !bHasTurn))
+	const bool bHasStrafe = Request.QueryParams.Contains(TEXT("strafe"));
+	if (!Move || (!bHasThrottle && !bHasTurn && !bHasStrafe))
 	{
-		OnComplete(MakeVerdict(false, TEXT("missing throttle/turn")));
+		OnComplete(MakeVerdict(false, TEXT("missing throttle/turn/strafe")));
 		return true;
 	}
 	if (bHasThrottle)
@@ -1234,6 +1243,10 @@ bool UStationServerSubsystem::HandleHelm(const FHttpServerRequest& Request, cons
 	if (bHasTurn)
 	{
 		Move->SetTurn(QueryFloat(Request, TEXT("turn"), 0.f));
+	}
+	if (bHasStrafe)
+	{
+		Move->SetStrafe(QueryFloat(Request, TEXT("strafe"), 0.f));
 	}
 	OnComplete(MakeVerdict(true));
 	return true;

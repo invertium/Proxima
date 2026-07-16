@@ -32,6 +32,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Movement")
 	void SetTurn(float InTurn);
 
+	/** Set lateral strafe thrust, -1..1 (port .. starboard) — evasive side-slip (issue #7). Slides
+	 *  the ship sideways without turning the bow, so you can dodge fire and keep guns on target. */
+	UFUNCTION(BlueprintCallable, Category = "Ship|Movement")
+	void SetStrafe(float InStrafe);
+
 	/** Lock out helm input and freeze the ship (used while docked, M19). Locking zeroes the
 	 *  current throttle/turn so the ship comes to rest; SetThrottle/SetTurn are ignored until
 	 *  unlocked. */
@@ -51,6 +56,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
 	float GetReverseThrottleMin() const { return ReverseThrottleMin; }
 
+	/** Current lateral strafe input, -1..1 (issue #7). */
+	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
+	float GetStrafe() const { return StrafeInput; }
+
 	/** Max speed after Engineering power scaling (MaxSpeed * engine power; MaxSpeed if no power comp). */
 	UFUNCTION(BlueprintPure, Category = "Ship|Movement")
 	float GetEffectiveMaxSpeed() const;
@@ -64,6 +73,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Movement")
 	float MaxTurnRate = 60.f; // deg/s at full turn
+
+	/** Max lateral thrust speed (uu/s) for evasive strafing (issue #7) — a dodge, not a drive, so
+	 *  it's well below MaxSpeed. Scaled by engine power/damage like forward thrust. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Movement")
+	float MaxStrafeSpeed = 950.f;
+
+	/** How fast lateral speed ramps to target — punchy so a strafe reads as a thruster kick. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Movement")
+	float StrafeAcceleration = 2600.f;
 
 	/** Most negative throttle allowed — reverse thrust (issue #4). Reverse is a maneuvering burn to
 	 *  back off incoming fire, so it's capped well short of full ahead (a fraction of MaxSpeed), not
@@ -79,8 +97,16 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Movement")
 	float TurnInput = 0.f;
 
+	/** Lateral strafe input, -1 (port) .. 1 (starboard). */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Movement")
+	float StrafeInput = 0.f;
+
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Movement")
 	float CurrentSpeed = 0.f;
+
+	/** Eased lateral speed (uu/s), ramps toward StrafeInput * MaxStrafeSpeed. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Movement")
+	float CurrentStrafeSpeed = 0.f;
 
 	/** While true, throttle/turn inputs are ignored and held at zero (docked, M19). */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Ship|Movement")

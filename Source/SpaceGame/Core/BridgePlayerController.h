@@ -80,6 +80,9 @@ private:
 	void TurnLeft();
 	void TurnRight();
 	void TurnStop();
+	void StrafeLeft();
+	void StrafeRight();
+	void StrafeStop();
 
 	/** Resolve the possessed ship's movement component, or null. */
 	class UShipMovementComponent* GetShipMovement() const;

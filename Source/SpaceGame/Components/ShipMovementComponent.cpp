@@ -59,6 +59,12 @@ void UShipMovementComponent::SetTurn(float InTurn)
 	UE_LOG(LogTemp, Log, TEXT("[ShipMovement] Turn set to %.2f"), TurnInput);
 }
 
+void UShipMovementComponent::SetStrafe(float InStrafe)
+{
+	if (bInputLocked) { return; }
+	StrafeInput = FMath::Clamp(InStrafe, -1.f, 1.f);
+}
+
 void UShipMovementComponent::SetInputLocked(bool bLocked)
 {
 	bInputLocked = bLocked;
@@ -67,6 +73,7 @@ void UShipMovementComponent::SetInputLocked(bool bLocked)
 		// Cut helm input so the ship coasts to a stop (CurrentSpeed eases down in Tick).
 		ThrottleInput = 0.f;
 		TurnInput = 0.f;
+		StrafeInput = 0.f;
 	}
 }
 
@@ -98,5 +105,14 @@ void UShipMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	{
 		const FVector Delta = Owner->GetActorForwardVector() * CurrentSpeed * DeltaTime;
 		Owner->AddActorWorldOffset(Delta, /*bSweep=*/true);
+	}
+
+	// Lateral strafe thrust (issue #7): ease a sideways speed and slide along the owner's right
+	// vector, so the helm can side-step incoming fire without yawing the bow off the target.
+	const float TargetStrafe = StrafeInput * MaxStrafeSpeed * EnginePowerScale() * EngineDamageScale();
+	CurrentStrafeSpeed = FMath::FInterpConstantTo(CurrentStrafeSpeed, TargetStrafe, DeltaTime, StrafeAcceleration);
+	if (!FMath::IsNearlyZero(CurrentStrafeSpeed))
+	{
+		Owner->AddActorWorldOffset(Owner->GetActorRightVector() * CurrentStrafeSpeed * DeltaTime, /*bSweep=*/true);
 	}
 }
