@@ -129,6 +129,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mission")
 	bool IsEncounterLive() const { return bEncounterLive; }
 
+	/** True once the ship has reached the active objective and the crew has been hailed with orders,
+	 *  but the fight hasn't been accepted yet (issue #8): arriving no longer auto-starts an encounter —
+	 *  the crew must ACCEPT ORDERS so nobody stumbles into a fight by accident. */
+	UFUNCTION(BlueprintPure, Category = "Mission")
+	bool IsObjectiveOffered() const { return bObjectiveOffered; }
+
+	/** Accept the offered orders and open the encounter (issue #8). No-op unless orders are pending
+	 *  and no fight is already live. Returns true if it started the encounter. */
+	UFUNCTION(BlueprintCallable, Category = "Mission")
+	bool AcceptObjective();
+
 	/** True once the final system has been cleared (the campaign is won). */
 	UFUNCTION(BlueprintPure, Category = "Mission")
 	bool IsSectorComplete() const { return bSectorComplete; }
@@ -211,6 +222,10 @@ private:
 
 	/** Load the objective's def, reset its script, and fire its briefing (where to fly + why). */
 	void BeginObjective(int32 Index);
+
+	/** Hail the crew with orders once they reach the objective (issue #8): announce the arrival + the
+	 *  pending fight on comms, but hold the fleet until AcceptObjective(). */
+	void OfferObjective();
 
 	/** Director tick (repeating timer): trigger the active fleet once the player enters its zone. */
 	void CheckDirector();
@@ -309,6 +324,8 @@ private:
 	float StartTime = 0.f;
 	int32 KillCount = 0;
 	bool bEncounterLive = false;   // an active fleet is up and the fight is on.
+	bool bObjectiveOffered = false;// reached the objective + hailed, awaiting ACCEPT ORDERS (issue #8).
+	bool bHullWarned = false;      // fired the one-shot hull-critical comms this encounter (issue #8).
 	bool bSectorComplete = false;  // the final system has been cleared.
 	FTimerHandle BeatTimer;
 	FTimerHandle DirectorTimer;

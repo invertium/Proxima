@@ -21,7 +21,9 @@ namespace
 {
 	// How far the normalised (0..1) sector map stretches across world space, in uu. Systems are
 	// placed by their MapX/MapY relative to the home system, so warp meaningfully shortens the hops.
-	constexpr float SectorSpan = 120000.f;
+	// Wider than the original 120k so the systems sit farther apart (issue #8): more room to fly/warp
+	// between objectives, and no chance of drifting into the next system's zone by accident.
+	constexpr float SectorSpan = 160000.f;
 
 	// Shift the whole sector so the home body sits clear of the player's start (the ship begins in
 	// open space beside Haven, not embedded in it). Applied to every system's world position.
@@ -221,6 +223,8 @@ void UMissionSubsystem::BeginObjective(int32 Index)
 	Mission = GetMissionDef(Index);   // a fresh copy, so its comms beats start un-fired.
 	KillCount = 0;
 	bEncounterLive = false;
+	bObjectiveOffered = false;        // fresh objective: orders not yet given/accepted (issue #8).
+	bHullWarned = false;
 	LiveFleet.Reset();
 
 	// Fire the objective's briefing (combat missions carry orders; the tutorial's timed comms cover it).
@@ -246,20 +250,60 @@ void UMissionSubsystem::CheckDirector()
 	CheckEvent();
 	CheckContract();
 
-	if (bEncounterLive || bSectorComplete) { return; }
 	const UWorld* World = GetWorld();
 	if (!World) { return; }
-
 	const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0);
+
+	// Reactive comms (issue #8): once the hull goes critical mid-fight, the crew calls it out — the
+	// story reacts to how the battle is actually going, not just to a fixed timeline. One-shot.
+	if (bEncounterLive && !bHullWarned && Player)
+	{
+		if (const UHealthComponent* H = Player->FindComponentByClass<UHealthComponent>())
+		{
+			if (H->GetMaxHull() > 0.f && H->GetHull() / H->GetMaxHull() <= 0.3f)
+			{
+				bHullWarned = true;
+				PostComms(TEXT("DAMAGE CONTROL"),
+					TEXT("Hull's buckling, Captain — she can't take much more of this! Break off or finish them fast."));
+			}
+		}
+	}
+
+	if (bEncounterLive || bSectorComplete) { return; }
 	if (!Player) { return; }
 
-	// Planar range to the active objective's landmark — enter the zone and the fleet powers up.
+	// Reached the objective's landmark: hail the crew with orders and hold (issue #8). The fight
+	// only opens on ACCEPT ORDERS — arriving no longer drops you straight into combat.
 	FVector Delta = Player->GetActorLocation() - GetActiveObjectiveLocation();
 	Delta.Z = 0.f;
-	if (Delta.SizeSquared() <= TriggerRadius * TriggerRadius)
+	if (!bObjectiveOffered && Delta.SizeSquared() <= TriggerRadius * TriggerRadius)
 	{
-		TriggerActiveEncounter();
+		OfferObjective();
 	}
+}
+
+void UMissionSubsystem::OfferObjective()
+{
+	bObjectiveOffered = true;
+
+	const FString Where = Mission.LandmarkName.IsEmpty() ? Mission.Name : Mission.LandmarkName;
+	PostComms(TEXT("CMDR VOSS"), FString::Printf(TEXT(
+		"You've reached %s. Hostiles on the scope. Orders are yours to give, Captain — ACCEPT ORDERS "
+		"when the bridge is ready and we'll engage. Take your time; nothing fires until you say so."),
+		*Where));
+	UE_LOG(LogTemp, Log, TEXT("[Sector] Objective %d '%s' OFFERED — awaiting ACCEPT ORDERS"),
+		MissionIndex, *Mission.Name);
+}
+
+bool UMissionSubsystem::AcceptObjective()
+{
+	if (!bObjectiveOffered || bEncounterLive || bSectorComplete)
+	{
+		return false;
+	}
+	PostComms(TEXT("CMDR VOSS"), TEXT("Orders accepted. All hands, battle stations — engage!"));
+	TriggerActiveEncounter();
+	return true;
 }
 
 void UMissionSubsystem::TriggerActiveEncounter()

@@ -204,6 +204,7 @@ void ABridgePlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ABridgePlayerController::WeaponFireTorpedo);
 	InputComponent->BindKey(EKeys::C, IE_Pressed, this, &ABridgePlayerController::ScienceCycleTarget);
 	InputComponent->BindKey(EKeys::X, IE_Pressed, this, &ABridgePlayerController::ScienceScan);
+	InputComponent->BindKey(EKeys::Y, IE_Pressed, this, &ABridgePlayerController::AcceptOrders);
 
 	// H toggles the controls reference card (works alongside any station).
 	InputComponent->BindKey(EKeys::H, IE_Pressed, this, &ABridgePlayerController::ToggleControls);
@@ -405,6 +406,18 @@ void ABridgePlayerController::HelmWarpToObjective()
 	{
 		UE_LOG(LogTemp, Log, TEXT("[Bridge] Lay-in-course refused — %s"),
 			Ship->IsDocked() ? TEXT("docked") : TEXT("warp still charging"));
+	}
+}
+
+void ABridgePlayerController::AcceptOrders()
+{
+	// ACCEPT ORDERS (issue #8): open the offered encounter. Bridge-wide, so it works from any station.
+	if (UWorld* World = GetWorld())
+	{
+		if (UMissionSubsystem* MS = World->GetSubsystem<UMissionSubsystem>())
+		{
+			MS->AcceptObjective();
+		}
 	}
 }
 

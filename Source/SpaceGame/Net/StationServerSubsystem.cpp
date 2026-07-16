@@ -175,7 +175,8 @@ function drawStarmap(d){const c=$('#smapc'),x=c.getContext('2d'),W=c.width,H=c.h
   x.strokeStyle=ring;x.lineWidth=2;x.beginPath();x.arc(px,py,s.sun?10:7,0,7);x.stroke();
   x.fillStyle=s.status==='locked'?'#7184a0':'#e6eefb';x.font='600 14px system-ui';x.textAlign='center';
   x.fillText(s.landmark||s.name,px,py-22);
-  x.fillStyle='#6f86a8';x.font='10px system-ui';x.fillText(s.status.toUpperCase(),px,py+28);}
+  x.fillStyle='#6f86a8';x.font='10px system-ui';x.fillText(s.status.toUpperCase(),px,py+28);
+  if(s.dist>=0){x.fillStyle='#8fb8e6';x.fillText((Math.round(s.dist/100)/10)+'k uu',px,py+40);}}
  // live travel-event marker (M27): pulsing diamond + label + countdown
  if(d.event){const ex=X(d.event.x),ey=Y(d.event.y),r=10+2*Math.sin(Date.now()/300);
   x.strokeStyle='#ff5ad0';x.lineWidth=2;
@@ -191,6 +192,7 @@ function drawStarmap(d){const c=$('#smapc'),x=c.getContext('2d'),W=c.width,H=c.h
  const o=$('#smapobj'),wb=$('#smapwarp');
  if(cur){const dist=d.objectiveDist>=0?(Math.round(d.objectiveDist/100)/10+'k uu'):'--';
   o.textContent=d.engaged?('OBJECTIVE: '+(cur.landmark||cur.name)+' — ENGAGED')
+   :d.offered?('OBJECTIVE: '+(cur.landmark||cur.name)+' — ORDERS PENDING (ACCEPT on Helm/Science)')
    :('OBJECTIVE: '+(cur.landmark||cur.name)+'  —  '+dist);
   wb.style.display=d.engaged?'none':'block';}}
 {SCRIPT}
@@ -237,6 +239,10 @@ setInterval(poll,250);poll();
 			"<button id='warpbtn' onclick=\"post('/api/warp')\">WARP</button>"
 			"<button id='courlbtn' onclick=\"post('/api/warp?mode=objective')\" "
 			"style='border-color:#7ad0ff;color:#cdefff'>&#9654; COURSE</button></div>"
+			// ACCEPT ORDERS (issue #8): shown only when the ship has reached the objective and orders
+			// are pending — arriving no longer auto-starts the fight.
+			"<button id='acceptbtn' onclick=\"post('/api/mission?action=accept')\" "
+			"style='display:none;border-color:#ffd24a;color:#ffe8a0'>&#9873; ACCEPT ORDERS</button>"
 			"<label>THROTTLE (&#9664; reverse)</label>"
 			"<input id='t' type='range' min='-35' max='100' value='0' "
 			"oninput=\"post('/api/helm?throttle='+(this.value/100))\">"
@@ -269,7 +275,9 @@ setInterval(poll,250);poll();
 			"const db=$('#dockbtn');db.textContent=s.docked?'\\u2191 UNDOCK':'\\u2193 DOCK';"
 			"db.disabled=!s.docked&&!s.canDock;db.className=(s.docked||s.canDock)?'rdy':'blk';"
 			"$('#obj').textContent=s.engaged?(s.objective||'')+' \\u2014 ENGAGED'"
+			":s.offered?(s.objective||'')+' \\u2014 ORDERS PENDING'"
 			":(s.objective||'')+(s.objectiveDist>=0?' \\u2014 '+Math.round(s.objectiveDist/100)/10+'k uu':'');"
+			"var ab=$('#acceptbtn');if(ab)ab.style.display=(s.offered&&!s.engaged)?'block':'none';"
 			"const wc=Math.round((s.warpCharge||0)*100),wb=$('#warpbtn');"
 			"$('#warp').textContent=s.docked?'offline (docked)':(s.warpReady?'READY':wc+'%');"
 			"wb.textContent=s.warpReady?'\\u27a4 WARP JUMP':'CHARGING '+wc+'%';"
@@ -483,6 +491,10 @@ setInterval(poll,250);poll();
 		// Cycle to a contact, run a timed scan, then read its hull/shield live off the target.
 		const FString Body = TEXT(
 			"<div class='stat'><b>MISSION</b><span id='msn'>&mdash;</span></div>"
+			"<div class='stat'><b>OBJECTIVE</b><span id='obj'>&mdash;</span></div>"
+			// ACCEPT ORDERS (issue #8): appears when the ship reaches the objective and orders are pending.
+			"<button id='acceptbtn' onclick=\"post('/api/mission?action=accept')\" "
+			"style='display:none;border-color:#ffd24a;color:#ffe8a0'>&#9873; ACCEPT ORDERS</button>"
 			"<button onclick='openStarmap()' style='width:auto;margin:10px auto 0;display:block;"
 			"padding:8px 18px;font-size:.9rem'>&#9678; SECTOR MAP</button>"
 			"<label>COMMS</label>"
@@ -509,6 +521,11 @@ setInterval(poll,250);poll();
 		const FString Script = TEXT(
 			"function render(s){"
 			"$('#msn').textContent=s.mission||'\\u2014';"
+			"var od=s.objectiveDist;"
+			"$('#obj').textContent=s.engaged?(s.objective||'')+' \\u2014 ENGAGED'"
+			":s.offered?(s.objective||'')+' \\u2014 ORDERS PENDING'"
+			":((s.objective||'')+(od>=0?' \\u2014 '+Math.round(od/100)/10+'k uu':''));"
+			"var ab=$('#acceptbtn');if(ab)ab.style.display=(s.offered&&!s.engaged)?'block':'none';"
 			"const cm=$('#comms'),items=(s.comms||[]);"
 			"if(items.length){cm.innerHTML=items.map(function(c,i){return '<div style=\"padding:3px 0;'+"
 			"(i===items.length-1?'color:#aef0c0':'color:#8fb8e6')+'\"><b>'+c.sender+':</b> '+c.text+'</div>';}).join('');"
@@ -704,6 +721,7 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Bind(TEXT("/api/starmap"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleStarmap);
 	Bind(TEXT("/api/contract"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleContract);
 	Bind(TEXT("/api/alert"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleAlert);
+	Bind(TEXT("/api/mission"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleMission);
 	Bind(TEXT("/api/helm"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleHelm);
 	Bind(TEXT("/api/dock"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleDock);
 	Bind(TEXT("/api/warp"), EHttpServerRequestVerbs::VERB_GET, &UStationServerSubsystem::HandleWarp);
@@ -948,6 +966,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 	FString ObjectiveName;
 	FString Comms;
 	bool bEngaged = false;      // an active fleet is up (proximity-triggered).
+	bool bOffered = false;      // reached the objective, orders pending ACCEPT (issue #8).
 	float ObjectiveDist = -1.f; // planar range to the objective landmark.
 	int32 Wave = 0;             // skirmish wave counter (0 = not in skirmish, M30).
 	if (const UWorld* World = GetWorld())
@@ -957,6 +976,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 			MissionName = MS->GetMissionName();
 			ObjectiveName = MS->GetObjectiveName();
 			bEngaged = MS->IsEncounterLive();
+			bOffered = MS->IsObjectiveOffered();
 			ObjectiveDist = MS->GetObjectiveDistance();
 			Wave = MS->GetSkirmishWave();
 			for (const FCommsMessage& M : MS->GetComms())
@@ -1030,7 +1050,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciTarget\":\"%s\",\"sciProgress\":%.3f,\"sciScanning\":%s,\"sciScanned\":%s,"
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
-		"\"objective\":\"%s\",\"engaged\":%s,\"objectiveDist\":%.0f,\"wave\":%d,"
+		"\"objective\":\"%s\",\"engaged\":%s,\"offered\":%s,\"objectiveDist\":%.0f,\"wave\":%d,"
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
 		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,"
 		"\"warpCharge\":%.3f,\"warpReady\":%s,\"upgrades\":[%s],\"ships\":[%s],"
@@ -1069,7 +1089,8 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		Sci ? Sci->GetTargetShield() : -1.f,
 		Sci ? Sci->GetTargetMaxShield() : -1.f,
 		*MissionName, *Comms,
-		*JsonEscape(ObjectiveName), bEngaged ? TEXT("true") : TEXT("false"), ObjectiveDist, Wave,
+		*JsonEscape(ObjectiveName), bEngaged ? TEXT("true") : TEXT("false"),
+		bOffered ? TEXT("true") : TEXT("false"), ObjectiveDist, Wave,
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),
@@ -1103,6 +1124,35 @@ bool UStationServerSubsystem::HandleAlert(const FHttpServerRequest& Request, con
 	else if (State && *State == TEXT("green")) { Ship->SetRedAlert(false); }
 	else                                       { Ship->ToggleRedAlert(); }
 	OnComplete(MakeVerdict(true));
+	return true;
+}
+
+bool UStationServerSubsystem::HandleMission(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// ACCEPT ORDERS (issue #8): open the offered encounter. A whole-bridge command, not station-gated.
+	FString Reason;
+	ASpaceship* Ship = GetCommandShip(Reason);
+	if (!Ship)
+	{
+		OnComplete(MakeVerdict(false, Reason));
+		return true;
+	}
+	UWorld* World = GetWorld();
+	UMissionSubsystem* MS = World ? World->GetSubsystem<UMissionSubsystem>() : nullptr;
+	if (!MS)
+	{
+		OnComplete(MakeVerdict(false, TEXT("no mission director")));
+		return true;
+	}
+	const FString* Action = Request.QueryParams.Find(TEXT("action"));
+	if (Action && *Action == TEXT("accept"))
+	{
+		OnComplete(MS->AcceptObjective()
+			? MakeVerdict(true)
+			: MakeVerdict(false, TEXT("no orders pending")));
+		return true;
+	}
+	OnComplete(MakeVerdict(false, TEXT("unknown action")));
 	return true;
 }
 
@@ -1160,8 +1210,11 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 	// the distance to the active objective — so the map is a real nav display, not a static readout.
 	int32 Current = 0;
 	FVector2D PlayerMap(-1.f, -1.f);
+	FVector PlayerWorld = FVector::ZeroVector;
+	bool bHavePlayer = false;
 	float ObjectiveDist = -1.f;
 	bool bEngaged = false;
+	bool bOffered = false;
 	FString EventJson = TEXT("null");
 	if (const UWorld* World = GetWorld())
 	{
@@ -1170,9 +1223,12 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 			Current = MS->GetMissionIndex();
 			ObjectiveDist = MS->GetObjectiveDistance();
 			bEngaged = MS->IsEncounterLive();
+			bOffered = MS->IsObjectiveOffered();
 			if (const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0))
 			{
-				PlayerMap = MS->GetMapPosition(Player->GetActorLocation());
+				PlayerWorld = Player->GetActorLocation();
+				bHavePlayer = true;
+				PlayerMap = MS->GetMapPosition(PlayerWorld);
 			}
 			// Live travel event (M27): kind + normalised map position + remaining window.
 			if (MS->GetActiveEvent() != ESectorEvent::None)
@@ -1186,6 +1242,10 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 		}
 	}
 
+	// Re-resolve the director so each system can report its real planar range from the ship (issue #8).
+	const UWorld* MapWorld = GetWorld();
+	const UMissionSubsystem* MapMS = MapWorld ? MapWorld->GetSubsystem<UMissionSubsystem>() : nullptr;
+
 	FString Systems;
 	const int32 Count = UMissionSubsystem::MissionCount();
 	for (int32 i = 0; i < Count; ++i)
@@ -1193,11 +1253,13 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 		const FMissionDef Def = UMissionSubsystem::GetMissionDef(i);
 		const TCHAR* Status = i < Current ? TEXT("cleared") : (i == Current ? TEXT("current") : TEXT("locked"));
 		const bool bSun = Def.LandmarkKind == ELandmarkKind::Sun;
+		const float Dist = (MapMS && bHavePlayer) ? FVector::Dist2D(MapMS->GetSystemLocation(i), PlayerWorld) : -1.f;
 		if (!Systems.IsEmpty()) { Systems += TEXT(","); }
 		Systems += FString::Printf(TEXT(
 			"{\"name\":\"%s\",\"landmark\":\"%s\",\"x\":%.3f,\"y\":%.3f,\"status\":\"%s\","
-			"\"sun\":%s,\"r\":%d,\"g\":%d,\"b\":%d}"),
+			"\"dist\":%.0f,\"sun\":%s,\"r\":%d,\"g\":%d,\"b\":%d}"),
 			*JsonEscape(Def.Name), *JsonEscape(Def.LandmarkName), Def.MapX, Def.MapY, Status,
+			Dist,
 			bSun ? TEXT("true") : TEXT("false"),
 			FMath::RoundToInt(FMath::Clamp(Def.LandmarkColor.R, 0.f, 1.f) * 255.f),
 			FMath::RoundToInt(FMath::Clamp(Def.LandmarkColor.G, 0.f, 1.f) * 255.f),
@@ -1206,9 +1268,10 @@ bool UStationServerSubsystem::HandleStarmap(const FHttpServerRequest& Request, c
 
 	const FString Json = FString::Printf(
 		TEXT("{\"sector\":\"THE VEIL FRONTIER\",\"current\":%d,\"px\":%.4f,\"py\":%.4f,"
-			"\"objectiveDist\":%.0f,\"engaged\":%s,\"event\":%s,\"systems\":[%s]}"),
+			"\"objectiveDist\":%.0f,\"engaged\":%s,\"offered\":%s,\"event\":%s,\"systems\":[%s]}"),
 		Current, PlayerMap.X, PlayerMap.Y, ObjectiveDist,
-		bEngaged ? TEXT("true") : TEXT("false"), *EventJson, *Systems);
+		bEngaged ? TEXT("true") : TEXT("false"),
+		bOffered ? TEXT("true") : TEXT("false"), *EventJson, *Systems);
 	OnComplete(MakeResponse(Json, TEXT("application/json")));
 	return true;
 }

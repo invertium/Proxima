@@ -1756,3 +1756,27 @@ heading held **0.0°** and px stayed ~236 — a pure side-slip.
 - **Friend/foe clarity:** the Scout's radar blip was **cyan** (read as friendly). Every hostile now blips
   in the warm red/orange band (Scout → amber-orange), unmistakable against the green starbase and amber
   cargo pods. **Verified:** builds clean.
+
+---
+
+## Story pacing + ACCEPT ORDERS + nav-map — issue #8 (2026-07-16)
+
+The campaign fired too fast and you could blunder into a fight just by flying. Reworked the open-sector
+director so encounters are deliberate and the map/story are legible.
+
+- **ACCEPT ORDERS gate.** Reaching an objective no longer auto-spawns its fleet. The director now
+  *offers* the objective on arrival (`OfferObjective` → a "you've reached X, orders are yours, ACCEPT
+  when ready" hail) and holds; `AcceptObjective()` opens the fight. Controls: web **ACCEPT ORDERS**
+  button on Helm + Science (shown only while `offered && !engaged`), `/api/mission?action=accept`, and
+  the solo **Y** key. `IsObjectiveOffered()` + `offered` exposed on `/api/state` and `/api/starmap`.
+- **Wider spacing.** `SectorSpan` 120k → 160k, so systems sit farther apart — more room to fly/warp and
+  no drifting into the next zone.
+- **Reactive comms.** DAMAGE CONTROL calls out a critical hull (≤30%) mid-fight (one-shot) — the story
+  reacts to how the battle is going, not just a fixed timeline. Plus the arrival hail + engage beat.
+- **Nav-map (Science).** `/api/starmap` now reports each system's real planar range + the offered state;
+  the map draws a **distance label under every system** and an **ORDERS PENDING** objective readout.
+  Helm/Science also show the objective range + ORDERS PENDING inline.
+
+**Verified [L]:** headless arena — `Objective 0 OFFERED — awaiting ACCEPT ORDERS` fired at spawn with
+**no** encounter; `/api/state` read `offered:true, engaged:false`; `POST /api/mission?action=accept`
+→ `{"ok":true}` → `engaged:true` (fleet spawned). Landmarks spread at span 160000.

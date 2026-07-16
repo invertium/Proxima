@@ -127,6 +127,8 @@ private:
 	/** G (Helm): lay in course — warp toward the active campaign objective. */
 	UFUNCTION(BlueprintCallable, Category = "Bridge")
 	void HelmWarpToObjective();
+	/** Solo hotkey: ACCEPT ORDERS to open the offered encounter (issue #8). Bridge-wide. */
+	void AcceptOrders();
 
 	/** T (Weapons): fire a torpedo at the locked target. */
 	UFUNCTION(BlueprintCallable, Category = "Bridge")

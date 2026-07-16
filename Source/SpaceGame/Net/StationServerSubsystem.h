@@ -67,6 +67,8 @@ private:
 	bool HandleGame(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleContract(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleAlert(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	// ACCEPT ORDERS gate (issue #8): open the offered encounter on the crew's command.
+	bool HandleMission(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 
 	/** Resolve the local player ship in this world, or null if not spawned yet. */
 	ASpaceship* GetShip() const;
