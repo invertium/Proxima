@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>PROXIMA — Join Crew</title>
-<meta name="description" content="Enter a host address and PIN to join a Proxima starship bridge crew." />
+<meta name="description" content="Enter a join code to reach a Proxima starship bridge crew." />
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -15,31 +15,31 @@
   }
   .card {
     width: min(440px, 100%); background: rgba(10,18,32,.72); border: 1px solid #16324f;
-    border-radius: 16px; padding: 26px 24px 22px; box-shadow: 0 12px 40px rgba(0,0,0,.5);
-    backdrop-filter: blur(6px);
+    border-radius: 16px; padding: 26px 24px 22px; box-shadow: 0 12px 40px rgba(0,0,0,.5); backdrop-filter: blur(6px);
   }
   h1 { margin: 0 0 2px; font-size: 1.5rem; letter-spacing: .12em; color: #eaf4ff; }
   .sub { margin: 0 0 20px; color: #6f89a8; font-size: .9rem; letter-spacing: .04em; }
-  .accent { color: #7ad0ff; }
   label { display: block; margin: 14px 0 5px; font-size: .74rem; letter-spacing: .14em; color: #86a2c4; text-transform: uppercase; }
   input {
     width: 100%; padding: 12px 13px; font-size: 1.05rem; color: #eaf4ff;
     background: #0b1524; border: 1px solid #1c3a58; border-radius: 10px; outline: none;
   }
+  #code { text-align: center; letter-spacing: .35em; text-transform: uppercase; font-size: 1.4rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
   input:focus { border-color: #3d90c8; box-shadow: 0 0 0 3px rgba(61,144,200,.18); }
   button {
-    width: 100%; margin-top: 20px; padding: 13px; font-size: 1.05rem; font-weight: 600; letter-spacing: .06em;
+    width: 100%; margin-top: 18px; padding: 13px; font-size: 1.05rem; font-weight: 600; letter-spacing: .06em;
     color: #04121e; background: linear-gradient(180deg, #8fe0ff, #4bb6ef); border: 0; border-radius: 10px; cursor: pointer;
   }
   button:active { transform: translateY(1px); }
   .msg { margin-top: 14px; min-height: 1.2em; font-size: .9rem; }
-  .err { color: #ff9a8f; }
-  .ok { color: #8fe0a8; }
-  .hint { margin-top: 18px; padding-top: 16px; border-top: 1px solid #12283f; font-size: .82rem; color: #7f97b6; }
+  .err { color: #ff9a8f; } .ok { color: #8fe0a8; }
+  details { margin-top: 18px; border-top: 1px solid #12283f; padding-top: 12px; }
+  summary { cursor: pointer; color: #7f97b6; font-size: .84rem; letter-spacing: .04em; }
+  .adv button { background: #16324f; color: #cfe6ff; }
+  .hint { margin-top: 16px; font-size: .82rem; color: #7f97b6; }
   .hint b { color: #a9c6e6; font-weight: 600; }
   code { background: #0b1524; border: 1px solid #16324f; border-radius: 5px; padding: 1px 5px; color: #bfe4ff; font-size: .85em; }
   a { color: #7ad0ff; }
-  .row { display: flex; gap: 8px; align-items: center; }
   .ip { font-family: ui-monospace, Menlo, Consolas, monospace; }
   .mini { font-size: .78rem; color: #6f89a8; }
 </style>
@@ -47,29 +47,49 @@
 <body>
   <main class="card">
     <h1>PROXIMA</h1>
-    <p class="sub">Join a bridge crew — enter your host’s address and the ship’s PIN.</p>
+    <p class="sub">Enter the join code from your host’s ship to man a bridge station.</p>
 
-    <form id="f" autocomplete="off">
-      <label for="host">Host address</label>
-      <input id="host" name="host" inputmode="url" placeholder="192.168.1.10:8081" spellcheck="false" />
-      <label for="pin">Crew PIN</label>
-      <input id="pin" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="1234" />
+    <form id="cf" autocomplete="off">
+      <label for="code">Join code</label>
+      <input id="code" name="code" placeholder="K7QB2" maxlength="64" spellcheck="false" autofocus />
       <button type="submit">JOIN CREW →</button>
     </form>
     <div id="msg" class="msg"></div>
 
+    <details class="adv">
+      <summary>No code? Enter host address + PIN</summary>
+      <form id="hf" autocomplete="off">
+        <label for="host">Host address</label>
+        <input id="host" name="host" inputmode="url" placeholder="192.168.1.10:8081" spellcheck="false" />
+        <label for="pin">Crew PIN</label>
+        <input id="pin" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="1234" />
+        <button type="submit">JOIN →</button>
+      </form>
+      <p class="mini" style="margin:12px 0 0">Hosting over the internet? Your public IP is
+        <span id="whoami" class="ip">…</span>.</p>
+    </details>
+
     <div class="hint">
-      <p style="margin:.2em 0 .6em"><b>Where do I find these?</b> They’re on the ship’s viewscreen — the crew URL reads
-      <code>http://&lt;address&gt;:&lt;port&gt;/stations?pin=&lt;PIN&gt;</code>. Type the <b>address:port</b> and the <b>PIN</b> above.</p>
-      <p class="row mini" style="margin:.2em 0">Hosting over the internet? Your public IP is
-        <span id="whoami" class="ip accent">…</span> <span class="mini">(forward the game’s port to it).</span></p>
-      <p class="mini" style="margin:.6em 0 0">The PIN gates access — this page only forwards you to the address you enter.</p>
+      <p style="margin:.2em 0"><b>Where’s the code?</b> It’s on the ship’s viewscreen, next to the crew URL
+      (<code>…/stations?pin=…</code>). No code shown? Use “host + PIN” above.</p>
     </div>
   </main>
 
 <script>
-  // IP-only URL builder (mirrors lib/crewurl.js). Client-side nav is the most reliable way to open
-  // the http:// game server from this https page.
+  const $ = (id) => document.getElementById(id);
+  const msg = $('msg');
+  function show(text, ok) { msg.className = 'msg ' + (ok ? 'ok' : 'err'); msg.innerHTML = text; }
+
+  // A join code just navigates to /api/resolve, which 307-redirects to the ship (works https→http).
+  function goCode(code) {
+    code = String(code || '').trim();
+    if (!code) { show('Enter the join code from the ship.', false); return; }
+    show('Looking up <span class="ip">' + code.replace(/</g,'&lt;') + '</span> …', true);
+    window.location.href = '/api/resolve?code=' + encodeURIComponent(code);
+  }
+  $('cf').addEventListener('submit', (e) => { e.preventDefault(); goCode($('code').value); });
+
+  // Manual host + PIN (IP-only builder, mirrors lib/crewurl.js) → client-side nav to the http server.
   function isIpv4(s){ return /^(\d{1,3})(\.\d{1,3}){3}$/.test(s) && s.split('.').every(n => +n>=0 && +n<=255); }
   function isIpv6(s){ return /^[0-9a-fA-F:]+$/.test(s) && (s.match(/:/g)||[]).length >= 2; }
   function buildCrewUrl(hostInput, pinInput){
@@ -87,31 +107,21 @@
     const authority = isIpv6(ip) ? '['+ip+']:'+port : ip+':'+port;
     return 'http://'+authority+'/stations?pin='+encodeURIComponent(pin);
   }
+  $('hf').addEventListener('submit', (e) => {
+    e.preventDefault();
+    try { const url = buildCrewUrl($('host').value, $('pin').value); show('Opening <span class="ip">' + url.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span> … <a href="'+url+'">tap if it doesn’t</a>', true); window.location.href = url; }
+    catch (err) { show(err.message, false); }
+  });
 
-  const $ = (id) => document.getElementById(id);
-  const msg = $('msg');
-  function go(host, pin, auto){
-    try {
-      const url = buildCrewUrl(host, pin);
-      msg.className = 'msg ok';
-      msg.innerHTML = (auto ? 'Redirecting to ' : 'Opening ') + '<span class="ip">' + url.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span> … <a href="' + url + '">tap if it doesn’t</a>';
-      window.location.href = url;
-    } catch (e) {
-      msg.className = 'msg err';
-      msg.textContent = e.message;
-    }
+  // Deep links: /?code=X (auto-resolve) or /?host=&pin= (auto-open). /j/CODE is handled server-side.
+  const q = new URLSearchParams(location.search);
+  if (q.get('code')) { $('code').value = q.get('code'); goCode(q.get('code')); }
+  else if (q.get('host')) {
+    $('host').value = q.get('host'); if (q.get('pin')) $('pin').value = q.get('pin');
+    document.querySelector('details').open = true;
+    if (q.get('pin')) $('hf').requestSubmit();
   }
 
-  $('f').addEventListener('submit', (e) => { e.preventDefault(); go($('host').value, $('pin').value, false); });
-
-  // Deep link: /?host=<ip:port>&pin=<pin> pre-fills and auto-redirects (a share-able join link).
-  const q = new URLSearchParams(location.search);
-  if (q.get('host')) $('host').value = q.get('host');
-  if (q.get('pin')) $('pin').value = q.get('pin');
-  if (q.get('host') && q.get('pin')) { go(q.get('host'), q.get('pin'), true); }
-  else if (q.get('host')) { $('pin').focus(); }
-
-  // Best-effort public-IP hint for internet hosts.
   fetch('/api/whoami').then(r => r.json()).then(d => { if (d && d.ip) $('whoami').textContent = d.ip; })
     .catch(() => { $('whoami').textContent = '(unknown)'; });
 </script>

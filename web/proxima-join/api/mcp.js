@@ -1,25 +1,68 @@
 // Minimal, stateless MCP server over Streamable HTTP (POST → single JSON-RPC response).
-// Exposes one tool, `crew_join_url`, so an MCP client (e.g. a Claude connector) can resolve a
-// Proxima crew-console URL from a host IP + PIN. No sessions, no storage — the tool is pure.
-//
+// Tools:
+//   crew_join_url(host, pin)   → build the crew URL from an IP + PIN (pure).
+//   register_host(host, pin)   → register a host and get a short join code (needs KV; stateless code otherwise).
+//   resolve_join_code(code)    → resolve a join code back to its crew URL.
 // Add it in an MCP client as a Streamable HTTP server pointing at:  https://<deployment>/api/mcp
 const { buildCrewUrl } = require('../lib/crewurl.js');
+const { registerUrl, resolveCode } = require('../lib/store.js');
 
-const TOOL = {
-  name: 'crew_join_url',
-  description:
-    'Build the Proxima crew-console URL to join a friend’s ship. Returns ' +
-    'http://<ip:port>/stations?pin=<pin>; open it in a browser to man a bridge station. ' +
-    'The host must be an IP address (LAN or public) and the PIN is shown on the ship’s screen.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      host: { type: 'string', description: 'Host IP and port, e.g. "192.168.1.10:8081"' },
-      pin: { type: 'string', description: 'Session PIN (digits) shown on the ship’s screen' },
+const TOOLS = [
+  {
+    name: 'crew_join_url',
+    description:
+      'Build the Proxima crew-console URL from a host IP + PIN. Returns http://<ip:port>/stations?pin=<pin>; ' +
+      'open it in a browser to man a bridge station. Host must be an IP address (LAN or public).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        host: { type: 'string', description: 'Host IP and port, e.g. "192.168.1.10:8081"' },
+        pin: { type: 'string', description: 'Session PIN (digits) shown on the ship’s screen' },
+      },
+      required: ['host'],
     },
-    required: ['host'],
   },
-};
+  {
+    name: 'register_host',
+    description:
+      'Register a Proxima host (IP + PIN) and get a short join code the crew can type at ' +
+      'https://proxima-join.vercel.app. Codes expire after 6 hours.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        host: { type: 'string', description: 'Host IP and port, e.g. "192.168.1.10:8081"' },
+        pin: { type: 'string', description: 'Session PIN (digits)' },
+      },
+      required: ['host'],
+    },
+  },
+  {
+    name: 'resolve_join_code',
+    description: 'Resolve a Proxima join code back to the ship’s crew-console URL.',
+    inputSchema: {
+      type: 'object',
+      properties: { code: { type: 'string', description: 'The join code shown on the ship’s screen' } },
+      required: ['code'],
+    },
+  },
+];
+const TOOL_NAMES = TOOLS.map((t) => t.name);
+
+async function callTool(name, args) {
+  args = args || {};
+  if (name === 'crew_join_url') return buildCrewUrl(args.host, args.pin);
+  if (name === 'register_host') {
+    const url = buildCrewUrl(args.host, args.pin);
+    const { code } = await registerUrl(url);
+    return `Join code: ${code}\nCrew: open https://proxima-join.vercel.app and enter ${code} (or https://proxima-join.vercel.app/j/${code}).`;
+  }
+  if (name === 'resolve_join_code') {
+    const url = await resolveCode(args.code);
+    if (!url) throw new Error('Unknown or expired join code');
+    return url;
+  }
+  throw new Error(`Unknown tool: ${name}`);
+}
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,7 +73,7 @@ module.exports = async (req, res) => {
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method === 'GET') {
-    return res.status(200).json({ server: 'proxima-join', transport: 'streamable-http', endpoint: '/api/mcp', tools: [TOOL.name] });
+    return res.status(200).json({ server: 'proxima-join', transport: 'streamable-http', endpoint: '/api/mcp', tools: TOOL_NAMES });
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
 
@@ -45,19 +88,16 @@ module.exports = async (req, res) => {
   try {
     if (method === 'initialize') {
       const pv = (params && params.protocolVersion) || '2024-11-05';
-      return rpc({ protocolVersion: pv, capabilities: { tools: {} }, serverInfo: { name: 'proxima-join', version: '1.0.0' } });
+      return rpc({ protocolVersion: pv, capabilities: { tools: {} }, serverInfo: { name: 'proxima-join', version: '1.1.0' } });
     }
-    if (typeof method === 'string' && method.startsWith('notifications/')) {
-      return res.status(202).end();
-    }
+    if (typeof method === 'string' && method.startsWith('notifications/')) return res.status(202).end();
     if (method === 'ping') return rpc({});
-    if (method === 'tools/list') return rpc({ tools: [TOOL] });
+    if (method === 'tools/list') return rpc({ tools: TOOLS });
     if (method === 'tools/call') {
-      if (params.name !== TOOL.name) return rpcErr(-32602, `Unknown tool: ${params.name}`);
-      const args = params.arguments || {};
+      if (!TOOL_NAMES.includes(params.name)) return rpcErr(-32602, `Unknown tool: ${params.name}`);
       try {
-        const url = buildCrewUrl(args.host, args.pin);
-        return rpc({ content: [{ type: 'text', text: url }] });
+        const text = await callTool(params.name, params.arguments);
+        return rpc({ content: [{ type: 'text', text }] });
       } catch (e) {
         return rpc({ content: [{ type: 'text', text: `Error: ${e.message}` }], isError: true });
       }
