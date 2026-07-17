@@ -10,6 +10,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Core/MenuUI.h"
 #include "GameFramework/GameUserSettings.h"
+#include "HAL/IConsoleManager.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/App.h"
 #include "Misc/ConfigCacheIni.h"
@@ -23,6 +24,8 @@ namespace
 	const TCHAR* AudioConfigKey = TEXT("MasterVolume");
 	const TCHAR* VideoConfigSection = TEXT("SpaceGame.Video");
 	const TCHAR* VideoSeededKey = TEXT("DefaultsSeeded");
+	const TCHAR* OnlineConfigSection = TEXT("SpaceGame.Online");
+	const TCHAR* OnlineJoinKey = TEXT("EnableJoinCode");
 
 	/** Volume moves in 10% steps; a click cycles down and wraps 0 → 100. */
 	constexpr float VolumeStep = 0.1f;
@@ -60,6 +63,19 @@ namespace
 	{
 		return Limit <= 0.f ? TEXT("UNLIMITED") : FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(Limit));
 	}
+
+	/** The *effective* online-join state = the live sg.OnlineJoinCode CVar (what RequestJoinCode()
+	 *  actually reads), falling back to the persisted config only if the CVar isn't registered. The UI
+	 *  reads this — not the raw config — so the row can never disagree with what the game will send even
+	 *  when the CVar was set from the console (a higher priority than our game-setting write). */
+	bool OnlineJoinEffective(bool bConfigFallback)
+	{
+		if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("sg.OnlineJoinCode")))
+		{
+			return CVar->GetInt() != 0;
+		}
+		return bConfigFallback;
+	}
 }
 
 float USettingsMenuWidget::LoadMasterVolume()
@@ -75,6 +91,24 @@ float USettingsMenuWidget::LoadMasterVolume()
 void USettingsMenuWidget::ApplyPersistedAudio()
 {
 	FApp::SetVolumeMultiplier(LoadMasterVolume());
+}
+
+bool USettingsMenuWidget::LoadOnlineJoinEnabled()
+{
+	bool bEnabled = false; // opt-in: off unless the player has turned it on
+	if (GConfig)
+	{
+		GConfig->GetBool(OnlineConfigSection, OnlineJoinKey, bEnabled, GGameUserSettingsIni);
+	}
+	return bEnabled;
+}
+
+void USettingsMenuWidget::ApplyPersistedOnlineJoin()
+{
+	if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("sg.OnlineJoinCode")))
+	{
+		CVar->Set(LoadOnlineJoinEnabled() ? 1 : 0, ECVF_SetByGameSetting);
+	}
 }
 
 void USettingsMenuWidget::SeedVideoDefaults()
@@ -161,6 +195,10 @@ void USettingsMenuWidget::BuildUI()
 	VolumeLabel = Cast<UTextBlock>(VolumeBtn->GetChildAt(0));
 	VolumeBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnCycleVolume);
 
+	UButton* OnlineJoinBtn = AddFlatButton(WidgetTree, Box, TEXT(""));
+	OnlineJoinLabel = Cast<UTextBlock>(OnlineJoinBtn->GetChildAt(0));
+	OnlineJoinBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnToggleOnlineJoin);
+
 	UButton* BackBtn = AddFlatButton(WidgetTree, Box, TEXT("BACK"));
 	BackBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnBack);
 	if (UVerticalBoxSlot* BS = Cast<UVerticalBoxSlot>(BackBtn->Slot))
@@ -206,6 +244,12 @@ void USettingsMenuWidget::UpdateLabels()
 	{
 		VolumeLabel->SetText(FText::FromString(
 			FString::Printf(TEXT("MASTER VOLUME   —   %d%%"), FMath::RoundToInt(LoadMasterVolume() * 100.f))));
+	}
+	if (OnlineJoinLabel)
+	{
+		const bool bOn = OnlineJoinEffective(LoadOnlineJoinEnabled());
+		OnlineJoinLabel->SetText(FText::FromString(
+			FString::Printf(TEXT("ONLINE JOIN CODE   —   %s"), bOn ? TEXT("ON") : TEXT("OFF"))));
 	}
 }
 
@@ -281,6 +325,27 @@ void USettingsMenuWidget::OnCycleVolume()
 	{
 		GConfig->SetFloat(AudioConfigSection, AudioConfigKey, Volume, GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+	UpdateLabels();
+}
+
+void USettingsMenuWidget::OnToggleOnlineJoin()
+{
+	// Opt-in: flip the *effective* state, persist it, and push it into the CVar so the next hosted world
+	// registers (or stops registering) its crew URL with proxima-join. Off by default — nothing is
+	// sent to the online service unless the player turns this on here.
+	const bool bNext = !OnlineJoinEffective(LoadOnlineJoinEnabled());
+	if (GConfig)
+	{
+		GConfig->SetBool(OnlineConfigSection, OnlineJoinKey, bNext, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+	// SetByConsole is the top CVar priority, so this explicit player action always wins — even over a
+	// prior `sg.OnlineJoinCode` typed at the console. Without it a console-set value would silently
+	// outrank a game-setting write and the row could claim OFF while the game still registered (P2).
+	if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("sg.OnlineJoinCode")))
+	{
+		CVar->Set(bNext ? 1 : 0, ECVF_SetByConsole);
 	}
 	UpdateLabels();
 }
