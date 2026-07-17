@@ -678,6 +678,11 @@ static TAutoConsoleVariable<FString> CVarOnlineJoinUrl(
 	TEXT("Endpoint that mints the online join code (POST {host,pin})."),
 	ECVF_Default);
 
+// Bumped each time a server world starts. A join-code request callback only writes JoinCode if its
+// epoch still matches — so a prior PIE session's stale code (or a late in-flight reply) can't leak
+// into a later session in the same process (review P3).
+static int32 GJoinCodeEpoch = 0;
+
 bool UStationServerSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
@@ -686,6 +691,10 @@ bool UStationServerSubsystem::DoesSupportWorldType(const EWorldType::Type WorldT
 void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
+
+	// New session: drop any prior code and invalidate prior in-flight requests (review P3).
+	JoinCode.Reset();
+	++GJoinCodeEpoch;
 
 	// Bind to all adapters (0.0.0.0), not just loopback, so other LAN devices can reach the
 	// stations — the whole point of this server. Also enable address reuse so a later PIE
@@ -957,6 +966,7 @@ void UStationServerSubsystem::RequestJoinCode()
 	if (Lan.IsEmpty() || BoundPort < 0) { return; }
 
 	JoinCode.Reset(); // clear any stale code while a fresh one is fetched
+	const int32 Epoch = GJoinCodeEpoch; // this session's epoch; a later session bumps it
 	const FString Body = FString::Printf(TEXT("{\"host\":\"%s:%d\",\"pin\":\"%s\"}"),
 		*UrlHost(Lan), BoundPort, *GetSessionPin());
 
@@ -967,8 +977,9 @@ void UStationServerSubsystem::RequestJoinCode()
 	Req->SetContentAsString(Body);
 	// The callback runs on the game thread (HTTP module tick), so writing the static JoinCode is safe.
 	Req->OnProcessRequestComplete().BindLambda(
-		[](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+		[Epoch](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 		{
+			if (Epoch != GJoinCodeEpoch) { return; } // a newer session started — this reply is stale
 			if (!bOk || !Resp.IsValid())
 			{
 				UE_LOG(LogTemp, Warning, TEXT("[StationServer] online join-code request failed"));
