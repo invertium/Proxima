@@ -61,9 +61,15 @@ jobs:
           UE_ROOT: ${{ vars.UE_ROOT_LINUX || '/home/ue4/UnrealEngine' }}
         run: |
           set -euo pipefail
+          # The container runs as root so checkout/setup can write the mounted workspace, but
+          # UnrealEditor refuses to cook as root ("Refusing to run with the root privileges").
+          # Hand the workspace to the image's ue4 user and run packaging as ue4 (HOME set so the
+          # cook commandlet can write its logs/DDC).
+          chown -R ue4:ue4 "$GITHUB_WORKSPACE"
           # No -nocompileeditor: this is a C++ project, so the cook commandlet needs the project's
           # editor binary compiled (else "Could not find SpaceGameEditor.target" at cook time).
-          "$UE_ROOT/Engine/Build/BatchFiles/RunUAT.sh" BuildCookRun \
+          runuser -u ue4 -- env HOME=/home/ue4 \
+            "$UE_ROOT/Engine/Build/BatchFiles/RunUAT.sh" BuildCookRun \
             -project="$GITHUB_WORKSPACE/$PROJECT.uproject" \
             -noP4 -utf8output -unattended -nocompile \
             -platform=Linux -clientconfig=$CONFIG \
