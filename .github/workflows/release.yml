@@ -56,6 +56,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Package (BuildCookRun)
+        shell: bash   # container jobs default to `sh` (dash) — force bash for `set -o pipefail`
         env:
           UE_ROOT: ${{ vars.UE_ROOT_LINUX || '/home/ue4/UnrealEngine' }}
         run: |
@@ -68,6 +69,7 @@ jobs:
             -archivedirectory="$GITHUB_WORKSPACE/dist"
 
       - name: Archive
+        shell: bash
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE/dist/Linux"
@@ -82,22 +84,20 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Windows — Windows container on a windows runner.
+  # Windows — SELF-HOSTED only.
   #
-  # ⚠️  This is the fragile path. Epic's Windows UE image is very large (tens of GB) and uses
-  #     process isolation, so it needs a host whose base OS matches the image (windows-2022 ↔
-  #     ltsc2022) AND enough free disk. GitHub-hosted windows-2022 runners are often too small;
-  #     if this job fails on image pull / disk, use a GitHub Larger Runner or a self-hosted
-  #     Windows box with UE installed (see docs/CI.md). The Linux job above is unaffected.
+  # GitHub Actions cannot run container jobs on Windows runners ("Container operations are only
+  # supported on Linux runners"), and UE cannot cross-compile a Windows target from a Linux host.
+  # So there is NO cloud path to a Windows build: it needs a self-hosted Windows runner with UE 5.7
+  # installed (no container). This job stays DORMANT until you both:
+  #   • register a self-hosted runner labelled `windows` with UE installed, and
+  #   • set repo variable ENABLE_WINDOWS=1
+  # so the Linux cloud release is never blocked waiting on Windows infrastructure. See docs/CI.md.
   # ---------------------------------------------------------------------------
   windows:
-    name: Package Windows
-    runs-on: windows-2022
-    container:
-      image: ghcr.io/epicgames/unreal-engine:${{ vars.UE_IMAGE_TAG || 'dev-slim-5.7' }}
-      credentials:
-        username: ${{ secrets.EPIC_GHCR_USERNAME }}
-        password: ${{ secrets.EPIC_GHCR_TOKEN }}
+    name: Package Windows (self-hosted)
+    if: ${{ vars.ENABLE_WINDOWS == '1' }}
+    runs-on: [self-hosted, Windows]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -105,7 +105,7 @@ jobs:
       - name: Package (BuildCookRun)
         shell: powershell
         env:
-          UE_ROOT: ${{ vars.UE_ROOT_WIN || 'C:\UnrealEngine' }}
+          UE_ROOT: ${{ vars.UE_ROOT_WIN || 'C:\Program Files\Epic Games\UE_5.7' }}
         run: |
           & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun `
             -project="$env:GITHUB_WORKSPACE\$env:PROJECT.uproject" `
