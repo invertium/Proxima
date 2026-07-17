@@ -61,9 +61,11 @@ jobs:
           UE_ROOT: ${{ vars.UE_ROOT_LINUX || '/home/ue4/UnrealEngine' }}
         run: |
           set -euo pipefail
+          # No -nocompileeditor: this is a C++ project, so the cook commandlet needs the project's
+          # editor binary compiled (else "Could not find SpaceGameEditor.target" at cook time).
           "$UE_ROOT/Engine/Build/BatchFiles/RunUAT.sh" BuildCookRun \
             -project="$GITHUB_WORKSPACE/$PROJECT.uproject" \
-            -noP4 -utf8output -unattended -nocompile -nocompileeditor \
+            -noP4 -utf8output -unattended -nocompile \
             -platform=Linux -clientconfig=$CONFIG \
             -cook -build -stage -pak -compressed -archive \
             -archivedirectory="$GITHUB_WORKSPACE/dist"
@@ -107,9 +109,10 @@ jobs:
         env:
           UE_ROOT: ${{ vars.UE_ROOT_WIN || 'C:\Program Files\Epic Games\UE_5.7' }}
         run: |
+          # No -nocompileeditor: a C++ project's cook commandlet needs the project editor binary built.
           & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun `
             -project="$env:GITHUB_WORKSPACE\$env:PROJECT.uproject" `
-            -noP4 -utf8output -unattended -nocompile -nocompileeditor `
+            -noP4 -utf8output -unattended -nocompile `
             -platform=Win64 -clientconfig=$env:CONFIG `
             -cook -build -stage -pak -compressed -prereqs -archive `
             -archivedirectory="$env:GITHUB_WORKSPACE\dist"
