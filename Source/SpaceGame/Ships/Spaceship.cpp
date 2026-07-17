@@ -469,15 +469,10 @@ bool ASpaceship::WarpToObjective(FVector Target)
 	const float Dist = Flat.Size();
 	const FVector Dir = (Dist > 1.f) ? Flat / Dist : GetActorForwardVector();
 
-	// Turn the bow toward the objective (yaw only — the ship's momentum follows its new heading).
-	FRotator Face = Dir.Rotation();
-	Face.Pitch = 0.f;
-	Face.Roll = 0.f;
-	SetActorRotation(Face, ETeleportType::TeleportPhysics);
-
-	// Jump toward it without overshooting — leave a standoff so we arrive near, not on top of, it.
-	// The standoff scales with the destination body: a fixed 4000 uu would land inside a big body's
-	// surface clamp (the Ember sun's radius is ~12500), so clear its radius plus a margin (M24).
+	// Compute the jump first (standoff scales with the destination body: a fixed 4000 uu would land
+	// inside a big body's surface clamp — the Ember sun's radius is ~12500 — so clear its radius plus
+	// a margin, M24). Bail before touching heading/charge if we're already within the standoff, so
+	// "lay in course" at the objective is a true no-op and doesn't swing the bow (audit BUG-07 / P3).
 	float Standoff = 4000.f;
 	TArray<AActor*> Bodies;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWorldLandmark::StaticClass(), Bodies);
@@ -490,12 +485,18 @@ bool ASpaceship::WarpToObjective(FVector Target)
 		}
 	}
 	const float Jump = FMath::Clamp(Dist - Standoff, 0.f, WarpDistance);
-	// Already within the objective's standoff — hold course without burning the charge (audit BUG-07).
 	if (Jump < 1.f)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[Warp] Already at the objective — course hold, charge kept"));
 		return false;
 	}
+
+	// Turn the bow toward the objective (yaw only — the ship's momentum follows its new heading).
+	FRotator Face = Dir.Rotation();
+	Face.Pitch = 0.f;
+	Face.Roll = 0.f;
+	SetActorRotation(Face, ETeleportType::TeleportPhysics);
+
 	const FVector NewLoc = From + Dir * Jump;
 	SetActorLocation(NewLoc, /*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
 	WarpCharge = 0.f;

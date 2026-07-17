@@ -628,7 +628,7 @@ setInterval(poll,250);poll();
 	// Find the first free TCP port at/after Start (scanning Count ports) so the crew server never
 	// collides with something else already on 8080 (another dev server, a previous session, etc.).
 	// Probes with a plain exclusive bind — no address reuse — so an existing listener reliably
-	// reports the port as taken. Returns Start as a last resort if none are free.
+	// reports the port as taken. Returns -1 if none in the range are free.
 	int32 FindFreePort(int32 Start, int32 Count)
 	{
 		ISocketSubsystem* SS = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
