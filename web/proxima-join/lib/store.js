@@ -7,14 +7,23 @@ const { isIpv4, isIpv6 } = require('./crewurl.js');
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L — unambiguous to read + type
 const TTL_SECONDS = 6 * 3600; // a session code lives 6 hours
 
+// Vercel injects these under KV_REST_API_* (Vercel KV / marketplace) or UPSTASH_REDIS_REST_*
+// (Upstash native integration) depending on which store tile was picked — accept either pair.
+function kvUrl() {
+  return process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+}
+function kvToken() {
+  return process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+}
+
 function kvEnabled() {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return !!(kvUrl() && kvToken());
 }
 
 // Upstash REST: POST the command as a JSON array; returns { result } or { error }.
 async function kvCommand(args) {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
+  const url = kvUrl();
+  const token = kvToken();
   const r = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
