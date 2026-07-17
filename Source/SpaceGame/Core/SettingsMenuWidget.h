@@ -28,6 +28,14 @@ public:
 	/** Apply the persisted master volume to the app (called from USpaceGameInstance::Init). */
 	static void ApplyPersistedAudio();
 
+	/** Read the persisted "online join code" opt-in (default false — the feature only phones the
+	 *  proxima-join service when the player explicitly turns it on). */
+	static bool LoadOnlineJoinEnabled();
+
+	/** Push the persisted opt-in into the sg.OnlineJoinCode CVar so RequestJoinCode() honours the
+	 *  player's saved choice from the first world (called from USpaceGameInstance::Init). */
+	static void ApplyPersistedOnlineJoin();
+
 	/** First-launch only: default to vsync on + a 60 FPS cap so the game presents smoothly on a
 	 *  60 Hz display (uncapped ~600 fps hitches under fullscreen vsync). Guarded by a one-shot flag
 	 *  so it never overrides a choice the player later makes via the VSYNC / MAX FRAMERATE rows.
@@ -46,6 +54,7 @@ private:
 	UFUNCTION() void OnToggleVSync();
 	UFUNCTION() void OnCycleFrameLimit();
 	UFUNCTION() void OnCycleVolume();
+	UFUNCTION() void OnToggleOnlineJoin();
 	UFUNCTION() void OnBack();
 
 	/** Refresh every row label from the live settings. */
@@ -60,4 +69,5 @@ private:
 	UPROPERTY() TObjectPtr<UTextBlock> VSyncLabel;
 	UPROPERTY() TObjectPtr<UTextBlock> FrameLimitLabel;
 	UPROPERTY() TObjectPtr<UTextBlock> VolumeLabel;
+	UPROPERTY() TObjectPtr<UTextBlock> OnlineJoinLabel;
 };

@@ -1916,3 +1916,23 @@ with `{host,pin}`, caches the returned code in a static `JoinCode`, logs it, and
 **Verified [L]:** with the CVar on, a headless host registered (192.168.178.71:8081) and got a code;
 `/api/state.joinCode` was populated; resolving that code against the live service 307-redirected back to
 the exact ship. (Codes are the long stateless form until a KV store is attached, then 5 chars.)
+
+---
+
+## Online join code — settings toggle + KV live (2026-07-17)
+
+Two follow-ups to the game-side join code:
+
+- **In-game opt-in toggle.** Added an **ONLINE JOIN CODE — ON / OFF** row to the Settings overlay
+  (`USettingsMenuWidget`), so the feature no longer needs a console command. It persists to
+  `GameUserSettings.ini` (`[SpaceGame.Online] EnableJoinCode`, **default off**) and, on toggle, pushes the
+  value straight into the `sg.OnlineJoinCode` CVar (`ECVF_SetByGameSetting`). `USpaceGameInstance::Init`
+  calls `ApplyPersistedOnlineJoin()` so the saved choice is honoured from the very first world (the CVar's
+  own default stays 0, so nothing phones home unless the player turns it on). Nothing is posted to the
+  external service while the toggle is off.
+- **Short codes now live.** An Upstash Redis (KV) store is attached to the `proxima-join` Vercel project,
+  so the registry hands out 5-char codes instead of the long stateless `~` fallback. `lib/store.js` reads
+  either `KV_REST_API_*` or `UPSTASH_REDIS_REST_*` env vars (whichever Vercel injects). Verified live:
+  `POST /api/register {192.168.1.50:8081,1234}` → `{"code":"CQM73","kv":true}`.
+
+See `web/proxima-join/README.md` for the deploy + KV setup notes.

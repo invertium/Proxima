@@ -10,6 +10,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Core/MenuUI.h"
 #include "GameFramework/GameUserSettings.h"
+#include "HAL/IConsoleManager.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/App.h"
 #include "Misc/ConfigCacheIni.h"
@@ -23,6 +24,8 @@ namespace
 	const TCHAR* AudioConfigKey = TEXT("MasterVolume");
 	const TCHAR* VideoConfigSection = TEXT("SpaceGame.Video");
 	const TCHAR* VideoSeededKey = TEXT("DefaultsSeeded");
+	const TCHAR* OnlineConfigSection = TEXT("SpaceGame.Online");
+	const TCHAR* OnlineJoinKey = TEXT("EnableJoinCode");
 
 	/** Volume moves in 10% steps; a click cycles down and wraps 0 → 100. */
 	constexpr float VolumeStep = 0.1f;
@@ -75,6 +78,24 @@ float USettingsMenuWidget::LoadMasterVolume()
 void USettingsMenuWidget::ApplyPersistedAudio()
 {
 	FApp::SetVolumeMultiplier(LoadMasterVolume());
+}
+
+bool USettingsMenuWidget::LoadOnlineJoinEnabled()
+{
+	bool bEnabled = false; // opt-in: off unless the player has turned it on
+	if (GConfig)
+	{
+		GConfig->GetBool(OnlineConfigSection, OnlineJoinKey, bEnabled, GGameUserSettingsIni);
+	}
+	return bEnabled;
+}
+
+void USettingsMenuWidget::ApplyPersistedOnlineJoin()
+{
+	if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("sg.OnlineJoinCode")))
+	{
+		CVar->Set(LoadOnlineJoinEnabled() ? 1 : 0, ECVF_SetByGameSetting);
+	}
 }
 
 void USettingsMenuWidget::SeedVideoDefaults()
@@ -161,6 +182,10 @@ void USettingsMenuWidget::BuildUI()
 	VolumeLabel = Cast<UTextBlock>(VolumeBtn->GetChildAt(0));
 	VolumeBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnCycleVolume);
 
+	UButton* OnlineJoinBtn = AddFlatButton(WidgetTree, Box, TEXT(""));
+	OnlineJoinLabel = Cast<UTextBlock>(OnlineJoinBtn->GetChildAt(0));
+	OnlineJoinBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnToggleOnlineJoin);
+
 	UButton* BackBtn = AddFlatButton(WidgetTree, Box, TEXT("BACK"));
 	BackBtn->OnClicked.AddDynamic(this, &USettingsMenuWidget::OnBack);
 	if (UVerticalBoxSlot* BS = Cast<UVerticalBoxSlot>(BackBtn->Slot))
@@ -206,6 +231,11 @@ void USettingsMenuWidget::UpdateLabels()
 	{
 		VolumeLabel->SetText(FText::FromString(
 			FString::Printf(TEXT("MASTER VOLUME   —   %d%%"), FMath::RoundToInt(LoadMasterVolume() * 100.f))));
+	}
+	if (OnlineJoinLabel)
+	{
+		OnlineJoinLabel->SetText(FText::FromString(
+			FString::Printf(TEXT("ONLINE JOIN CODE   —   %s"), LoadOnlineJoinEnabled() ? TEXT("ON") : TEXT("OFF"))));
 	}
 }
 
@@ -281,6 +311,24 @@ void USettingsMenuWidget::OnCycleVolume()
 	{
 		GConfig->SetFloat(AudioConfigSection, AudioConfigKey, Volume, GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+	UpdateLabels();
+}
+
+void USettingsMenuWidget::OnToggleOnlineJoin()
+{
+	// Opt-in: flip the saved choice, persist it, and push it into the CVar so the next hosted world
+	// registers (or stops registering) its crew URL with proxima-join. Off by default — nothing is
+	// sent to the online service unless the player turns this on here.
+	const bool bNext = !LoadOnlineJoinEnabled();
+	if (GConfig)
+	{
+		GConfig->SetBool(OnlineConfigSection, OnlineJoinKey, bNext, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+	if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("sg.OnlineJoinCode")))
+	{
+		CVar->Set(bNext ? 1 : 0, ECVF_SetByGameSetting);
 	}
 	UpdateLabels();
 }
