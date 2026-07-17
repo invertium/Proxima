@@ -1,0 +1,6 @@
+{
+  "name": "proxima-join",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Proxima crew-join redirector: enter a host IP + PIN, get forwarded to the ship's bridge consoles. Also exposes an MCP endpoint at /api/mcp."
+}
