@@ -31,6 +31,9 @@
 #include "Sockets.h"
 #include "World/GravityField.h"
 #include "HAL/IConsoleManager.h"
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
 #include "UObject/UObjectIterator.h"
 
 // World distance (uu) from the Helm map centre to the outer ring — mirrors URadarWidget::RadarRangeUU.
@@ -661,6 +664,19 @@ setInterval(poll,250);poll();
 // menus' GetCrewUrl() can advertise the right one even though it's not the compile-time default.
 int32 UStationServerSubsystem::BoundPort = -1; // -1 = not yet bound this process (see OnWorldBeginPlay)
 TSet<int32> UStationServerSubsystem::ActivePorts;
+FString UStationServerSubsystem::JoinCode;
+
+// Online join code (issue #10): register the crew URL with proxima-join so crew can join by a short
+// code instead of typing the LAN IP. Opt-in — off by default, since it posts this host's LAN IP + PIN
+// to an external service (harmless for a hosted co-op session, but the host should choose it).
+static TAutoConsoleVariable<int32> CVarOnlineJoin(
+	TEXT("sg.OnlineJoinCode"), 0,
+	TEXT("Register the crew URL with the online join service so crew can join by a short code (0=off, 1=on)."),
+	ECVF_Default);
+static TAutoConsoleVariable<FString> CVarOnlineJoinUrl(
+	TEXT("sg.OnlineJoinUrl"), TEXT("https://proxima-join.vercel.app/api/register"),
+	TEXT("Endpoint that mints the online join code (POST {host,pin})."),
+	ECVF_Default);
 
 bool UStationServerSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
@@ -842,6 +858,9 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	const FString Host = Lan.IsEmpty() ? FString(TEXT("<this-machine-LAN-IP>")) : UrlHost(Lan);
 	UE_LOG(LogTemp, Log, TEXT("[StationServer] bridge stations live at  http://%s:%d/stations?pin=%s   (open on any LAN device; the PIN gates all access)"),
 		*Host, Port, *GetSessionPin());
+
+	// Fetch a short online join code (issue #10), if enabled — crew can then join by code, no IP typing.
+	RequestJoinCode();
 }
 
 void UStationServerSubsystem::Deinitialize()
@@ -929,6 +948,48 @@ FString UStationServerSubsystem::GetCrewUrl()
 	// anything on the LAN without it is rejected.
 	return (Lan.IsEmpty() || BoundPort < 0) ? FString()
 		: FString::Printf(TEXT("http://%s:%d/stations?pin=%s"), *UrlHost(Lan), BoundPort, *GetSessionPin());
+}
+
+void UStationServerSubsystem::RequestJoinCode()
+{
+	if (CVarOnlineJoin.GetValueOnGameThread() == 0) { return; }
+	const FString Lan = GetLanAddress();
+	if (Lan.IsEmpty() || BoundPort < 0) { return; }
+
+	JoinCode.Reset(); // clear any stale code while a fresh one is fetched
+	const FString Body = FString::Printf(TEXT("{\"host\":\"%s:%d\",\"pin\":\"%s\"}"),
+		*UrlHost(Lan), BoundPort, *GetSessionPin());
+
+	const TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
+	Req->SetURL(CVarOnlineJoinUrl.GetValueOnGameThread());
+	Req->SetVerb(TEXT("POST"));
+	Req->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	Req->SetContentAsString(Body);
+	// The callback runs on the game thread (HTTP module tick), so writing the static JoinCode is safe.
+	Req->OnProcessRequestComplete().BindLambda(
+		[](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+		{
+			if (!bOk || !Resp.IsValid())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[StationServer] online join-code request failed"));
+				return;
+			}
+			const FString Content = Resp->GetContentAsString();
+			// Pull "code":"..." out by hand (avoids the Json module for a single field).
+			const FString Key = TEXT("\"code\":\"");
+			int32 i = Content.Find(Key);
+			if (i != INDEX_NONE)
+			{
+				i += Key.Len();
+				const int32 j = Content.Find(TEXT("\""), ESearchCase::CaseSensitive, ESearchDir::FromStart, i);
+				if (j != INDEX_NONE)
+				{
+					JoinCode = Content.Mid(i, j - i);
+					UE_LOG(LogTemp, Log, TEXT("[StationServer] Online JOIN CODE: %s  (crew: open https://proxima-join.vercel.app and enter it)"), *JoinCode);
+				}
+			}
+		});
+	Req->ProcessRequest();
 }
 
 const FString& UStationServerSubsystem::GetSessionPin()
@@ -1155,7 +1216,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		"\"sciHull\":%.1f,\"sciMaxHull\":%.1f,\"sciShield\":%.1f,\"sciMaxShield\":%.1f,"
 		"\"mission\":\"%s\",\"comms\":[%s],"
 		"\"objective\":\"%s\",\"engaged\":%s,\"offered\":%s,\"objectiveDist\":%.0f,\"wave\":%d,"
-		"\"gravity\":%d,\"recording\":%d,\"gravityPull\":%.0f,"
+		"\"gravity\":%d,\"recording\":%d,\"gravityPull\":%.0f,\"joinCode\":\"%s\","
 		"\"credits\":%d,\"xp\":%d,\"rank\":%d,"
 		"\"docked\":%s,\"canDock\":%s,\"stationRange\":%.0f,"
 		"\"warpCharge\":%.3f,\"warpReady\":%s,\"upgrades\":[%s],\"ships\":[%s],"
@@ -1196,7 +1257,7 @@ bool UStationServerSubsystem::HandleState(const FHttpServerRequest& Request, con
 		*MissionName, *Comms,
 		*JsonEscape(ObjectiveName), bEngaged ? TEXT("true") : TEXT("false"),
 		bOffered ? TEXT("true") : TEXT("false"), ObjectiveDist, Wave,
-		GravOn, RecOn, GravPull,
+		GravOn, RecOn, GravPull, *JsonEscape(GetJoinCode()),
 		GI ? GI->GetCredits() : 0, GI ? GI->GetXP() : 0, GI ? GI->GetRank() : 1,
 		(Ship && Ship->IsDocked()) ? TEXT("true") : TEXT("false"),
 		(Ship && Ship->CanDock()) ? TEXT("true") : TEXT("false"),

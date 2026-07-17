@@ -1901,3 +1901,18 @@ Two parts:
   (rejects hostnames) so it can't be abused as an open redirector. Also exposes an **MCP endpoint** at
   `/api/mcp` (tool `crew_join_url`), plus `/api/join` (307) and `/api/whoami`. All endpoints verified
   live (home 200, join 307, evil.com 400, MCP list+call).
+
+---
+
+## Game-side online join code — issue #10 (2026-07-17)
+
+The ship can now show a short join code so crew join without typing an IP (pairs with the
+proxima-join registry). On server bind, if `sg.OnlineJoinCode 1` (CVar, **default off** — it posts the
+host's LAN IP + PIN to the external service, so it's opt-in), `UStationServerSubsystem::RequestJoinCode`
+fires an async HTTP POST (`HTTP` module) to `sg.OnlineJoinUrl` (default the proxima-join `/api/register`)
+with `{host,pin}`, caches the returned code in a static `JoinCode`, logs it, and exposes it on
+`/api/state` (`joinCode`) + `GetJoinCode()` for menus/HUD.
+
+**Verified [L]:** with the CVar on, a headless host registered (192.168.178.71:8081) and got a code;
+`/api/state.joinCode` was populated; resolving that code against the live service 307-redirected back to
+the exact ship. (Codes are the long stateless form until a KV store is attached, then 5 chars.)
