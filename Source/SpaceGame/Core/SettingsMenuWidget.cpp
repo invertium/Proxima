@@ -63,6 +63,19 @@ namespace
 	{
 		return Limit <= 0.f ? TEXT("UNLIMITED") : FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(Limit));
 	}
+
+	/** The *effective* online-join state = the live sg.OnlineJoinCode CVar (what RequestJoinCode()
+	 *  actually reads), falling back to the persisted config only if the CVar isn't registered. The UI
+	 *  reads this — not the raw config — so the row can never disagree with what the game will send even
+	 *  when the CVar was set from the console (a higher priority than our game-setting write). */
+	bool OnlineJoinEffective(bool bConfigFallback)
+	{
+		if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("sg.OnlineJoinCode")))
+		{
+			return CVar->GetInt() != 0;
+		}
+		return bConfigFallback;
+	}
 }
 
 float USettingsMenuWidget::LoadMasterVolume()
@@ -234,8 +247,9 @@ void USettingsMenuWidget::UpdateLabels()
 	}
 	if (OnlineJoinLabel)
 	{
+		const bool bOn = OnlineJoinEffective(LoadOnlineJoinEnabled());
 		OnlineJoinLabel->SetText(FText::FromString(
-			FString::Printf(TEXT("ONLINE JOIN CODE   —   %s"), LoadOnlineJoinEnabled() ? TEXT("ON") : TEXT("OFF"))));
+			FString::Printf(TEXT("ONLINE JOIN CODE   —   %s"), bOn ? TEXT("ON") : TEXT("OFF"))));
 	}
 }
 
@@ -317,18 +331,21 @@ void USettingsMenuWidget::OnCycleVolume()
 
 void USettingsMenuWidget::OnToggleOnlineJoin()
 {
-	// Opt-in: flip the saved choice, persist it, and push it into the CVar so the next hosted world
+	// Opt-in: flip the *effective* state, persist it, and push it into the CVar so the next hosted world
 	// registers (or stops registering) its crew URL with proxima-join. Off by default — nothing is
 	// sent to the online service unless the player turns this on here.
-	const bool bNext = !LoadOnlineJoinEnabled();
+	const bool bNext = !OnlineJoinEffective(LoadOnlineJoinEnabled());
 	if (GConfig)
 	{
 		GConfig->SetBool(OnlineConfigSection, OnlineJoinKey, bNext, GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
 	}
+	// SetByConsole is the top CVar priority, so this explicit player action always wins — even over a
+	// prior `sg.OnlineJoinCode` typed at the console. Without it a console-set value would silently
+	// outrank a game-setting write and the row could claim OFF while the game still registered (P2).
 	if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("sg.OnlineJoinCode")))
 	{
-		CVar->Set(bNext ? 1 : 0, ECVF_SetByGameSetting);
+		CVar->Set(bNext ? 1 : 0, ECVF_SetByConsole);
 	}
 	UpdateLabels();
 }
