@@ -1,0 +1,155 @@
+name: Release
+
+# Delivers packaged Proxima (SpaceGame) builds for Linux and Windows.
+#
+# HOW IT RUNS: pushing a version tag (e.g. v1.0.0) packages both platforms inside Epic's
+# prebuilt Unreal Engine container images, then publishes a GitHub Release with the zips
+# attached. macOS is intentionally absent — Apple/Epic licensing ties UE macOS packaging to
+# a physical Mac, which can't be done in a cloud container (see docs/CI.md).
+#
+# PREREQUISITES (one-time — see docs/CI.md for the walkthrough):
+#   1. Link your Epic Games account to GitHub and accept the Unreal Engine EULA so your
+#      account can pull ghcr.io/epicgames/unreal-engine images.
+#   2. Add two repo secrets: EPIC_GHCR_USERNAME (your GitHub username) and EPIC_GHCR_TOKEN
+#      (a classic PAT with read:packages) so CI can authenticate to ghcr.io.
+#   3. (Optional) repo variables to override defaults without editing this file:
+#        UE_IMAGE_TAG   image tag for both containers   (default: dev-slim-5.7)
+#        UE_ROOT_LINUX  engine path in the Linux image  (default: /home/ue4/UnrealEngine)
+#        UE_ROOT_WIN    engine path in the Windows image (default: C:\UnrealEngine)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# The release job needs to create a Release (and upload assets) on this repo.
+permissions:
+  contents: write
+
+env:
+  PROJECT: SpaceGame              # .uproject basename
+  PRODUCT: Proxima                # human-facing name used in asset filenames
+  CONFIG: Shipping               # client build configuration
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux — native Linux container on a standard ubuntu runner. This is the
+  # robust path: Linux containers run first-class on GitHub-hosted Linux runners.
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Package Linux
+    runs-on: ubuntu-22.04
+    container:
+      image: ghcr.io/epicgames/unreal-engine:${{ vars.UE_IMAGE_TAG || 'dev-slim-5.7' }}
+      # ghcr.io/epicgames images are private to the EpicGames org — authenticate with a PAT
+      # from an account that has linked Epic + accepted the UE EULA.
+      credentials:
+        username: ${{ secrets.EPIC_GHCR_USERNAME }}
+        password: ${{ secrets.EPIC_GHCR_TOKEN }}
+      # Run as root so UAT can freely read/write the runner-owned workspace mount.
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trust the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Package (BuildCookRun)
+        env:
+          UE_ROOT: ${{ vars.UE_ROOT_LINUX || '/home/ue4/UnrealEngine' }}
+        run: |
+          set -euo pipefail
+          "$UE_ROOT/Engine/Build/BatchFiles/RunUAT.sh" BuildCookRun \
+            -project="$GITHUB_WORKSPACE/$PROJECT.uproject" \
+            -noP4 -utf8output -unattended -nocompile -nocompileeditor \
+            -platform=Linux -clientconfig=$CONFIG \
+            -cook -build -stage -pak -compressed -archive \
+            -archivedirectory="$GITHUB_WORKSPACE/dist"
+
+      - name: Archive
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/dist/Linux"
+          tar -czf "$GITHUB_WORKSPACE/$PRODUCT-${GITHUB_REF_NAME}-Linux.tar.gz" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: ${{ github.workspace }}/${{ env.PRODUCT }}-${{ github.ref_name }}-Linux.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Windows — Windows container on a windows runner.
+  #
+  # ⚠️  This is the fragile path. Epic's Windows UE image is very large (tens of GB) and uses
+  #     process isolation, so it needs a host whose base OS matches the image (windows-2022 ↔
+  #     ltsc2022) AND enough free disk. GitHub-hosted windows-2022 runners are often too small;
+  #     if this job fails on image pull / disk, use a GitHub Larger Runner or a self-hosted
+  #     Windows box with UE installed (see docs/CI.md). The Linux job above is unaffected.
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Package Windows
+    runs-on: windows-2022
+    container:
+      image: ghcr.io/epicgames/unreal-engine:${{ vars.UE_IMAGE_TAG || 'dev-slim-5.7' }}
+      credentials:
+        username: ${{ secrets.EPIC_GHCR_USERNAME }}
+        password: ${{ secrets.EPIC_GHCR_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package (BuildCookRun)
+        shell: powershell
+        env:
+          UE_ROOT: ${{ vars.UE_ROOT_WIN || 'C:\UnrealEngine' }}
+        run: |
+          & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun `
+            -project="$env:GITHUB_WORKSPACE\$env:PROJECT.uproject" `
+            -noP4 -utf8output -unattended -nocompile -nocompileeditor `
+            -platform=Win64 -clientconfig=$env:CONFIG `
+            -cook -build -stage -pak -compressed -prereqs -archive `
+            -archivedirectory="$env:GITHUB_WORKSPACE\dist"
+          if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
+
+      - name: Archive
+        shell: powershell
+        run: |
+          $zip = "$env:GITHUB_WORKSPACE\$env:PRODUCT-$env:GITHUB_REF_NAME-Windows.zip"
+          Compress-Archive -Path "$env:GITHUB_WORKSPACE\dist\Windows\*" -DestinationPath $zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: ${{ github.workspace }}/${{ env.PRODUCT }}-${{ github.ref_name }}-Windows.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Release — collect both platforms' zips and publish a GitHub Release for the tag.
+  # Runs on a plain runner (no engine needed). Waits for both packagers.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish Release
+    needs: [linux, windows]
+    # Publish as long as Linux packaged. The Windows job is allowed to fail (fragile cloud path)
+    # without sinking the release — whatever artifacts exist get attached.
+    if: ${{ always() && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

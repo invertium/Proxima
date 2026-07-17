@@ -1936,3 +1936,14 @@ Two follow-ups to the game-side join code:
   `POST /api/register {192.168.1.50:8081,1234}` → `{"code":"CQM73","kv":true}`.
 
 See `web/proxima-join/README.md` for the deploy + KV setup notes.
+
+---
+
+## Release CI/CD — tag-driven packaging (2026-07-17)
+
+Added `.github/workflows/release.yml`: pushing a `v*` tag packages **Linux** and **Windows** via
+`RunUAT BuildCookRun` (Shipping client) inside Epic's prebuilt UE 5.7 container images
+(`ghcr.io/epicgames/unreal-engine`, pulled with `EPIC_GHCR_*` secrets), then publishes a GitHub Release
+with the zips. Linux is the robust path (native container on ubuntu); Windows is best-effort (large
+process-isolated image — release still publishes if only Linux succeeds). No macOS (Apple ties UE Mac
+packaging to a physical Mac — needs a self-hosted Mac runner). Setup + caveats in `docs/CI.md`.
