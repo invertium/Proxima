@@ -1885,3 +1885,19 @@ Three P2 regressions from the audit fixes, caught by codex:
 - **Crew port ownership (P2c):** reusing `BoundPort` unconditionally let a concurrent PIE world steal a
   live world's router. Track `ActivePorts` (ports held by live instances) and reuse `BoundPort` only
   when no live world holds it; concurrent worlds take their own free port. Released in Deinitialize.
+
+---
+
+## Ask-for-PIN + hosted join redirector — issue #10 (2026-07-17)
+
+Two parts:
+- **Local (game):** opening a crew page without `?pin=` used to show a dead-end "CREW ACCESS LOCKED"
+  page. The PinGate now serves a **PIN entry form** (a GET form that reloads the same path with the
+  entered PIN) and distinguishes a *missing* PIN from a *wrong* one. Verified [L]: `/stations` with no
+  PIN → the form; `?pin=0000` → "Incorrect PIN"; `?pin=<correct>` → the real station page.
+- **Online (Vercel):** `web/proxima-join/` — a stateless redirector shipped to
+  **https://proxima-join.vercel.app** via the Vercel MCP. Enter a host IP + PIN (or open a
+  `/?host=&pin=` deep link) and it forwards to `http://<ip:port>/stations?pin=<pin>`. **IP-only**
+  (rejects hostnames) so it can't be abused as an open redirector. Also exposes an **MCP endpoint** at
+  `/api/mcp` (tool `crew_join_url`), plus `/api/join` (307) and `/api/whoami`. All endpoints verified
+  live (home 200, join 307, evil.com 400, MCP list+call).

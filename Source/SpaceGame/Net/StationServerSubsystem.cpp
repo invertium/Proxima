@@ -731,12 +731,29 @@ void UStationServerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		}
 		else
 		{
-			OnComplete(MakeResponse(TEXT(
-				"<!doctype html><html><body style='background:#05080f;color:#cfe6ff;"
-				"font-family:system-ui;text-align:center;padding-top:20vh'>"
-				"<h2>CREW ACCESS LOCKED</h2>"
-				"<p>Open the exact crew URL shown on the ship's screen &mdash; it carries this session's PIN.</p>"
-				"</body></html>"), TEXT("text/html")));
+			// Issue #10: opening a page without a PIN used to show a dead-end error. Instead, prompt
+			// for it — a GET form that reloads the same path with ?pin=. Tell them if it was wrong.
+			const bool bWrong = (Pin != nullptr); // a PIN was supplied but didn't match
+			const FString Sub = bWrong
+				? TEXT("Incorrect PIN &mdash; check the ship's screen and try again.")
+				: TEXT("Enter the crew PIN shown on the ship's screen.");
+			const FString Html = FString(TEXT(
+				"<!doctype html><html><head><meta charset='utf-8'>"
+				"<meta name='viewport' content='width=device-width,initial-scale=1'>"
+				"<title>PROXIMA &mdash; Enter PIN</title></head>"
+				"<body style='background:radial-gradient(1000px 500px at 50% -10%,#0f2338,#05080f);"
+				"color:#cfe6ff;font-family:system-ui;min-height:100vh;margin:0;display:grid;place-items:center'>"
+				"<form method='get' style='background:rgba(10,18,32,.72);border:1px solid #16324f;"
+				"border-radius:14px;padding:26px 24px;width:min(360px,92vw);text-align:center'>"
+				"<h2 style='margin:0 0 4px;letter-spacing:.12em'>PROXIMA</h2>"
+				"<p style='color:#7f97b6;margin:0 0 18px;font-size:.9rem'>")) + Sub + FString(TEXT("</p>"
+				"<input name='pin' inputmode='numeric' pattern='[0-9]*' maxlength='8' placeholder='PIN' autofocus "
+				"style='width:100%;padding:12px;font-size:1.2rem;text-align:center;letter-spacing:.3em;"
+				"color:#eaf4ff;background:#0b1524;border:1px solid #1c3a58;border-radius:10px;outline:none'>"
+				"<button style='width:100%;margin-top:16px;padding:12px;font-size:1rem;font-weight:600;color:#04121e;"
+				"background:linear-gradient(180deg,#8fe0ff,#4bb6ef);border:0;border-radius:10px;cursor:pointer'>ENTER &rarr;</button>"
+				"</form></body></html>"));
+			OnComplete(MakeResponse(Html, TEXT("text/html")));
 		}
 		return true;
 	};
