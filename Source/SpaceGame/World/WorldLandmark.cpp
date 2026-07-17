@@ -53,7 +53,7 @@ void AWorldLandmark::Setup(const FString& InName, float Scale, const FLinearColo
 
 	// Gravity well (issues #1/#3): the "mass parameter" is set here from the body's kind + scale — a
 	// sun is far heavier than a planet. Mass sizes both the reach (InfluenceRadius) and the strength
-	// (PeakPull). PeakPull is capped low (<= 340 uu/s) versus ~1800+ uu/s of ship thrust, so the pull
+	// (PeakPull). PeakPull is capped low (<= 420 uu/s) versus ~1800+ uu/s of ship thrust, so the pull
 	// is always a gentle nudge you can power out of — never a trap, never damage (per issue #3).
 	GravityMass = (bSun ? 8.0f : 1.0f) * FMath::Max(0.2f, Scale);
 	InfluenceRadius = BodyRadius + 25000.f + GravityMass * 6000.f;

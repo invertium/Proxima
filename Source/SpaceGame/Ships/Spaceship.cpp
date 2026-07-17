@@ -262,8 +262,9 @@ bool ASpaceship::CanDock() const
 	const AStation* S = NearestStation();
 	if (!S) { return false; }
 	if (FVector::Dist(GetActorLocation(), S->GetActorLocation()) > S->GetDockRange()) { return false; }
-	// Must be nearly stopped to dock (you can't slam into a starbase at full impulse).
-	const float Speed = MovementComp ? FMath::Abs(MovementComp->GetSpeed()) : 0.f;
+	// Must be nearly stopped to dock (you can't slam into a starbase at full impulse). Uses total
+	// planar speed so a full-strafe sideways approach counts too (audit BUG-04).
+	const float Speed = MovementComp ? MovementComp->GetPlanarSpeed() : 0.f;
 	return Speed <= DockMaxSpeed;
 }
 
@@ -325,8 +326,11 @@ void ASpaceship::HandleCollisions(float DeltaSeconds)
 	// Refresh the candidate lists on an interval rather than sweeping every actor in the world twice
 	// per frame. Landmarks are spawned once at begin play; enemies come and go slowly relative to the
 	// 0.25 s cadence, and we still read their live positions off the cached pointers below.
+	// Refresh strictly on the interval. The old "|| CachedRamTargets.Num() == 0" clause made an
+	// enemy-free sector rescan every single frame (audit BUG-05); CollisionScanAccum starts high so
+	// the very first tick still seeds the caches.
 	CollisionScanAccum += DeltaSeconds;
-	if (CollisionScanAccum >= CollisionScanInterval || CachedRamTargets.Num() == 0)
+	if (CollisionScanAccum >= CollisionScanInterval)
 	{
 		CollisionScanAccum = 0.f;
 		TArray<AActor*> Found;
@@ -378,12 +382,11 @@ void ASpaceship::HandleCollisions(float DeltaSeconds)
 	}
 
 	// Solid celestial bodies: a planet or sun blocks the ship — clamp it to the surface each tick so it
-	// can't fly through, and cut the impulse so it doesn't keep grinding in. (Shares the not-docked guard.)
-	TArray<AActor*> Bodies;
-	UGameplayStatics::GetAllActorsOfClass(World, AWorldLandmark::StaticClass(), Bodies);
-	for (AActor* A : Bodies)
+	// can't fly through, and cut the impulse so it doesn't keep grinding in. Iterate the cached body
+	// list (refreshed on the interval above) instead of a fresh full-world scan every frame (BUG-05).
+	for (const TWeakObjectPtr<AActor>& Weak : CachedBodies)
 	{
-		AWorldLandmark* Body = Cast<AWorldLandmark>(A);
+		AWorldLandmark* Body = Cast<AWorldLandmark>(Weak.Get());
 		if (!Body) { continue; }
 		const float Surface = Body->GetBodyRadius() + BodyClearance;
 		FVector ToShip = GetActorLocation() - Body->GetActorLocation();
@@ -466,15 +469,10 @@ bool ASpaceship::WarpToObjective(FVector Target)
 	const float Dist = Flat.Size();
 	const FVector Dir = (Dist > 1.f) ? Flat / Dist : GetActorForwardVector();
 
-	// Turn the bow toward the objective (yaw only — the ship's momentum follows its new heading).
-	FRotator Face = Dir.Rotation();
-	Face.Pitch = 0.f;
-	Face.Roll = 0.f;
-	SetActorRotation(Face, ETeleportType::TeleportPhysics);
-
-	// Jump toward it without overshooting — leave a standoff so we arrive near, not on top of, it.
-	// The standoff scales with the destination body: a fixed 4000 uu would land inside a big body's
-	// surface clamp (the Ember sun's radius is ~12500), so clear its radius plus a margin (M24).
+	// Compute the jump first (standoff scales with the destination body: a fixed 4000 uu would land
+	// inside a big body's surface clamp — the Ember sun's radius is ~12500 — so clear its radius plus
+	// a margin, M24). Bail before touching heading/charge if we're already within the standoff, so
+	// "lay in course" at the objective is a true no-op and doesn't swing the bow (audit BUG-07 / P3).
 	float Standoff = 4000.f;
 	TArray<AActor*> Bodies;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWorldLandmark::StaticClass(), Bodies);
@@ -487,6 +485,18 @@ bool ASpaceship::WarpToObjective(FVector Target)
 		}
 	}
 	const float Jump = FMath::Clamp(Dist - Standoff, 0.f, WarpDistance);
+	if (Jump < 1.f)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Warp] Already at the objective — course hold, charge kept"));
+		return false;
+	}
+
+	// Turn the bow toward the objective (yaw only — the ship's momentum follows its new heading).
+	FRotator Face = Dir.Rotation();
+	Face.Pitch = 0.f;
+	Face.Roll = 0.f;
+	SetActorRotation(Face, ETeleportType::TeleportPhysics);
+
 	const FVector NewLoc = From + Dir * Jump;
 	SetActorLocation(NewLoc, /*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
 	WarpCharge = 0.f;
@@ -543,7 +553,7 @@ void ASpaceship::HandleShipDestroyed(AActor* /*DeadActor*/)
 	UE_LOG(LogTemp, Log, TEXT("[Ship] Destroyed — hull blown apart, helm frozen"));
 }
 
-void ASpaceship::HandleDamaged(float EffectiveDamage, float HullRemaining)
+void ASpaceship::HandleDamaged(float EffectiveDamage, float HullDamage, float HullRemaining)
 {
 	AddCameraTrauma(EffectiveDamage * HitTraumaPerDamage);
 	if (HitSound)

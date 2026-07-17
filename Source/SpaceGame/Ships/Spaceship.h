@@ -138,7 +138,7 @@ protected:
 
 	/** Bound to HealthComp->OnDamaged: convert a hit into camera trauma. */
 	UFUNCTION()
-	void HandleDamaged(float EffectiveDamage, float HullRemaining);
+	void HandleDamaged(float EffectiveDamage, float HullDamage, float HullRemaining);
 
 	/** Bound to HealthComp->OnDeath: blow the hull apart (multi-burst FX + debris), hide the mesh,
 	 *  and freeze the helm. The pawn survives so the camera keeps framing the wreck while the
@@ -291,7 +291,7 @@ private:
 	 *  for ram detection but it drops two GetAllActorsOfClass sweeps per frame off the hot path. */
 	TArray<TWeakObjectPtr<AActor>> CachedRamTargets;
 	TArray<TWeakObjectPtr<AActor>> CachedBodies;
-	float CollisionScanAccum = 0.f;
+	float CollisionScanAccum = 1000.f; // start high so the first tick seeds the caches (BUG-05)
 	static constexpr float CollisionScanInterval = 0.25f;
 
 	/** Emissive material for the warp flash + shield-impact sparks (cyan), loaded in the constructor. */

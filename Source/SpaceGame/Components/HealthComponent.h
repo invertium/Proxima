@@ -9,7 +9,9 @@
 class UPowerComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthDeath, AActor*, DeadActor);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthDamaged, float, EffectiveDamage, float, HullRemaining);
+// HullDamage is the amount that actually reached hull this hit (0 when shields soaked it all) — lets
+// listeners tell a hull hit from a shield-only hit even at exact shield depletion (audit BUG-06).
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHealthDamaged, float, EffectiveDamage, float, HullDamage, float, HullRemaining);
 
 /**
  * UHealthComponent — hull + regenerating-free shield pool for any combatant. Damage

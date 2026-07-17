@@ -1843,3 +1843,45 @@ Addressed all three findings from codex's review of the gravity/modules branch:
 **#6 orbit button deferred:** built an orbit-assist autopilot but it spiralled outward while reporting
 "stable" (radius not held). Reverted it from this PR rather than ship a broken control; it's a clean
 follow-up (the `GravityField::DominantBody` groundwork stays for it).
+
+---
+
+## Audit fixes — first-party bugs (2026-07-16)
+
+Implemented the first-party defects from codex's repo audit (AUDIT_REPORT.md, kept local/untracked).
+Security findings in the vendored dev-tooling plugins (VibeUE/UnrealClaude) and the intentional
+trusted-LAN PIN design were left as-is per the triage.
+
+- **BUG-01** fleets/bounty/event ships spawned inside the Ember sun (formation distances < the sun's
+  ~12500 radius). Every spawn point is now pushed outside solid bodies via `GravityField::ClampOutsideBodies`.
+- **BUG-03** victory/defeat could race (defeat wasn't latched until a delayed overlay). Added an atomic
+  `TryLatchOutcome` — the first terminal event claims the outcome + phase; later ones are dropped.
+- **BUG-04** docking ignored lateral strafe. `UShipMovementComponent::GetPlanarSpeed()` combines
+  forward + strafe, and `CanDock` uses it — a full-strafe approach can't dock.
+- **BUG-05** collision cache re-scanned every frame when empty, and the body loop did its own full scan.
+  Refresh is now interval-only (accumulator starts high to seed frame 1) and iterates `CachedBodies`.
+- **BUG-06** an exactly-shield-depleting hit could knock out a subsystem. `OnDamaged` now carries the
+  real hull-damage amount; `DamageControlComponent` rolls only when `HullDamage > 0` (shield-bypass
+  torpedoes still can).
+- **BUG-07** a zero-distance warp consumed the charge. `WarpToObjective` returns false without spending
+  when already inside the standoff.
+- **BUG-08** malformed LAN params were coerced into valid commands. `QueryFloat` rejects non-numeric /
+  NaN / Inf; alert/power-preset/system/ship-id reject unknown values instead of silently defaulting.
+- **BUG-09** recorder filenames could collide within a second. Now millisecond-stamped + existence-checked.
+- **BUG-10** the crew server could advertise an unusable URL. `FindFreePort` returns -1 (and the server
+  doesn't start/advertise) when all ports are busy; `GetLanAddress` prefers IPv4; IPv6 literals are bracketed.
+- **BUG-02** (turret firing after death) was already fixed in the gravity PR.
+
+**Verified [L]:** builds clean; server still starts; BUG-08 rejections confirmed over the API
+(bad alert/preset/system/ship all `ok:false`, valid commands `ok:true`).
+
+## PR #12 codex re-review fixes (2026-07-17)
+
+Three P2 regressions from the audit fixes, caught by codex:
+- **Skirmish spawn (P2a):** the BUG-01 body clamp pushed wave-1 spawns to Ember's ~15000 uu shell while
+  the skirmish player parked at 16000 — ~1000 uu apart, in ram range. Park the player at 26000 instead.
+- **Warp reason (P2b):** BUG-07's `false` return for an already-arrived warp was reported as "still
+  charging". Callers now check `IsWarpReady()` and report "already at the objective" instead.
+- **Crew port ownership (P2c):** reusing `BoundPort` unconditionally let a concurrent PIE world steal a
+  live world's router. Track `ActivePorts` (ports held by live instances) and reuse `BoundPort` only
+  when no live world holds it; concurrent worlds take their own free port. Released in Deinitialize.
