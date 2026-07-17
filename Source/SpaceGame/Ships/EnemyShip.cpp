@@ -10,6 +10,7 @@
 #include "FX/Debris.h"
 #include "FX/ExplosionFx.h"
 #include "FX/TorpedoProjectile.h"
+#include "World/GravityField.h"
 #include "Core/SpaceGameInstance.h"
 #include "Materials/MaterialInterface.h"
 #include "Sound/SoundBase.h"
@@ -431,5 +432,21 @@ void AEnemyShip::Tick(float DeltaSeconds)
 			LaunchTorpedo(Player);
 			VolleyTimer = VolleyGap;
 		}
+	}
+
+	// Gentle celestial gravity (issue #3): enemies drift toward bodies too. It's far weaker than
+	// their cruise speed, so it bends their approach without ever trapping them in orbit.
+	const FVector Pull = GravityField::PullVelocityAt(GetWorld(), GetActorLocation());
+	if (!Pull.IsNearlyZero())
+	{
+		AddActorWorldOffset(Pull * DeltaSeconds, /*bSweep=*/true);
+	}
+
+	// Enemies carry no body collision of their own, so keep them out of the (opaque, collision-less)
+	// planet meshes — gravity or a head-on approach could otherwise bury one inside a body (review P2).
+	const FVector Clamped = GravityField::ClampOutsideBodies(GetWorld(), GetActorLocation(), 400.f);
+	if (!Clamped.Equals(GetActorLocation(), 1.f))
+	{
+		SetActorLocation(Clamped);
 	}
 }

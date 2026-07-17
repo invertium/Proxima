@@ -13,7 +13,9 @@ enum class EUpgradeStat : uint8
 	MaxHull,       // UHealthComponent::MaxHull
 	MaxShield,     // UHealthComponent::MaxShield
 	TorpedoAmmo,   // UTorpedoLauncherComponent::MaxAmmo
-	ReactorBudget  // UPowerComponent::ReactorBudget
+	ReactorBudget, // UPowerComponent::ReactorBudget
+	StrafeSpeed,   // UShipMovementComponent::MaxStrafeSpeed (issue #7: bought side-thrusters)
+	Turret         // UWeaponComponent::TurretDamage (issue #5: bought auto-turret)
 };
 
 /** One purchasable upgrade path: tiers add MagnitudePerTier to a stat, with escalating cost + rank gate. */
@@ -41,6 +43,9 @@ namespace UpgradeCatalogue
 			{ TEXT("shields"),       TEXT("Shield Capacity"), TEXT("shld"),  EUpgradeStat::MaxShield,     30.f, 3, 200 },
 			{ TEXT("torpedo"),       TEXT("Torpedo Tubes"),   TEXT("rds"),   EUpgradeStat::TorpedoAmmo,   2.f,  3, 180 },
 			{ TEXT("reactor"),       TEXT("Reactor Output"),  TEXT("pwr"),   EUpgradeStat::ReactorBudget, 0.5f, 3, 250 },
+			// One-time modules (MaxTier 1) the starter hull doesn't carry — buy once to unlock.
+			{ TEXT("strafe"),        TEXT("Maneuvering Thrusters"), TEXT("uu/s"), EUpgradeStat::StrafeSpeed, 950.f, 1, 160 },
+			{ TEXT("turret"),        TEXT("Auto-Turret"),     TEXT("dmg"),   EUpgradeStat::Turret,        12.f, 1, 240 },
 		};
 		return Catalogue;
 	}

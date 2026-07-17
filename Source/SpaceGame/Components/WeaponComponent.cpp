@@ -236,4 +236,54 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	// Recharge, scaled by Weapons power (0 power → never charges) and combat damage (M25:
 	// a damaged weapons system recharges at half rate until Engineering repairs it).
 	Charge = FMath::Clamp(Charge + BaseRechargeRate * WeaponPowerScale() * WeaponDamageScale() * DeltaTime, 0.f, 1.f);
+
+	// Auto-turret (issue #5): if installed, it tracks the locked target on its own and fires
+	// regardless of the ship's heading, so the helm can dodge/reposition while it keeps shooting.
+	// Offline while docked, like the beam.
+	if (HasTurret())
+	{
+		TurretCooldown = FMath::Max(0.f, TurretCooldown - DeltaTime);
+		const AActor* Owner = GetOwner();
+		const ASpaceship* OwnerShip = Cast<ASpaceship>(Owner);
+		const bool bDocked = OwnerShip && OwnerShip->IsDocked();
+		// Dead ships don't shoot: the pawn is kept alive through the defeat beat, but a turret firing
+		// then could award a kill / advance the mission / flip Defeat to Victory (review P1).
+		const UHealthComponent* OwnerHealth = Owner ? Owner->FindComponentByClass<UHealthComponent>() : nullptr;
+		const bool bAlive = !OwnerHealth || OwnerHealth->IsAlive();
+		if (bAlive && !bDocked && TurretCooldown <= 0.f && CurrentTarget && IsValid(CurrentTarget))
+		{
+			const float Range = GetTargetRange();
+			if (Range >= 0.f && Range <= TurretRange)
+			{
+				FireTurretShot();
+				TurretCooldown = TurretInterval;
+			}
+		}
+	}
+}
+
+void UWeaponComponent::FireTurretShot()
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !CurrentTarget) { return; }
+
+	// Thinner, higher-pitched shot than the main beam so a turret reads as a lighter secondary gun.
+	ABeamFx::Spawn(GetWorld(), Owner->GetActorLocation(), CurrentTarget->GetActorLocation(),
+		BeamMaterial, 12.f, BeamDrawTime);
+	if (FireSound)
+	{
+		UGameplayStatics::PlaySound2D(this, FireSound, 0.55f, FMath::FRandRange(1.15f, 1.32f));
+	}
+
+	float Damage = TurretDamage * WeaponPowerScale() * WeaponDamageScale();
+	if (const AEnemyShip* Enemy = Cast<AEnemyShip>(CurrentTarget))
+	{
+		const float ArmorMult = Enemy->GetBeamDamageMultiplier();
+		if (ArmorMult < 1.f) { Damage *= ArmorMult; }
+	}
+	if (UHealthComponent* Health = CurrentTarget->FindComponentByClass<UHealthComponent>())
+	{
+		Health->ApplyDamage(Damage);
+	}
+	AExplosionFx::Spawn(GetWorld(), CurrentTarget->GetActorLocation(), 180.f, BeamMaterial, 0.16f, false);
 }

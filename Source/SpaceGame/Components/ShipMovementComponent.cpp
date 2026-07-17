@@ -4,6 +4,8 @@
 
 #include "Components/DamageControlComponent.h"
 #include "Components/PowerComponent.h"
+#include "World/GravityField.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
 
 UShipMovementComponent::UShipMovementComponent()
@@ -114,5 +116,16 @@ void UShipMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	if (!FMath::IsNearlyZero(CurrentStrafeSpeed))
 	{
 		Owner->AddActorWorldOffset(Owner->GetActorRightVector() * CurrentStrafeSpeed * DeltaTime, /*bSweep=*/true);
+	}
+
+	// Gentle celestial gravity (issues #1/#3): a soft drift toward nearby bodies. Capped well under
+	// thrust so it's always escapable; suppressed while docked so the station keeps its grip.
+	if (!bInputLocked)
+	{
+		const FVector Pull = GravityField::PullVelocityAt(GetWorld(), Owner->GetActorLocation());
+		if (!Pull.IsNearlyZero())
+		{
+			Owner->AddActorWorldOffset(Pull * DeltaTime, /*bSweep=*/true);
+		}
 	}
 }

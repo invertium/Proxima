@@ -1780,3 +1780,66 @@ director so encounters are deliberate and the map/story are legible.
 **Verified [L]:** headless arena — `Objective 0 OFFERED — awaiting ACCEPT ORDERS` fired at spawn with
 **no** encounter; `/api/state` read `offered:true, engaged:false`; `POST /api/mission?action=accept`
 → `{"ok":true}` → `engaged:true` (fleet spawned). Landmarks spread at span 160000.
+
+---
+
+## Celestial gravity + toggles + analysis buttons — issues #1/#3 (2026-07-16)
+
+Gentle gravity that pulls the player *and* enemies toward planets/suns (per wz-stabl on #3: affects
+the player, only a slight pull, no damage, always escapable with moderate thrust).
+
+- **`AWorldLandmark`** gains a mass-driven well: `GravityMass` (the "predefined mass parameter" of #1,
+  set from kind+scale — a sun ~8× a planet), sizing `InfluenceRadius` and `PeakPull` (capped 420 uu/s,
+  far under ~1800 uu/s thrust, easing quadratically to 0 at the influence edge).
+- **`World/GravityField`** sums every well into a planar drift velocity; applied each tick to the
+  player (`UShipMovementComponent`, suppressed while docked) and enemies (`AEnemyShip`, weak enough
+  they never get trapped).
+- **Toggleable:** CVar `sg.Gravity` (default on). Web Helm **GRAVITY** button flips it live
+  (`/api/toggle?what=gravity`) and shows the current pull; `/api/state` exposes `gravity`/`gravityPull`.
+- **Analysis logging button:** web Helm **REC LOG** button toggles session recording
+  (`/api/toggle?what=recording` → `sg.RecordSession`); `/api/state` exposes `recording`.
+
+**Verified [L]:** `gravityPull` reads 78–94 uu/s near the home world; fly out + release → the ship
+drifts back (px 7773 → 7204, pull rising 78→87 as it nears) and thrust escapes freely; GRAVITY toggle
+→ pull 0; REC LOG toggle → recording on.
+
+---
+
+## Drydock modules: Auto-Turret + Maneuvering Thrusters — issues #5, #7 (2026-07-16)
+
+Two one-time drydock purchases (MaxTier 1) the starter hull doesn't carry, added to `UpgradeCatalogue`
+so they appear in the Engineering drydock automatically:
+
+- **Auto-Turret (#5):** `UWeaponComponent` gains a turret that auto-fires at the Weapons-locked target
+  on its own cooldown **regardless of the ship's heading** (no arc constraint), within `TurretRange` —
+  so the helm can dodge/reposition while it keeps shooting. `TurretDamage` 0 = not installed; the
+  "Auto-Turret" module sets it. Offline while docked; respects weapon power + armor mitigation.
+- **Maneuvering Thrusters (#7 follow-up):** per wz-stabl, strafe is no longer free — `MaxStrafeSpeed`
+  now defaults to **0** (Q/E and the web STRAFE buttons do nothing) until the "Maneuvering Thrusters"
+  module is bought, which sets it to 950 uu/s.
+
+Both are wired through the existing `ApplyShipPreset` reset + `ApplyUpgrades` path (idempotent across
+drydock refreshes / ship switches).
+
+**Verified [L]:** `/api/state` lists both modules in the drydock (strafe 160cr, turret 240cr, maxTier 1);
+with gravity isolated off, commanding strafe on an un-upgraded ship moves it **0.0 uu** — correctly
+disabled until purchased.
+
+---
+
+## PR #11 codex-review fixes (2026-07-16)
+
+Addressed all three findings from codex's review of the gravity/modules branch:
+- **[P1] Gravity surface-pin.** Changed the well falloff to a band profile (`4·d·(1-d)`) — pull is now
+  **0 at the body surface** (and at the influence edge), peaking mid-well. A ship resting on a body is
+  no longer dragged back in each frame while collision zeroes its throttle. Verified: pull peaks ~190
+  mid-well, tapers to ~175 as the ship nears the surface, and still pulls a released ship back.
+- **[P1] Turret firing after death.** `UWeaponComponent` turret tick now gates on the owner's
+  `HealthComponent::IsAlive()`, so a destroyed ship can't auto-fire during the defeat beat (which could
+  award a kill / flip Defeat to Victory).
+- **[P2] Enemies buried in planets.** Added `GravityField::ClampOutsideBodies`; `AEnemyShip` clamps
+  itself out of the collision-less landmark meshes each tick (enemies had no body clearance of their own).
+
+**#6 orbit button deferred:** built an orbit-assist autopilot but it spiralled outward while reporting
+"stable" (radius not held). Reverted it from this PR rather than ship a broken control; it's a clean
+follow-up (the `GravityField::DominantBody` groundwork stays for it).

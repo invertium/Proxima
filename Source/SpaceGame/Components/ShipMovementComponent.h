@@ -75,9 +75,11 @@ public:
 	float MaxTurnRate = 60.f; // deg/s at full turn
 
 	/** Max lateral thrust speed (uu/s) for evasive strafing (issue #7) — a dodge, not a drive, so
-	 *  it's well below MaxSpeed. Scaled by engine power/damage like forward thrust. */
+	 *  it's well below MaxSpeed. Scaled by engine power/damage like forward thrust. Defaults to 0:
+	 *  the starter hull has no side-thrusters; buy "Maneuvering Thrusters" at the drydock to unlock
+	 *  them (per issue #7 feedback). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Movement")
-	float MaxStrafeSpeed = 950.f;
+	float MaxStrafeSpeed = 0.f;
 
 	/** How fast lateral speed ramps to target — punchy so a strafe reads as a thruster kick. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Movement")
