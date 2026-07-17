@@ -44,6 +44,10 @@ public:
 	 *  part of the crew URL; every HTTP route rejects requests that don't carry it. */
 	static const FString& GetSessionPin();
 
+	/** Short online join code from the proxima-join service (issue #10), or empty until it's fetched
+	 *  / if online join is disabled. Crew type it at proxima-join.vercel.app to reach this ship. */
+	static const FString& GetJoinCode() { return JoinCode; }
+
 private:
 	// --- Route handlers (all run on the game thread) ---
 	bool HandleIndex(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
@@ -82,6 +86,13 @@ private:
 
 	/** Best-guess LAN IPv4 of this machine (skips loopback), or empty. */
 	static FString GetLanAddress();
+
+	/** Fire-and-forget: POST this session's crew URL to the online join service and cache the returned
+	 *  short join code in JoinCode (issue #10). Gated by the sg.OnlineJoinCode CVar. */
+	void RequestJoinCode();
+
+	/** Cached online join code (static so GetJoinCode()/menus can read it across the session). */
+	static FString JoinCode;
 
 	/** Router for our port; kept so we can unbind our routes on teardown. */
 	TSharedPtr<IHttpRouter> Router;
