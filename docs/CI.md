@@ -28,6 +28,10 @@ git push origin v1.0.0      # → packages Linux (cloud) → publishes the Relea
 
 The result: **Linux is the cloud deliverable**; Windows/macOS need self-hosted runners with UE installed.
 
+> **Status:** the Linux cloud path is verified end-to-end (compile editor + Shipping game → cook → stage →
+> pak → archive → publish). Budget **~30 min** per release run. The cook runs as the image's non-root
+> `ue4` user — UnrealEditor refuses to cook as root — which the workflow handles automatically.
+
 ## One-time setup (Linux / cloud)
 
 The Epic UE images (`ghcr.io/epicgames/unreal-engine`) are private to the EpicGames GitHub org, so CI must
