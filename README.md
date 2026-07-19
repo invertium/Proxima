@@ -6,6 +6,12 @@ on their phones/laptops over the LAN (Helm, Weapons, Engineering, Science) and r
 together. It ships with a small story campaign across an open sector — fly between planets and a
 sun, trigger encounters by proximity, warp to travel, dock to repair and buy upgrades/ships.
 
+<p align="center">
+  <img src="docs/images/hero-ship-haven.png" alt="The player ship on approach to Haven, the home system" width="100%">
+  <br>
+  <em>On approach to Haven, the home system — one player flies the ship in 3rd person.</em>
+</p>
+
 > This is a source project (no packaged build committed). You compile the editor target and play
 > in-editor (PIE). The steps below take you from a clean checkout to a running game.
 
@@ -111,6 +117,19 @@ From the same machine, `http://localhost:8080/` works too. Each crew member pick
   buy tiered upgrades and new ships with earned credits/XP.
 - **Science** — comms log, sector starmap.
 
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/images/console-helm.png" alt="Helm web console" width="100%"><br><b>Helm</b> — radar with contacts and phaser/torpedo firing arcs, heading &amp; throttle, DOCK / WARP.</td>
+    <td width="50%" valign="top"><img src="docs/images/console-weapons.png" alt="Weapons web console" width="100%"><br><b>Weapons</b> — lock a target, watch range / in-arc, fire the beam and torpedoes when it's a solution.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/images/console-engineering.png" alt="Engineering web console" width="100%"><br><b>Engineering</b> — route reactor power between engines/weapons/shields, or snap to a preset.</td>
+    <td width="50%" valign="top"><img src="docs/images/console-science.png" alt="Science web console" width="100%"><br><b>Science</b> — mission orders, the comms log, target scans, and the sector map.</td>
+  </tr>
+</table>
+
+<sub>The four crew consoles, opened on phones/laptops over the LAN. They're mobile-first and update live.</sub>
+
 Find your LAN IP with `ip addr` (look for the `192.168.x.x` / `10.x.x.x` address). The consoles are
 mobile-first and scrollable.
 
@@ -128,6 +147,12 @@ mobile-first and scrollable.
    new ship** in Engineering's drydock.
 6. Clear the final system (the Pact staging point at the **Ember** sun) for the epilogue. Being
    destroyed shows the defeat screen; retry reloads the sector.
+
+<p align="center">
+  <img src="docs/images/sector-hostiles.png" alt="Hostile contacts closing in near the home planet" width="100%">
+  <br>
+  <em>Hostiles closing in over the homeworld — accept orders and the fleet engages.</em>
+</p>
 
 ---
 
