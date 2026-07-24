@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ctext y=%2213%22 font-size=%2213%22%3E🛸%3C/text%3E%3C/svg%3E" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Proxima — Crew Station</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body { margin: 0; background: #05070f; color: #dbe7ff; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .wrap { max-width: 560px; margin: 0 auto; padding: 12px 12px 32px; }
+
+      header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+      header h1 { margin: 0; font-size: 14px; letter-spacing: .28em; font-weight: 500; color: #7dd3fc; }
+      #status { font-size: 11px; color: #f87171; }
+      #status.ok { color: #4ade80; }
+
+      #tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+      #tabs button { padding: 9px 4px; font-size: 11px; letter-spacing: .05em; }
+      #tabs button.sel { background: #123252; border-color: #38bdf8; color: #bae6fd; }
+
+      #radar { width: 100%; aspect-ratio: 1; background: #060d18; border: 1px solid #1e3a5f; border-radius: 8px; margin-bottom: 12px; }
+
+      button { background: #0d1c2f; color: #cfe3ff; border: 1px solid #1e3a5f; border-radius: 6px; padding: 12px 8px; font: inherit; font-size: 12px; cursor: pointer; }
+      button:active { background: #16304d; }
+      button:disabled { opacity: .35; cursor: default; }
+
+      .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+      .grid.two { grid-template-columns: repeat(2, 1fr); }
+      .grid:has(> :nth-child(3):last-child) { grid-template-columns: repeat(3, 1fr); }
+
+      dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 12px 0 0; }
+      dt { color: #7d9dc4; font-size: 11px; }
+      dd { margin: 0; text-align: right; }
+
+      h3 { margin: 16px 0 6px; font-size: 11px; letter-spacing: .1em; color: #7d9dc4; font-weight: 500; }
+      .muted { color: #56708f; font-size: 11px; }
+
+      .contacts { display: grid; gap: 6px; margin-bottom: 10px; }
+      .contact { display: grid; text-align: left; gap: 1px; }
+      .contact.sel { border-color: #fbbf24; background: #2a2110; }
+      .contact b { color: #fca5a5; }
+      .contact span { font-size: 11px; color: #7d9dc4; }
+      .contact em { font-size: 10px; font-style: normal; color: #94a3b8; letter-spacing: .06em; }
+      .contact em.ok { color: #4ade80; }
+
+      .pwr { display: grid; grid-template-columns: 78px 1fr 32px; align-items: center; gap: 8px; margin-bottom: 6px; }
+      .pwr label { font-size: 11px; color: #7d9dc4; }
+      .pwr input { width: 100%; }
+      .pwr b { text-align: right; }
+
+      .comms p { margin: 0 0 6px; padding: 6px 9px; background: #0a1524; border-left: 2px solid #38bdf8; border-radius: 0 5px 5px 0; }
+      .comms b { color: #38bdf8; margin-right: 6px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>PROXIMA</h1>
+        <div id="status">WAITING FOR HOST…</div>
+      </header>
+      <div id="tabs">
+        <button data-station="helm">HELM</button>
+        <button data-station="weapons">WEAPONS</button>
+        <button data-station="engineering">ENG</button>
+        <button data-station="science">SCI</button>
+      </div>
+      <canvas id="radar"></canvas>
+      <div id="panel"></div>
+    </div>
+    <script type="module" src="/src/stations/station.ts"></script>
+  </body>
+</html>

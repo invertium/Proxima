@@ -1,0 +1,28 @@
+// Wire format shared by the host, the sim worker, and the crew stations.
+//
+// The same message types cross all three boundaries (worker postMessage, and the
+// station transport), so there is exactly one definition of what a command and a
+// state update look like — the protocol drift the C++/JSON/embedded-HTML split
+// invited can't happen here.
+
+import type { Command, SimEvent, Snapshot } from '../sim/types';
+
+export const PROTOCOL_VERSION = 1;
+
+/** Host -> sim worker, and host -> crew stations. */
+export type ServerMessage =
+  | { m: 'state'; snapshot: Snapshot; events: SimEvent[] }
+  | { m: 'hello'; version: number; station: string }
+  | { m: 'error'; reason: string };
+
+/** Crew station -> host, and host -> sim worker. */
+export type ClientMessage =
+  | { m: 'cmd'; cmd: Command }
+  | { m: 'join'; station: string; version: number }
+  | { m: 'start'; seed: number; difficulty: string };
+
+/** Sim worker control messages. */
+export type WorkerMessage =
+  | { m: 'boot'; seed: number }
+  | { m: 'cmd'; cmd: Command }
+  | { m: 'pause'; paused: boolean };
