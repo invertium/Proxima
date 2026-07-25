@@ -121,6 +121,8 @@ describe('open-sector director', () => {
     // Teleport onto the first objective the way a warp would.
     w.player.pos = { ...w.landmarks[0]!.pos };
     step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
+    step(w, TICK_DT);
 
     expect(w.encounterLive).toBe(true);
     expect(w.enemies.length).toBe(CAMPAIGN[0]!.enemies.length);
@@ -131,6 +133,10 @@ describe('open-sector director', () => {
 
     for (let m = 0; m < CAMPAIGN.length; m++) {
       w.player.pos = { ...w.landmarks[m]!.pos };
+      step(w, TICK_DT);
+      // Arriving hails the bridge; the fight starts only once the crew accepts.
+      expect(w.objectiveOffered).toBe(true);
+      applyCommand(w, { c: 'acceptObjective' });
       step(w, TICK_DT);
       expect(w.encounterLive).toBe(true);
 
@@ -151,6 +157,8 @@ describe('open-sector director', () => {
   it('banks credits and xp for each kill', () => {
     const w = createWorld();
     w.player.pos = { ...w.landmarks[0]!.pos };
+    step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
     step(w, TICK_DT);
 
     const before = w.player.credits;
@@ -204,6 +212,8 @@ describe('snapshot', () => {
   it('is structurally cloneable for the worker and network boundary', () => {
     const w = createWorld();
     w.player.pos = { ...w.landmarks[0]!.pos };
+    step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
     step(w, TICK_DT);
 
     const snap = snapshot(w);

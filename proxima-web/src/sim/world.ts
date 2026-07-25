@@ -14,6 +14,7 @@ import {
   DOCK_MAX_SPEED,
   DOCK_RANGE,
   ENEMIES,
+  EVENT_ROLL_INTERVAL,
   MAX_PER_SYSTEM,
   MAX_SHIELD,
   RAM_DAMAGE,
@@ -42,6 +43,7 @@ import {
   upgradeRankReq,
 } from './data';
 import { effectiveStats } from './stats';
+import { acceptContract, describeContract, gravityPullAt, stepContracts, stepEvents } from './sector';
 import { DEG, addScaled, clamp, dist, forward, interpConstantTo, makeRng, vec } from './math';
 import type {
   Command,
@@ -141,7 +143,18 @@ export const createWorld = (
     torpedoes: [],
     landmarks,
     missionIndex: opts.missionIndex ?? 0,
+    objectiveOffered: false,
     encounterLive: false,
+    fleetIds: [],
+    activeEvent: 'none',
+    eventPos: vec(),
+    eventDeadline: 0,
+    eventFleet: [],
+    eventRollTimer: EVENT_ROLL_INTERVAL,
+    offer: null,
+    contract: null,
+    bountyId: null,
+    wasDocked: false,
     encounterTime: 0,
     killsThisEncounter: 0,
     firedComms: new Set(),
@@ -215,6 +228,15 @@ export const applyCommand = (world: World, cmd: Command): void => {
       break;
     case 'buyShip':
       tryBuyShip(world, cmd.type);
+      break;
+    case 'acceptObjective':
+      if (world.objectiveOffered && !world.encounterLive) {
+        world.objectiveOffered = false;
+        beginEncounter(world);
+      }
+      break;
+    case 'acceptContract':
+      acceptContract(world, (s, t) => pushComms(world, s, t));
       break;
   }
 };
@@ -430,6 +452,10 @@ export const step = (world: World, dt: number): void => {
   rollSystemDamage(world, hullBefore - world.player.hull);
   resolveEncounter(world);
 
+  const comms = (sender: string, text: string) => pushComms(world, sender, text);
+  stepEvents(world, dt, comms);
+  stepContracts(world, comms);
+
   if (world.player.hull <= 0) {
     world.player.alive = false;
     world.phase = 'defeat';
@@ -459,6 +485,9 @@ const stepPlayer = (world: World, dt: number): void => {
     p.speed = interpConstantTo(p.speed, world.intent.throttle * maxSpeed, dt, stats.acceleration);
     p.heading += world.intent.turn * stats.turnRate * DEG * dt;
     addScaled(p.pos, forward(p.heading), p.speed * dt);
+
+    // Celestial gravity: a gentle drift toward nearby bodies, always escapable.
+    addScaled(p.pos, gravityPullAt(world, p.pos), dt);
 
     // Lateral thrust only exists once Manoeuvring Thrusters are bought.
     const targetStrafe = world.intent.strafe * stats.strafeSpeed * powerScale(p.power.engines);
@@ -532,12 +561,12 @@ const stepDirector = (world: World, dt: number): void => {
   if (!landmark) return;
 
   if (!world.encounterLive) {
-    if (dist(world.player.pos, landmark.pos) <= TRIGGER_RADIUS + landmark.radius) {
-      spawnFleet(world, landmark.pos);
-      world.encounterLive = true;
-      world.encounterTime = 0;
-      world.killsThisEncounter = 0;
+    // Arriving hails the crew and waits for ACCEPT rather than ambushing them — the
+    // bridge gets to choose its moment.
+    if (!world.objectiveOffered && dist(world.player.pos, landmark.pos) <= TRIGGER_RADIUS + landmark.radius) {
+      world.objectiveOffered = true;
       pushComms(world, mission.briefSender, mission.briefText);
+      pushComms(world, 'CMDR VOSS', 'Standing by for your order, Captain — ACCEPT when the bridge is ready.');
     }
     return;
   }
@@ -558,20 +587,34 @@ const stepDirector = (world: World, dt: number): void => {
   }
 };
 
+/** Commits to the active objective: the fleet spawns and the fight is on. */
+const beginEncounter = (world: World): void => {
+  const landmark = world.landmarks[world.missionIndex];
+  if (!landmark) return;
+
+  spawnFleet(world, landmark.pos);
+  world.encounterLive = true;
+  world.encounterTime = 0;
+  world.killsThisEncounter = 0;
+};
+
 const spawnFleet = (world: World, around: { x: number; y: number; z: number }): void => {
   const mission = CAMPAIGN[world.missionIndex]!;
   const rng = makeRng(world.seed + world.missionIndex * 977);
   const scale = DIFFICULTY_SCALE[world.difficulty];
+  world.fleetIds = [];
 
   mission.enemies.forEach((type, i) => {
     const def = ENEMIES[type];
     const angle = (i / mission.enemies.length) * Math.PI * 2 + rng() * 0.6;
     const radius = 7000 + rng() * 3000;
     const hull = def.maxHull * scale.hull;
+    const id = world.nextId++;
+    world.fleetIds.push(id);
 
     world.enemies.push({
       kind: 'enemy',
-      id: world.nextId++,
+      id,
       enemyType: type,
       pos: vec(around.x + Math.cos(angle) * radius, 0, around.z + Math.sin(angle) * radius),
       heading: angle + Math.PI,
@@ -637,11 +680,13 @@ const resolveEncounter = (world: World): void => {
     world.killsThisEncounter += 1;
   }
 
-  if (world.enemies.some((e) => e.alive)) return;
+  if (world.enemies.some((e) => world.fleetIds.includes(e.id) && e.alive)) return;
 
   // Fleet wiped: advance seamlessly, no reload, no outcome screen — unless this was
-  // the last system, which is the campaign's only victory beat.
-  world.enemies.length = 0;
+  // the last system, which is the campaign's only victory beat. Only the campaign
+  // fleet is cleared away; event raiders and bounty targets fight on.
+  world.enemies = world.enemies.filter((e) => !world.fleetIds.includes(e.id));
+  world.fleetIds = [];
   world.encounterLive = false;
   world.missionIndex += 1;
 
@@ -733,7 +778,30 @@ export const snapshot = (world: World): Snapshot => {
       color: l.color,
     })),
     objective: objectiveLandmark
-      ? { name: objectiveLandmark.name, pos: { ...objectiveLandmark.pos }, range: dist(p.pos, objectiveLandmark.pos) }
+      ? {
+          name: objectiveLandmark.name,
+          pos: { ...objectiveLandmark.pos },
+          range: dist(p.pos, objectiveLandmark.pos),
+          offered: world.objectiveOffered,
+          live: world.encounterLive,
+        }
+      : null,
+    event:
+      world.activeEvent === 'none'
+        ? null
+        : {
+            kind: world.activeEvent,
+            pos: { ...world.eventPos },
+            timeLeft: Math.max(0, world.eventDeadline - world.time),
+          },
+    offer: world.offer ? { text: describeContract(world.offer), reward: world.offer.reward } : null,
+    contract: world.contract
+      ? {
+          text: describeContract(world.contract),
+          type: world.contract.type,
+          stage: world.contract.stage,
+          reward: world.contract.reward,
+        }
       : null,
     comms: world.commsLog.slice(-12),
   };

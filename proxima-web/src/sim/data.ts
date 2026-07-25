@@ -42,8 +42,23 @@ export const RAM_DAMAGE = 48;
 /** World size the normalised mission mapX/mapY are projected onto. */
 export const SECTOR_SPAN = 220000;
 
-/** Proximity that spawns the active mission's fleet (M23 open-sector director). */
-export const TRIGGER_RADIUS = 14000;
+/** Proximity that hails the crew at the active objective (M23 open-sector director). */
+export const TRIGGER_RADIUS = 18000;
+
+// ── Sector events (Core/MissionSubsystem.h) ─────────────────────────────────────
+
+export const EVENT_ROLL_INTERVAL = 25;
+export const EVENT_CHANCE = 0.4;
+export const DISTRESS_DURATION = 150;
+export const INTERDICTION_DURATION = 180;
+export const SALVAGE_DURATION = 120;
+export const SALVAGE_COLLECT_RANGE = 1500;
+export const SALVAGE_CREDITS = 60;
+
+// ── Contracts (Core/MissionSubsystem.h) ─────────────────────────────────────────
+
+export const CONTRACT_VISIT_RANGE = 9000;
+export const PIRATE_CALLSIGNS = ['KRAIT', 'DUSKRUNNER', 'RED HARROW', 'VULTURE', 'IRONJAW'];
 
 // ── Damage control (Components/DamageControlComponent.h) ────────────────────────
 

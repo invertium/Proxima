@@ -53,6 +53,25 @@ export type EnemyAIState = 'idle' | 'approach' | 'engage' | 'overshoot';
 
 export type LandmarkKind = 'planet' | 'sun' | 'station';
 
+/** Opportunistic things the sector throws at the crew between objectives. */
+export type SectorEvent = 'none' | 'distress' | 'interdiction' | 'salvage';
+
+/** Station board work. One may be active at a time; it persists in the save. */
+export type ContractType = 'none' | 'bounty' | 'patrol' | 'delivery';
+
+export interface Contract {
+  type: ContractType;
+  /** System index the contract points at (and, for patrol, the first leg). */
+  targetA: number;
+  /** Second patrol leg, or -1. */
+  targetB: number;
+  /** 0 = outbound leg, 1 = second leg / return. */
+  stage: number;
+  /** Bounty target's callsign. */
+  ship: string;
+  reward: number;
+}
+
 /** A player hull: visuals + base stats + drydock price. Cost 0 = owned from the start. */
 export interface ShipDef {
   type: PlayerShipType;
@@ -218,7 +237,11 @@ export type SimEvent =
   | { t: 'warp'; from: Vec3; to: Vec3 }
   | { t: 'systemDamaged'; system: DamageSystem }
   | { t: 'systemRepaired'; system: DamageSystem }
-  | { t: 'scanComplete'; id: number };
+  | { t: 'scanComplete'; id: number }
+  | { t: 'eventStart'; kind: SectorEvent; pos: Vec3 }
+  | { t: 'eventEnd'; kind: SectorEvent; success: boolean }
+  | { t: 'salvage'; pos: Vec3; credits: number }
+  | { t: 'contractComplete'; reward: number };
 
 /** Commands are the only way anything mutates the world — stations send these. */
 export type Command =
@@ -235,7 +258,10 @@ export type Command =
   | { c: 'buyUpgrade'; id: string }
   /** Engineering's repair sweep: fixes the current damaged system, else restores hull. */
   | { c: 'weld' }
-  | { c: 'scan'; id: number | null };
+  | { c: 'scan'; id: number | null }
+  /** Arriving at a system hails first; the crew commits to the fight with this. */
+  | { c: 'acceptObjective' }
+  | { c: 'acceptContract' };
 
 export interface World {
   tick: number;
@@ -254,8 +280,33 @@ export interface World {
   torpedoes: Torpedo[];
   landmarks: Landmark[];
   missionIndex: number;
+  /** True once the player has reached the objective and been hailed, awaiting ACCEPT. */
+  objectiveOffered: boolean;
   /** True once the active mission's fleet has spawned and is still alive. */
   encounterLive: boolean;
+  /**
+   * Ids belonging to the campaign fleet. Clearing an objective checks these, not every
+   * hostile alive — otherwise a stray event raider or bounty target would silently
+   * block the campaign from advancing.
+   */
+  fleetIds: number[];
+  activeEvent: SectorEvent;
+  /** Where the active event is happening. */
+  eventPos: Vec3;
+  /** Wall-clock sim time the event expires at. */
+  eventDeadline: number;
+  /** Ids of hostiles belonging to the event rather than the campaign fleet. */
+  eventFleet: number[];
+  /** Seconds until the next event roll. */
+  eventRollTimer: number;
+  /** The board offer while docked, or null. */
+  offer: Contract | null;
+  /** The signed contract, or null. */
+  contract: Contract | null;
+  /** Live bounty target's enemy id, when a bounty contract has spawned one. */
+  bountyId: number | null;
+  /** Tracks docking edges, so the board only refreshes on a fresh arrival. */
+  wasDocked: boolean;
   encounterTime: number;
   killsThisEncounter: number;
   firedComms: Set<string>;
@@ -325,6 +376,12 @@ export interface Snapshot {
     scanned: boolean;
   }[];
   landmarks: { id: string; name: string; kind: LandmarkKind; pos: Vec3; radius: number; color: number }[];
-  objective: { name: string; pos: Vec3; range: number } | null;
+  objective: { name: string; pos: Vec3; range: number; offered: boolean; live: boolean } | null;
+  /** The live sector event, for the radar marker and the countdown. */
+  event: { kind: SectorEvent; pos: Vec3; timeLeft: number } | null;
+  /** Board posting while docked — signable with acceptContract. */
+  offer: { text: string; reward: number } | null;
+  /** The signed contract and how far along it is. */
+  contract: { text: string; type: ContractType; stage: number; reward: number } | null;
   comms: { sender: string; text: string; at: number }[];
 }

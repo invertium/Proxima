@@ -233,6 +233,8 @@ describe('science', () => {
     const w = createWorld();
     w.player.pos = { ...w.landmarks[0]!.pos };
     step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
+    step(w, TICK_DT);
 
     const contact = w.enemies[0]!;
     // Well inside scan range, but clear of the collision radius — parking on top of a
@@ -252,6 +254,8 @@ describe('science', () => {
     const w = createWorld();
     w.player.pos = { ...w.landmarks[0]!.pos };
     step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
+    step(w, TICK_DT);
 
     const contact = w.enemies[0]!;
     w.player.pos = { x: contact.pos.x + 5000, y: 0, z: contact.pos.z };
@@ -270,6 +274,8 @@ describe('auto-turret', () => {
     const w = atDrydock();
     applyCommand(w, { c: 'dock' }); // undock
     w.player.pos = { ...w.landmarks[0]!.pos };
+    step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
     step(w, TICK_DT);
 
     const contact = w.enemies[0]!;
