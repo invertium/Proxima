@@ -7,6 +7,7 @@
 import { RelayStation } from '../net/transport';
 import { Scope } from './ui/scope';
 import { toastStrip } from './ui/controls';
+import { keepAwake, loadSettings } from '../settings';
 import { createHelmPanel } from './panels/helm';
 import { createWeaponsPanel } from './panels/weapons';
 import { createEngineeringPanel } from './panels/engineering';
@@ -21,6 +22,10 @@ const tabs = document.getElementById('tabs') as HTMLDivElement;
 const statusEl = document.getElementById('status') as HTMLDivElement;
 const noticeEl = document.getElementById('notice') as HTMLDivElement;
 const alertEl = document.getElementById('alert') as HTMLButtonElement;
+
+// A phone that sleeps mid-fight takes a bridge station down with it.
+const settings = loadSettings();
+keepAwake(() => settings.wakeLock);
 
 const link = new RelayStation();
 const send = (cmd: Command): void => {

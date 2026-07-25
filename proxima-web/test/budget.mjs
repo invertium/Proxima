@@ -17,8 +17,12 @@ const BASE = process.env.BASE ?? 'http://localhost:8099';
  * Gzipped ceilings, in KB, set just above current so a regression trips them. The
  * station figure is the one that matters — it's what a phone downloads — and it counts
  * the shared sim/data chunks it pulls in, not just its own.
+ *
+ * Raised 20 -> 25 when the console gained the session footer, the refusal toast, the
+ * weld sweep gauge and the wake lock. That is real functionality, not bloat; the
+ * ceiling still sits just above actual so a regression trips it.
  */
-const BUDGETS = { host: 200, station: 20 };
+const BUDGETS = { host: 200, station: 25 };
 /** Median frame time under a full fight, in ms. 16.7 is 60fps; software rendering in CI is slower. */
 const FRAME_BUDGET_MS = 60;
 

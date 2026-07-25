@@ -129,7 +129,7 @@ await journey('new game -> objective hail -> accept -> fleet engages', async (ct
   const before = await weapons.textContent('#panel');
   if (!/No contacts/.test(before)) throw new Error('contacts existed before the objective was accepted');
 
-  await pilot.keyboard.press('KeyE');
+  await pilot.keyboard.press('Enter');
 
   // Accepting spawns the fleet, which the Weapons console must see.
   await weapons.waitForFunction(() => /Derelict|Pact/.test(document.querySelector('#panel')?.textContent ?? ''), null, {
@@ -264,7 +264,7 @@ await journey('science scan resolves a contact for weapons', async (ctx) => {
   await pilot.waitForFunction(() => /press E to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
     timeout: 20000,
   });
-  await pilot.keyboard.press('KeyE');
+  await pilot.keyboard.press('Enter');
 
   const sci = await openStation(ctx, 'science');
   const weapons = await openStation(ctx, 'weapons');

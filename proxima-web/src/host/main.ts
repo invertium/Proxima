@@ -6,6 +6,8 @@ import { SectorView } from '../render/scene';
 import { RelayHost } from '../net/transport';
 import { Menu, type NewGameChoice } from './menu';
 import { clearCampaign, loadCampaign, saveCampaign } from './storage';
+import { PIXEL_RATIO_CAP, keepAwake, loadSettings, saveSettings } from '../settings';
+import { SessionRecorder } from './recorder';
 import type { ServerMessage, WorkerMessage } from '../net/protocol';
 import type { SaveGame } from '../sim/save';
 import type { Command, Snapshot } from '../sim/types';
@@ -28,10 +30,24 @@ const cmd = (c: Command, id?: number): void => send({ m: 'cmd', cmd: c, id });
 
 let latestSave: SaveGame | null = null;
 
+// Opt-in telemetry. Nothing in the sim knows it exists.
+const recorder = new SessionRecorder(new URLSearchParams(location.search).has('record'));
+
+const settings = loadSettings();
+audio.setVolume(settings.volume);
+view.setQuality(PIXEL_RATIO_CAP[settings.quality]);
+keepAwake(() => settings.wakeLock);
+
 const menu = new Menu(
   menuEl,
   (choice: NewGameChoice) => startGame(choice),
   () => updatePause(),
+  settings,
+  (next) => {
+    saveSettings(next);
+    audio.setVolume(next.volume);
+    view.setQuality(PIXEL_RATIO_CAP[next.quality]);
+  },
 );
 
 worker.onmessage = (ev: MessageEvent<ServerMessage>) => {
@@ -52,6 +68,7 @@ worker.onmessage = (ev: MessageEvent<ServerMessage>) => {
   if (msg.m !== 'state') return;
 
   snap = msg.snapshot;
+  recorder.observe(msg.snapshot, msg.events);
   view.ingest(msg.events);
   audio.ingest(msg.events, msg.snapshot.player.hullCritical, 1 / 60);
   crew.broadcast(msg);
@@ -60,6 +77,7 @@ worker.onmessage = (ev: MessageEvent<ServerMessage>) => {
   if (msg.snapshot.phase !== 'playing') {
     menu.setSave(latestSave);
     menu.showOutcome(msg.snapshot.phase === 'victory' ? 'victory' : 'defeat');
+    recorder.download();
     // A finished campaign shouldn't resume into a dead ship on the next launch.
     if (msg.snapshot.phase === 'victory') void clearCampaign();
   }
@@ -143,7 +161,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') cmd({ c: 'fireTorpedo' });
   if (e.code === 'KeyG') cmd({ c: 'dock' });
   if (e.code === 'KeyJ') cmd({ c: 'warp' });
-  if (e.code === 'KeyE') cmd({ c: 'acceptObjective' });
+  if (e.code === 'Enter') cmd({ c: 'acceptObjective' });
   if (e.code === 'KeyR') cmd({ c: 'weld' });
   if (e.code === 'KeyV') cmd({ c: 'alert', state: 'toggle' });
   if (e.code === 'Tab') {
@@ -180,9 +198,19 @@ const cycleTarget = (): void => {
 let lastThrottle = 0;
 let lastTurn = 0;
 
+let lastStrafe = 0;
+
 const pumpInput = (): void => {
   const throttle = (held.has('KeyW') ? 1 : 0) - (held.has('KeyS') ? 1 : 0);
   const turn = (held.has('KeyD') ? 1 : 0) - (held.has('KeyA') ? 1 : 0);
+  // Strafe had no keyboard binding at all: E had been rebound to accept-orders,
+  // so the pilot could not use thrusters they had paid for.
+  const strafe = (held.has('KeyE') ? 1 : 0) - (held.has('KeyQ') ? 1 : 0);
+
+  if (strafe !== lastStrafe) {
+    cmd({ c: 'strafe', v: strafe });
+    lastStrafe = strafe;
+  }
 
   // Only send on change — a held key is already state on the sim side.
   if (throttle !== lastThrottle) {

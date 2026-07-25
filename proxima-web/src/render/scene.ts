@@ -99,6 +99,11 @@ export class SectorView {
     window.addEventListener('resize', () => this.resize());
   }
 
+  /** Render quality: caps the device pixel ratio, which is the cheapest real lever. */
+  setQuality(cap: number): void {
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, cap));
+  }
+
   /** One tick's sim events, handed straight to the effect pools. */
   ingest(events: SimEvent[]): void {
     this.fx.ingest(events);
