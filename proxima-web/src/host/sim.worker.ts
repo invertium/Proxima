@@ -35,7 +35,7 @@ self.onmessage = (ev: MessageEvent<WorkerMessage>) => {
     last = performance.now();
     accumulator = 0;
   } else if (msg.m === 'cmd' && world) {
-    queueCommand(world, msg.cmd);
+    queueCommand(world, msg.cmd, msg.id);
   } else if (msg.m === 'pause') {
     paused = msg.paused;
     // Drop whatever piled up while suspended rather than fast-forwarding through it.
@@ -65,6 +65,8 @@ const loop = (): void => {
       // Events are per-tick and must not be coalesced away, so each stepped tick
       // ships its own payload.
       post({ m: 'state', snapshot: snapshot(world), events: [...world.events] });
+      // Refusals only — a silent success is the normal case and isn't worth a message.
+      if (world.acks.length > 0) post({ m: 'ack', acks: [...world.acks] });
     }
 
     // Campaign progress is checked twice a second rather than every tick: it changes

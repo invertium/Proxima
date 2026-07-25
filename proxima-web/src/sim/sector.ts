@@ -8,7 +8,9 @@ import {
   CALLSIGN_POOL,
   CAMPAIGN,
   CONTRACT_VISIT_RANGE,
+  DISTRESS_CREDITS,
   DISTRESS_DURATION,
+  INTERDICTION_CREDITS,
   ENEMIES,
   EVENT_CHANCE,
   EVENT_ROLL_INTERVAL,
@@ -21,7 +23,8 @@ import {
 } from './data';
 import { addScaled, dist, forward, vec } from './math';
 import type { Vec3 } from './math';
-import type { Contract, ContractType, EnemyShip, EnemyType, SectorEvent, World } from './types';
+import type { Contract, ContractType, EnemyShip, EnemyType, SectorEvent, Verdict, World } from './types';
+import { OK, no } from './types';
 
 // ── Gravity ─────────────────────────────────────────────────────────────────────
 
@@ -181,7 +184,16 @@ export const stepEvents = (world: World, dt: number, comms: (s: string, t: strin
     // Combat events resolve when their fleet is wiped.
     const alive = world.enemies.filter((e) => world.eventFleet.includes(e.id) && e.alive);
     if (alive.length === 0) {
-      comms('OPS', world.activeEvent === 'distress' ? 'Convoy is safe. Nice work, Captain.' : 'Interdiction broken.');
+      // Clearing a timed event pays on top of the kills — that bonus is the reason to
+      // take the detour at all.
+      const bonus = world.activeEvent === 'distress' ? DISTRESS_CREDITS : INTERDICTION_CREDITS;
+      world.player.credits += bonus;
+      comms(
+        'OPS',
+        world.activeEvent === 'distress'
+          ? `Convoy is safe. ${bonus} credits from a grateful skipper.`
+          : `Interdiction broken. ${bonus} credits salvaged.`,
+      );
       endEvent(world, true, comms);
       return;
     }
@@ -262,15 +274,17 @@ const spawnBountyShip = (world: World, c: Contract): void => {
   world.bountyId = e.id;
 };
 
-export const acceptContract = (world: World, comms: (s: string, t: string) => void): boolean => {
-  if (!world.offer || world.contract || !world.player.docked) return false;
+export const acceptContract = (world: World, comms: (s: string, t: string) => void): Verdict => {
+  if (!world.player.docked) return no('the board is only signable at a starbase');
+  if (world.contract) return no('a contract is already running');
+  if (!world.offer) return no('nothing posted on the board');
 
   world.contract = { ...world.offer };
   world.offer = null;
   comms('STARBASE OPS', `Contract signed. ${describeContract(world.contract)}`);
 
   if (world.contract.type === 'bounty') spawnBountyShip(world, world.contract);
-  return true;
+  return OK;
 };
 
 const completeContract = (world: World, comms: (s: string, t: string) => void): void => {

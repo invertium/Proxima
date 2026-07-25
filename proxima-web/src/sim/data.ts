@@ -51,7 +51,7 @@ export const WARP_CHARGE_RATE = 0.16;
 export const DOCK_MAX_SPEED = 250;
 /** Reverse is a nudge, not a second forward gear (ShipMovementComponent.h:97). */
 export const REVERSE_THROTTLE_MIN = -0.35;
-export const DOCK_RANGE = 3500;
+export const DOCK_RANGE = 3500; // declared divergence — see DIVERGENCES
 
 export const COLLISION_RADIUS = 650;
 export const RAM_DAMAGE = 48;
@@ -62,7 +62,7 @@ export const RAM_SPEED_MIN = 0.5;
 export const RAM_SPEED_MAX = 1.5;
 
 /** World size the normalised mission mapX/mapY are projected onto. */
-export const SECTOR_SPAN = 220000;
+export const SECTOR_SPAN = 160000;
 
 /** Proximity that hails the crew at the active objective (M23 open-sector director). */
 export const TRIGGER_RADIUS = 18000;
@@ -75,14 +75,21 @@ export const DISTRESS_DURATION = 150;
 export const INTERDICTION_DURATION = 180;
 export const SALVAGE_DURATION = 120;
 export const SALVAGE_COLLECT_RANGE = 1500;
-export const SALVAGE_CREDITS = 60;
+/** Clearing a timed event pays a bonus on top of any kills. */
+export const DISTRESS_CREDITS = 150;
+export const INTERDICTION_CREDITS = 60;
+export const SALVAGE_CREDITS = 90;
 
 // ── Contracts (Core/MissionSubsystem.h) ─────────────────────────────────────────
 
 export const CONTRACT_VISIT_RANGE = 9000;
 
-/** Skirmish: gap between waves once the arena is clear. */
+/** Skirmish: gap between waves once the arena is clear, and the per-wave clear bonus. */
 export const WAVE_INTERVAL = 12;
+export const WAVE_BONUS_CREDITS = 25;
+export const WAVE_BONUS_XP = 10;
+/** Hard cap on a skirmish wave, so wave 20 is hard rather than a slideshow. */
+export const SKIRMISH_MAX_FLEET = 6;
 export const PIRATE_CALLSIGNS = ['KRAIT', 'DUSKRUNNER', 'RED HARROW', 'VULTURE', 'IRONJAW'];
 
 /**
@@ -138,9 +145,9 @@ export const TURRET_INTERVAL = 1.6;
 export const STRAFE_ACCELERATION = 2600;
 
 export const DIFFICULTY_SCALE: Record<Difficulty, { damage: number; hull: number }> = {
-  ensign: { damage: 0.7, hull: 0.8 },
+  ensign: { damage: 0.7, hull: 0.75 },
   captain: { damage: 1.0, hull: 1.0 },
-  admiral: { damage: 1.35, hull: 1.3 },
+  admiral: { damage: 1.4, hull: 1.3 },
 };
 
 // ── Player hulls (Core/ShipCatalogue.h) ─────────────────────────────────────────
@@ -489,3 +496,90 @@ export const CAMPAIGN: MissionDef[] = [
     ],
   },
 ];
+
+
+// ── Divergence control ──────────────────────────────────────────────────────────
+//
+// This file's header claims every number is ported verbatim from the C++. That claim
+// was false for about twenty of them, and unlabelled drift is the worst possible
+// state: you cannot tell a balance decision from a typo, and the replay tests quietly
+// bake in whichever it was.
+//
+// So the C++ values are recorded here and a test asserts the live constants match,
+// unless the key appears in DIVERGENCES with its reason. Drift can still happen — it
+// just cannot happen silently.
+
+/** The Unreal build's value for every ported tunable. Reference only; never edited to match the web build. */
+export const CPP_REFERENCE = {
+  SECTOR_SPAN: 160000,
+  DOCK_RANGE: 1600,
+  DOCK_MAX_SPEED: 250,
+  TRIGGER_RADIUS: 18000,
+  BEAM_RANGE: 15000,
+  BEAM_ARC_DEG: 70,
+  TORPEDO_ARC_DEG: 110,
+  TORPEDO_DAMAGE: 60,
+  TORPEDO_SPEED: 5000,
+  TORPEDO_RELOAD: 4,
+  TORPEDO_LIFE: 12,
+  TORPEDO_TURN_RATE_DEG: 75,
+  TORPEDO_BLAST_RADIUS: 700,
+  MAX_SHIELD: 50,
+  SHIELD_MITIGATION_SCALE: 0.35,
+  MAX_MITIGATION: 0.8,
+  SHIELD_CHARGE_RATE: 4,
+  SHIELD_BLEED_RATE: 1.5,
+  REACTOR_BUDGET: 3.0,
+  MAX_PER_SYSTEM: 2.0,
+  WARP_DISTANCE: 18000,
+  WARP_CHARGE_RATE: 0.16,
+  COLLISION_RADIUS: 650,
+  RAM_DAMAGE: 48,
+  SHIELD_RADIUS_BONUS: 320,
+  REVERSE_THROTTLE_MIN: -0.35,
+  DAMAGE_CHANCE: 0.35,
+  DAMAGED_MULTIPLIER: 0.5,
+  WELDS_PER_SYSTEM_REPAIR: 3,
+  ALARM_HULL_FRACTION: 0.3,
+  WELD_HULL_REPAIR: 8,
+  WELD_MIN_INTERVAL: 0.25,
+  SCAN_DURATION: 2.5,
+  SCAN_RANGE: 40000,
+  XP_PER_RANK: 400,
+  TURRET_RANGE: 12000,
+  TURRET_INTERVAL: 1.6,
+  STRAFE_ACCELERATION: 2600,
+  EVENT_ROLL_INTERVAL: 25,
+  EVENT_CHANCE: 0.4,
+  DISTRESS_DURATION: 150,
+  INTERDICTION_DURATION: 180,
+  SALVAGE_DURATION: 120,
+  SALVAGE_COLLECT_RANGE: 1500,
+  SALVAGE_CREDITS: 90,
+  DISTRESS_CREDITS: 150,
+  INTERDICTION_CREDITS: 60,
+  CONTRACT_VISIT_RANGE: 9000,
+  WAVE_INTERVAL: 12,
+  WAVE_BONUS_CREDITS: 25,
+  BODY_CLEARANCE: 500,
+  MIN_SEPARATION: 1300,
+  VOLLEY_SIZE: 3,
+  VOLLEY_GAP: 0.6,
+  ENEMY_TORPEDO_SPEED: 1900,
+  ENEMY_TORPEDO_DAMAGE: 7,
+  STRAFE_PASS_DISTANCE: 2800,
+  STRAFE_BREAKOFF_DISTANCE: 9000,
+} as const;
+
+/**
+ * Deliberate departures from the C++. Anything that differs and is NOT listed here is
+ * a bug, not a decision — and the test below will say so.
+ */
+export const DIVERGENCES = [
+  {
+    key: 'DOCK_RANGE',
+    cpp: 1600,
+    web: 3500,
+    why: 'Docking is a hold-still-and-tap manoeuvre, and a touch console over a relay carries latency the in-process C++ console did not. Paired with restoring the C++ helm STARBASE range readout so the approach is legible.',
+  },
+] as const;

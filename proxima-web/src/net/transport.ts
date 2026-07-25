@@ -26,6 +26,10 @@ export interface HostTransport {
 
 export interface StationTransport {
   send(msg: ClientMessage): void;
+  /** Sends a command tagged with a fresh id, and returns that id. */
+  sendCommand(msg: ClientMessage & { m: 'cmd' }): number;
+  /** True for ids this page minted, so acks broadcast to every station filter cleanly. */
+  ownsId(id: number | undefined): boolean;
   onMessage(handler: (msg: ServerMessage) => void): void;
   onStatus(handler: (connected: boolean) => void): void;
   close(): void;
@@ -140,6 +144,14 @@ export class RelayHost implements HostTransport {
 export class RelayStation implements StationTransport {
   private handler: (msg: ServerMessage) => void = () => {};
   private status: (connected: boolean) => void = () => {};
+
+  /**
+   * Command ids are scoped to this page by a random nonce, so acks broadcast to every
+   * station can be filtered to our own with one comparison — and the relay stays a
+   * dumb pipe that knows nothing about who sent what.
+   */
+  private readonly nonce = Math.floor(Math.random() * 1e6) * 1e6;
+  private seq = 0;
   private readonly sock = new Socket(
     relayUrl('station'),
     (data) => this.handler(data as ServerMessage),
@@ -148,6 +160,16 @@ export class RelayStation implements StationTransport {
 
   send(msg: ClientMessage): void {
     this.sock.send(msg);
+  }
+
+  sendCommand(msg: ClientMessage & { m: 'cmd' }): number {
+    const id = this.nonce + this.seq++;
+    this.sock.send({ ...msg, id });
+    return id;
+  }
+
+  ownsId(id: number | undefined): boolean {
+    return id !== undefined && id >= this.nonce && id < this.nonce + 1e6;
   }
 
   onMessage(handler: (msg: ServerMessage) => void): void {

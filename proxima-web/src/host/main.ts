@@ -24,7 +24,7 @@ const crew = new RelayHost();
 let snap: Snapshot | null = null;
 
 const send = (msg: WorkerMessage): void => worker.postMessage(msg);
-const cmd = (c: Command): void => send({ m: 'cmd', cmd: c });
+const cmd = (c: Command, id?: number): void => send({ m: 'cmd', cmd: c, id });
 
 let latestSave: SaveGame | null = null;
 
@@ -40,6 +40,13 @@ worker.onmessage = (ev: MessageEvent<ServerMessage>) => {
   if (msg.m === 'save') {
     latestSave = msg.save;
     void saveCampaign(msg.save);
+    return;
+  }
+  if (msg.m === 'ack') {
+    // Stations filter by their own id; the pilot shows anything unattributed.
+    crew.broadcast(msg);
+    const mine = msg.acks.find((a) => a.id === undefined && !a.ok);
+    if (mine?.reason) showRefusal(mine.reason);
     return;
   }
   if (msg.m !== 'state') return;
@@ -78,7 +85,7 @@ const startGame = (choice: NewGameChoice): void => {
 // (range, arc, charge, reactor headroom) exactly as it does the pilot's.
 crew.onMessage((msg) => {
   if (msg.m === 'cmd') {
-    cmd(msg.cmd);
+    cmd(msg.cmd, msg.id);
     return;
   }
   if (msg.m === 'game') {
@@ -110,6 +117,14 @@ crew.onEvicted(() => {
     '<div id="spectator">ANOTHER PILOT WINDOW TOOK OVER THIS SESSION — close this tab, or reload it to take control back.</div>',
   );
 });
+
+/** A short-lived reason line, so a refused key press isn't silent. */
+let refusalUntil = 0;
+let refusalText = '';
+const showRefusal = (reason: string): void => {
+  refusalText = reason;
+  refusalUntil = performance.now() + 2500;
+};
 
 // ── Pilot input ─────────────────────────────────────────────────────────────────
 //
@@ -211,6 +226,7 @@ const drawHud = (s: Snapshot): void => {
       ? `<div class="tgt ${target.inBeamArc ? 'ok' : ''}">TARGET: ${target.name} — hull ${Math.round(target.hull)} — ${(target.range / 1000).toFixed(1)} km ${target.inBeamArc ? '[IN ARC]' : '[NO SOLUTION]'}</div>`
       : '<div class="tgt">NO TARGET — press TAB</div>',
     p.docked ? '<div class="obj">DOCKED — repaired and resupplied</div>' : '',
+    performance.now() < refusalUntil ? `<div class="refusal">${refusalText}</div>` : '',
 
   ].join('');
 

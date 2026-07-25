@@ -24,10 +24,10 @@ const snapshots = (count: number, opts: { fight?: boolean } = {}): Snapshot[] =>
   if (opts.fight) {
     w.player.pos = { ...w.landmarks[0]!.pos };
     step(w, TICK_DT);
-    w.pending.push({ c: 'acceptObjective' });
+    w.pending.push({ cmd: { c: 'acceptObjective' } });
     step(w, TICK_DT);
   }
-  w.pending.push({ c: 'throttle', v: 1 });
+  w.pending.push({ cmd: { c: 'throttle', v: 1 } });
 
   const out: Snapshot[] = [];
   for (let i = 0; i < count; i++) {

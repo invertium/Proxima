@@ -15,12 +15,15 @@ export type ServerMessage =
   | { m: 'state'; snapshot: Snapshot; events: SimEvent[] }
   /** Emitted when campaign progress changes, for the host to persist. */
   | { m: 'save'; save: SaveGame }
+  /** Refused commands, broadcast to all stations; each filters its own by id. */
+  | { m: 'ack'; acks: { id?: number; ok: boolean; reason?: string }[] }
   | { m: 'hello'; version: number; station: string }
   | { m: 'error'; reason: string };
 
 /** Crew station -> host, and host -> sim worker. */
 export type ClientMessage =
-  | { m: 'cmd'; cmd: Command }
+  /** `id` lets the sender match a refusal back to the control that was pressed. */
+  | { m: 'cmd'; cmd: Command; id?: number }
   | { m: 'join'; station: string; version: number }
   /**
    * Session control from a crew console. Deliberately NOT a Command: the sim cannot
@@ -41,5 +44,5 @@ export interface BootOptions {
 
 export type WorkerMessage =
   | { m: 'boot'; options: BootOptions }
-  | { m: 'cmd'; cmd: Command }
+  | { m: 'cmd'; cmd: Command; id?: number }
   | { m: 'pause'; paused: boolean };

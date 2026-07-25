@@ -42,7 +42,10 @@ import {
   TRIGGER_RADIUS,
   TURRET_INTERVAL,
   TURRET_RANGE,
+  WAVE_BONUS_CREDITS,
+  WAVE_BONUS_XP,
   WAVE_INTERVAL,
+  SKIRMISH_MAX_FLEET,
   WARP_CHARGE_RATE,
   WARP_DISTANCE,
   WELDS_PER_SYSTEM_REPAIR,
@@ -72,8 +75,10 @@ import type {
   ShipSystem,
   Snapshot,
   Torpedo,
+  Verdict,
   World,
 } from './types';
+import { OK, no } from './types';
 
 /**
  * Reactor allocation scales what a system delivers, linearly and honestly: nominal
@@ -171,6 +176,7 @@ export const createWorld = (
     rng: makeRng(seed),
     intent: { throttle: 0, turn: 0, strafe: 0 },
     pending: [],
+    acks: [],
     player,
     enemies: [],
     torpedoes: [],
@@ -204,33 +210,34 @@ export const createWorld = (
  * pilot use; draining at a fixed point in the tick is what keeps ordering deterministic
  * regardless of when messages actually arrive over the network.
  */
-export const queueCommand = (world: World, cmd: Command): void => {
-  world.pending.push(cmd);
+export const queueCommand = (world: World, cmd: Command, id?: number): void => {
+  world.pending.push({ cmd, id });
 };
 
-export const applyCommand = (world: World, cmd: Command): void => {
+export const applyCommand = (world: World, cmd: Command): Verdict => {
   const p = world.player;
-  if (world.phase !== 'playing' || !p.alive) return;
+  if (world.phase !== 'playing') return no('the run is over');
+  if (!p.alive) return no('ship destroyed');
 
   switch (cmd.c) {
     case 'throttle':
+      if (p.docked) return no('docked — release the clamps first');
       world.intent.throttle = clamp(cmd.v, REVERSE_THROTTLE_MIN, 1);
-      break;
+      return OK;
     case 'turn':
       world.intent.turn = clamp(cmd.v, -1, 1);
-      break;
+      return OK;
     case 'strafe':
+      if (effectiveStats(p).strafeSpeed <= 0) return no('manoeuvring thrusters not installed');
       world.intent.strafe = clamp(cmd.v, -1, 1);
-      break;
+      return OK;
     case 'target':
       p.targetId = cmd.id;
-      break;
+      return OK;
     case 'fireBeam':
-      tryFireBeam(world);
-      break;
+      return tryFireBeam(world);
     case 'fireTorpedo':
-      tryFireTorpedo(world);
-      break;
+      return tryFireTorpedo(world);
     case 'power': {
       // The reactor is a hard cap on the total (D11): a system can only take what the
       // other two leave unclaimed. The budget itself grows with Reactor Output.
@@ -238,42 +245,37 @@ export const applyCommand = (world: World, cmd: Command): void => {
         .filter((s) => s !== cmd.system)
         .reduce((sum, s) => sum + p.power[s], 0);
       const headroom = Math.max(0, effectiveStats(p).reactorBudget - others);
-      p.power[cmd.system] = Math.min(clamp(cmd.v, 0, MAX_PER_SYSTEM), headroom);
-      break;
+      const want = clamp(cmd.v, 0, MAX_PER_SYSTEM);
+      p.power[cmd.system] = Math.min(want, headroom);
+      if (want > headroom + 1e-6) return no('reactor at capacity — take power from another system');
+      return OK;
     }
     case 'buyUpgrade':
-      tryBuyUpgrade(world, cmd.id);
-      break;
+      return tryBuyUpgrade(world, cmd.id);
     case 'weld':
-      weld(world, cmd.phase);
-      break;
+      return weld(world, cmd.phase);
     case 'scan':
       // Retargeting restarts the scan; the crew can't bank progress across contacts.
       p.scanTargetId = cmd.id;
       p.scanProgress = 0;
       p.scanning = cmd.id !== null;
-      break;
+      return OK;
     case 'dock':
-      tryDock(world);
-      break;
+      return tryDock(world);
     case 'warp':
-      tryWarp(world);
-      break;
+      return tryWarp(world);
     case 'buyShip':
-      tryBuyShip(world, cmd.type);
-      break;
+      return tryBuyShip(world, cmd.type);
     case 'acceptObjective':
-      if (world.objectiveOffered && !world.encounterLive) {
-        world.objectiveOffered = false;
-        beginEncounter(world);
-      }
-      break;
+      if (!world.objectiveOffered) return no('no orders to accept');
+      if (world.encounterLive) return no('already engaged');
+      world.objectiveOffered = false;
+      beginEncounter(world);
+      return OK;
     case 'acceptContract':
-      acceptContract(world, (s, t) => pushComms(world, s, t));
-      break;
+      return acceptContract(world, (s, t) => pushComms(world, s, t));
     case 'layInCourse':
-      layInCourse(world);
-      break;
+      return layInCourse(world);
     case 'alert': {
       const next = cmd.state === 'toggle' ? (world.alert === 'red' ? 'green' : 'red') : cmd.state;
       if (next !== world.alert) {
@@ -287,20 +289,23 @@ export const applyCommand = (world: World, cmd: Command): void => {
             : 'Stand down to green alert. Shields idling down.',
         );
       }
-      break;
+      return OK;
     }
   }
+  return OK;
 };
 
 const target = (world: World): EnemyShip | null =>
   world.enemies.find((e) => e.id === world.player.targetId && e.alive) ?? null;
 
-const tryFireBeam = (world: World): void => {
+const tryFireBeam = (world: World): Verdict => {
   const p = world.player;
   const t = target(world);
   // Docking is a combat-safe refuge in both directions: you can't be shot, and you
   // can't snipe from inside the station's arms.
-  if (!t || p.beamCharge < 1 || p.docked) return;
+  if (p.docked) return no('weapons safed while docked');
+  if (!t) return no('no target locked');
+  if (p.beamCharge < 1) return no('beam still charging');
 
   // Weapons power drives the RECHARGE rate, never the damage. Scaling both was a
   // double-dip that made the reactor allocation worth about twice what it should be.
@@ -311,17 +316,24 @@ const tryFireBeam = (world: World): void => {
   // reason a cruiser fight wants a Science officer.
   const armor = p.scanned.includes(t.id) ? 1 : ENEMIES[t.enemyType].armoredBeamMultiplier;
 
-  if (fireBeam(world, p, t, damage, stats.beamArcDeg, BEAM_RANGE, true, armor)) {
-    p.beamCharge = 0;
+  if (!fireBeam(world, p, t, damage, stats.beamArcDeg, BEAM_RANGE, true, armor)) {
+    return no(
+      dist(p.pos, t.pos) > BEAM_RANGE ? 'target out of beam range' : 'target outside firing arc',
+    );
   }
+  p.beamCharge = 0;
+  return OK;
 };
 
-const tryFireTorpedo = (world: World): void => {
+const tryFireTorpedo = (world: World): Verdict => {
   const p = world.player;
-  if (p.torpedoAmmo <= 0 || p.torpedoReload > 0 || p.docked) return;
+  if (p.docked) return no('tubes safed while docked');
+  if (p.torpedoAmmo <= 0) return no('tubes empty');
+  if (p.torpedoReload > 0) return no(`reloading — ${p.torpedoReload.toFixed(1)}s`);
 
   const t = target(world);
-  if (!t || !inArc(p, t, TORPEDO_ARC_DEG)) return;
+  if (!t) return no('no target locked');
+  if (!inArc(p, t, TORPEDO_ARC_DEG)) return no('target outside torpedo arc');
 
   p.torpedoAmmo -= 1;
   p.torpedoReload = TORPEDO_RELOAD;
@@ -335,20 +347,21 @@ const tryFireTorpedo = (world: World): void => {
     friendly: true,
     targetId: t.id,
   });
+  return OK;
 };
 
-const tryDock = (world: World): void => {
+const tryDock = (world: World): Verdict => {
   const p = world.player;
   if (p.docked) {
     p.docked = false;
     p.dockedAt = null;
     p.invulnerable = false;
-    return;
+    return OK;
   }
-  if (Math.abs(p.speed) > DOCK_MAX_SPEED) return;
+  if (Math.abs(p.speed) > DOCK_MAX_SPEED) return no('too fast to dock — all stop first');
 
   const base = world.landmarks.find((l) => l.dockable && dist(l.pos, p.pos) <= DOCK_RANGE);
-  if (!base) return;
+  if (!base) return no('no starbase in docking range');
 
   p.docked = true;
   p.dockedAt = base.id;
@@ -362,16 +375,19 @@ const tryDock = (world: World): void => {
   p.repairWelds = 0;
   world.events.push({ t: 'dock', station: base.name });
   pushComms(world, 'STARBASE', 'Docking clamps engaged. Hull repaired, tubes reloaded. Drydock is open, Captain.');
+  return OK;
 };
 
-const tryWarp = (world: World): void => {
+const tryWarp = (world: World): Verdict => {
   const p = world.player;
-  if (p.warpCharge < 1 || p.docked) return;
+  if (p.docked) return no('cannot warp from the clamps');
+  if (p.warpCharge < 1) return no(`warp core at ${Math.round(p.warpCharge * 100)}%`);
 
   const from = { ...p.pos };
   addScaled(p.pos, forward(p.heading), WARP_DISTANCE);
   p.warpCharge = 0;
   world.events.push({ t: 'warp', from, to: { ...p.pos } });
+  return OK;
 };
 
 /**
@@ -379,10 +395,12 @@ const tryWarp = (world: World): void => {
  * first is what makes this 'lay in a course' rather than a teleport — a jump still only
  * covers WARP_DISTANCE, so crossing the sector takes several.
  */
-const layInCourse = (world: World): void => {
+const layInCourse = (world: World): Verdict => {
   const p = world.player;
   const target = world.landmarks[world.missionIndex];
-  if (!target || p.warpCharge < 1 || p.docked) return;
+  if (!target) return no('no objective to course to');
+  if (p.docked) return no('cannot warp from the clamps');
+  if (p.warpCharge < 1) return no(`warp core at ${Math.round(p.warpCharge * 100)}%`);
 
   p.heading = Math.atan2(target.pos.z - p.pos.z, target.pos.x - p.pos.x);
 
@@ -395,19 +413,22 @@ const layInCourse = (world: World): void => {
   addScaled(p.pos, forward(p.heading), jump);
   p.warpCharge = 0;
   world.events.push({ t: 'warp', from, to: { ...p.pos } });
+  return OK;
 };
 
-const tryBuyShip = (world: World, type: PlayerShipType): void => {
+const tryBuyShip = (world: World, type: PlayerShipType): Verdict => {
   const p = world.player;
-  if (!p.docked) return;
+  if (!p.docked) return no('drydock only available while docked');
 
   const def = SHIPS.find((s) => s.type === type);
-  if (!def || def.type === p.shipType) return;
+  if (!def) return no('unknown hull');
+  if (def.type === p.shipType) return no('already flying that hull');
 
   // Already-owned hulls are a free switch; a new one costs credits and crew rank.
   const owned = p.ownedShips.includes(def.type);
   if (!owned) {
-    if (p.credits < def.cost || rankFromXp(p.xp) < def.rankReq) return;
+    if (p.credits < def.cost) return no(`needs ${def.cost} credits`);
+    if (rankFromXp(p.xp) < def.rankReq) return no(`needs crew rank ${def.rankReq}`);
     p.credits -= def.cost;
     p.ownedShips.push(def.type);
   }
@@ -419,19 +440,20 @@ const tryBuyShip = (world: World, type: PlayerShipType): void => {
   p.maxShield = stats.maxShield;
   p.torpedoAmmo = stats.torpedoAmmo;
   pushComms(world, 'DRYDOCK', `${def.name} is yours, Captain. She's fuelled and ready.`);
+  return OK;
 };
 
-const tryBuyUpgrade = (world: World, id: string): void => {
+const tryBuyUpgrade = (world: World, id: string): Verdict => {
   const p = world.player;
-  if (!p.docked) return;
+  if (!p.docked) return no('drydock only available while docked');
 
   const def = upgradeDef(id);
-  if (!def) return;
+  if (!def) return no('unknown upgrade');
 
   const tier = p.upgrades[id] ?? 0;
-  if (tier >= def.maxTier) return;
-  if (p.credits < upgradeCost(def, tier)) return;
-  if (rankFromXp(p.xp) < upgradeRankReq(tier)) return;
+  if (tier >= def.maxTier) return no(`${def.name} is already at max tier`);
+  if (p.credits < upgradeCost(def, tier)) return no(`needs ${upgradeCost(def, tier)} credits`);
+  if (rankFromXp(p.xp) < upgradeRankReq(tier)) return no(`needs crew rank ${upgradeRankReq(tier)}`);
 
   p.credits -= upgradeCost(def, tier);
   p.upgrades[id] = tier + 1;
@@ -450,6 +472,7 @@ const tryBuyUpgrade = (world: World, id: string): void => {
   if (def.stat === 'torpedoAmmo') p.torpedoAmmo += def.magnitudePerTier;
 
   pushComms(world, 'DRYDOCK', `${def.name} installed — tier ${tier + 1}.`);
+  return OK;
 };
 
 /** Next callsign for an archetype: WASP-1, WASP-2, VIPER-1... numbered within class. */
@@ -467,14 +490,14 @@ const repairTarget = (p: PlayerShip): DamageSystem | null =>
  * Engineering's repair sweep. Welds go into fixing broken systems first — three per
  * system — and only once everything works do further welds patch hull.
  */
-const weld = (world: World, phase?: number): void => {
+const weld = (world: World, phase?: number): Verdict => {
   const p = world.player;
 
   // Rate limit first. This, not the phase, is what stops a held key or a scripted
   // client from welding the hull to full instantly — and it's what the C++ relied on.
   if (world.time - p.lastWeldAt < WELD_MIN_INTERVAL) {
     world.events.push({ t: 'weld', credited: false });
-    return;
+    return no('welder still cycling');
   }
 
   // The sweep runs on the console, which is the only place it can feel responsive;
@@ -482,7 +505,7 @@ const weld = (world: World, phase?: number): void => {
   // would rotate the green band under the player by exactly the network latency.
   if (phase !== undefined && (phase < WELD_GREEN_MIN || phase > WELD_GREEN_MAX)) {
     world.events.push({ t: 'weld', credited: false });
-    return;
+    return no('missed the green');
   }
 
   p.lastWeldAt = world.time;
@@ -490,8 +513,9 @@ const weld = (world: World, phase?: number): void => {
 
   const target = repairTarget(p);
   if (!target) {
+    if (p.hull >= p.maxHull) return no('hull already sound');
     p.hull = Math.min(p.maxHull, p.hull + WELD_HULL_REPAIR);
-    return;
+    return OK;
   }
 
   p.repairWelds += 1;
@@ -501,6 +525,7 @@ const weld = (world: World, phase?: number): void => {
     world.events.push({ t: 'systemRepaired', system: target });
     pushComms(world, 'ENGINEERING', `${target.toUpperCase()} back online, Captain.`);
   }
+  return OK;
 };
 
 /**
@@ -536,13 +561,19 @@ export const step = (world: World, dt: number): void => {
   world.events.length = 0;
   if (world.phase !== 'playing') {
     world.pending.length = 0;
+    world.acks.length = 0;
     return;
   }
 
   world.tick += 1;
   world.time += dt;
 
-  for (const cmd of world.pending) applyCommand(world, cmd);
+  world.acks.length = 0;
+  for (const { cmd, id } of world.pending) {
+    const verdict = applyCommand(world, cmd);
+    // Only refusals are worth a round trip; a silent success is the normal case.
+    if (!verdict.ok) world.acks.push({ id, ok: false, reason: verdict.reason });
+  }
   world.pending.length = 0;
 
   stepPlayer(world, dt);
@@ -898,14 +929,23 @@ const stepSkirmish = (world: World, dt: number): void => {
   world.waveTimer -= dt;
   if (world.waveTimer > 0) return;
 
+  // Clearing a wave pays a bonus that scales with how deep the crew has got.
+  if (world.skirmishWave > 0) {
+    world.player.credits += WAVE_BONUS_CREDITS * world.skirmishWave;
+    world.player.xp += WAVE_BONUS_XP * world.skirmishWave;
+  }
+
   world.enemies.length = 0;
   world.skirmishWave += 1;
   world.waveTimer = WAVE_INTERVAL;
 
-  // Wave 1 is a pair of scouts; every second wave adds a gunship, every third a cruiser.
-  const types: EnemyType[] = ['scout', 'scout'];
+  // C++ composition: scouts grow slowly, gunships every other wave, cruisers every
+  // fourth, and the whole wave is capped so a late run stays fightable.
+  const types: EnemyType[] = [];
+  for (let i = 0; i < 1 + Math.floor(world.skirmishWave / 3); i++) types.push('scout');
   for (let i = 0; i < Math.floor(world.skirmishWave / 2); i++) types.push('gunship');
-  for (let i = 0; i < Math.floor(world.skirmishWave / 3); i++) types.push('cruiser');
+  for (let i = 0; i < Math.floor(world.skirmishWave / 4); i++) types.push('cruiser');
+  types.length = Math.min(types.length, SKIRMISH_MAX_FLEET);
 
   const scale = DIFFICULTY_SCALE[world.difficulty];
   world.fleetIds = [];

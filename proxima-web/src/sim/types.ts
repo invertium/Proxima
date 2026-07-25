@@ -265,6 +265,16 @@ export type SimEvent =
   | { t: 'salvage'; pos: Vec3; credits: number }
   | { t: 'contractComplete'; reward: number };
 
+/**
+ * Why a command was refused. The C++ answered every station request with a reason
+ * ("target outside firing arc"); dropping them silently leaves a crew unable to tell
+ * a bad shot from a broken link.
+ */
+export type Verdict = { ok: true } | { ok: false; reason: string };
+
+export const OK: Verdict = { ok: true };
+export const no = (reason: string): Verdict => ({ ok: false, reason });
+
 /** Commands are the only way anything mutates the world — stations send these. */
 export type Command =
   | { c: 'throttle'; v: number }
@@ -310,7 +320,9 @@ export interface World {
   /** Helm intent, held per-world so several sims can run in one process (tests, replays). */
   intent: { throttle: number; turn: number; strafe: number };
   /** Commands land here and are drained at a fixed point in the tick, keeping order deterministic. */
-  pending: Command[];
+  pending: { cmd: Command; id?: number }[];
+  /** Verdicts produced this tick, drained by the host and returned to whoever asked. */
+  acks: { id?: number; ok: boolean; reason?: string }[];
   player: PlayerShip;
   enemies: EnemyShip[];
   torpedoes: Torpedo[];

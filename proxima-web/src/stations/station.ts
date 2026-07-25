@@ -6,6 +6,7 @@
 
 import { RelayStation } from '../net/transport';
 import { Scope } from './ui/scope';
+import { toastStrip } from './ui/controls';
 import { createHelmPanel } from './panels/helm';
 import { createWeaponsPanel } from './panels/weapons';
 import { createEngineeringPanel } from './panels/engineering';
@@ -22,10 +23,13 @@ const noticeEl = document.getElementById('notice') as HTMLDivElement;
 const alertEl = document.getElementById('alert') as HTMLButtonElement;
 
 const link = new RelayStation();
-const send = (cmd: Command): void => link.send({ m: 'cmd', cmd });
+const send = (cmd: Command): void => {
+  link.sendCommand({ m: 'cmd', cmd });
+};
 const scope = new Scope(canvas);
 const footer = createFooter((action) => link.send({ m: 'game', action }));
-document.querySelector('.wrap')!.appendChild(footer.root);
+const toast = toastStrip();
+document.querySelector('.wrap')!.append(footer.root, toast.root);
 
 let snap: Snapshot | null = null;
 let lastSnapAt = 0;
@@ -69,6 +73,13 @@ const activate = (which: Station): void => {
 };
 
 link.onMessage((msg) => {
+  if (msg.m === 'ack') {
+    // Acks go to every station, so keep only the ones this page asked for. Refusals
+    // are the whole point: a control that does nothing with no reason is unusable.
+    const mine = msg.acks.find((a) => link.ownsId(a.id) && !a.ok);
+    if (mine?.reason) toast.show(mine.reason, 'error');
+    return;
+  }
   if (msg.m !== 'state') return;
   snap = msg.snapshot;
   lastSnapAt = performance.now();
@@ -127,8 +138,15 @@ window.addEventListener('hashchange', () => {
  * One update per frame, not one per snapshot. Snapshots arrive at up to 60 Hz and must
  * coalesce, or a phone spends its whole budget on state it will never display.
  */
+let lastFrameAt = performance.now();
+
 const frame = (): void => {
   requestAnimationFrame(frame);
+
+  const now = performance.now();
+  toast.tick((now - lastFrameAt) / 1000);
+  lastFrameAt = now;
+
   updateLinkState();
 
   if (!snap || !dirty) return;
