@@ -344,6 +344,8 @@ export interface Snapshot {
     power: Record<ShipSystem, number>;
     beamCharge: number;
     torpedoAmmo: number;
+    /** Seconds until the next torpedo can launch — the C++ console showed this. */
+    torpedoReload: number;
     warpCharge: number;
     docked: boolean;
     targetId: number | null;
@@ -370,6 +372,7 @@ export interface Snapshot {
       strafeSpeed: number;
       turretDamage: number;
       scanRange: number;
+      radarRange: number;
     };
   };
   contacts: {

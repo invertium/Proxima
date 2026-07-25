@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Proxima \u2014 browser-native co-op bridge simulator (Three.js rewrite)",
+  "description": "Proxima — browser-native co-op bridge simulator (Three.js rewrite)",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -26,6 +26,7 @@
     "@types/node": "^26.1.1",
     "@types/three": "^0.180.0",
     "@types/ws": "^8.18.1",
+    "jsdom": "^29.1.1",
     "playwright": "^1.62.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",

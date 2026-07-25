@@ -34,6 +34,8 @@ export const WARP_DISTANCE = 18000;
 export const WARP_CHARGE_RATE = 0.16;
 
 export const DOCK_MAX_SPEED = 250;
+/** Reverse is a nudge, not a second forward gear (ShipMovementComponent.h:97). */
+export const REVERSE_THROTTLE_MIN = -0.35;
 export const DOCK_RANGE = 3500;
 
 export const COLLISION_RADIUS = 650;

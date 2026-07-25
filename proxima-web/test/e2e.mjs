@@ -86,6 +86,33 @@ const openStation = async (ctx, which) => {
 
 const hud = (page) => page.evaluate(() => document.querySelector('#hud')?.textContent ?? '');
 
+/**
+ * Presses a control the way a hand does: press, dwell, release. This is the thing the
+ * old suite never did — page.click() dispatches press+release in under a millisecond,
+ * so it never spanned a repaint, and an entire console that dropped real presses
+ * reported 8/8 green.
+ */
+const press = async (page, selector, ms = 140) => {
+  const box = await page.locator(selector).first().boundingBox();
+  if (!box) throw new Error(`no such control: ${selector}`);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(ms);
+  await page.mouse.up();
+};
+
+/** Holds a control down for `ms`, for the steering controls. */
+const hold = async (page, selector, ms) => {
+  const box = await page.locator(selector).first().boundingBox();
+  if (!box) throw new Error(`no such control: ${selector}`);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(ms);
+  await page.mouse.up();
+};
+
+const speedOf = async (page) => Number(/SPD\s*(\d+)/.exec(await hud(page))?.[1] ?? 0);
+
 // ── Journey 1: new game, hail, accept, engage ───────────────────────────────────
 
 await journey('new game -> objective hail -> accept -> fleet engages', async (ctx) => {
@@ -113,24 +140,97 @@ await journey('new game -> objective hail -> accept -> fleet engages', async (ct
 
 // ── Journey 2: the crew flies the ship ──────────────────────────────────────────
 
-await journey('helm station drives the ship the pilot renders', async (ctx) => {
+await journey('helm station drives the ship, pressed the way a hand presses', async (ctx) => {
   const pilot = await openPilot(ctx);
   await startNewGame(pilot);
   const helm = await openStation(ctx, 'helm');
 
-  await helm.click('button:has-text("FULL AHEAD")');
+  // Deliberate 140ms presses, long enough to span several state updates.
+  await press(helm, 'button:has-text("FULL")');
   await pilot.waitForFunction(
     () => Number(/SPD\s*(\d+)/.exec(document.querySelector('#hud')?.textContent ?? '')?.[1] ?? 0) > 800,
     null,
     { timeout: 10000 },
   );
 
-  await helm.click('button:has-text("STOP")');
+  await press(helm, 'button:has-text("STOP")');
   await pilot.waitForFunction(
     () => Number(/SPD\s*(\d+)/.exec(document.querySelector('#hud')?.textContent ?? '')?.[1] ?? 999) < 200,
     null,
     { timeout: 10000 },
   );
+});
+
+// ── Journey 2b: loss rate, not just 'one press worked' ────────────────────────
+
+await journey('ten deliberate presses all land', async (ctx) => {
+  const pilot = await openPilot(ctx);
+  await startNewGame(pilot);
+  const helm = await openStation(ctx, 'helm');
+
+  let landed = 0;
+  for (let i = 0; i < 10; i++) {
+    const wantFast = i % 2 === 0;
+    await press(helm, wantFast ? 'button:has-text("FULL")' : 'button:has-text("STOP")');
+    // The interceptor accelerates at 1500/s, so braking from full speed genuinely
+    // takes ~1.2s. Allow for the physics, not just the message.
+    await pilot.waitForTimeout(1800);
+    const speed = await speedOf(pilot);
+    if (wantFast ? speed > 300 : speed < 300) landed++;
+  }
+
+  if (landed < 10) throw new Error(`only ${landed}/10 presses reached the ship`);
+});
+
+// ── Journey 2c: the console must not churn its own controls ───────────────────
+
+await journey('the panel never destroys a control while state ticks', async (ctx) => {
+  const pilot = await openPilot(ctx);
+  await startNewGame(pilot);
+  const helm = await openStation(ctx, 'helm');
+
+  await press(helm, 'button:has-text("FULL")'); // guarantee live, changing values
+  await helm.evaluate(() => {
+    window.__churn = 0;
+    new MutationObserver((records) => {
+      for (const r of records) {
+        for (const node of r.removedNodes) {
+          if (node.nodeType !== 1) continue;
+          const e = node;
+          if (e.matches?.('button,input') || e.querySelector?.('button,input')) window.__churn++;
+        }
+      }
+    }).observe(document.querySelector('#panel'), { childList: true, subtree: true });
+  });
+
+  await helm.waitForTimeout(3000);
+  const churn = await helm.evaluate(() => window.__churn);
+  if (churn > 0) throw new Error(`${churn} controls were destroyed under the user's finger`);
+});
+
+// ── Journey 2d: hold-to-turn ──────────────────────────────────────────────────
+
+await journey('hold-to-turn turns while held and centres on release', async (ctx) => {
+  const pilot = await openPilot(ctx);
+  await startNewGame(pilot);
+  const helm = await openStation(ctx, 'helm');
+
+  const heading = async () => Number(/HDG\s*(\d+)/.exec(await hud(pilot))?.[1] ?? -1);
+
+  const before = await heading();
+  await hold(helm, 'button:has-text("PORT")', 1200);
+  const afterHold = await heading();
+  if (before === afterHold) throw new Error('holding PORT did not turn the ship');
+
+  // The rudder must centre itself on release. If it doesn't, the ship spins forever
+  // and the helm is unflyable — the exact failure a tap-to-set control has.
+  await pilot.waitForTimeout(900);
+  const settled = await heading();
+  await pilot.waitForTimeout(900);
+  const stillSettled = await heading();
+  if (settled !== stillSettled) {
+    throw new Error(`rudder did not centre on release (${settled} -> ${stillSettled})`);
+  }
 });
 
 // ── Journey 3: Engineering moves the reactor, and it reaches the ship ───────────
@@ -141,13 +241,13 @@ await journey('engineering reactor preset changes the ship top speed', async (ct
   const eng = await openStation(ctx, 'engineering');
   const helm = await openStation(ctx, 'helm');
 
-  await eng.click('button:has-text("TURTLE")'); // starves engines
-  await helm.click('button:has-text("FULL AHEAD")');
-  await pilot.waitForTimeout(4000);
+  await press(eng, 'button:has-text("COMBAT")'); // weapons/shields heavy, engines starved
+  await press(helm, 'button:has-text("FULL")');
+  await pilot.waitForTimeout(5000);
   const starved = Number(/SPD\s*(\d+)/.exec(await hud(pilot))?.[1] ?? 0);
 
-  await eng.click('button:has-text("RUN")'); // everything into engines
-  await pilot.waitForTimeout(4000);
+  await press(eng, 'button:has-text("TRAVEL")'); // engines heavy
+  await pilot.waitForTimeout(5000);
   const boosted = Number(/SPD\s*(\d+)/.exec(await hud(pilot))?.[1] ?? 0);
 
   if (!(boosted > starved * 1.2)) {
@@ -219,6 +319,9 @@ await journey('escape pauses the sim and resume continues it', async (ctx) => {
   await pilot.waitForSelector('button[data-action="resume"]', { timeout: 5000 });
 
   const tickOf = () => pilot.evaluate(() => document.querySelector('#hud')?.textContent ?? '');
+  // Snapshots already in flight when the pause message was posted still land after it,
+  // so let the stream drain before taking the baseline.
+  await pilot.waitForTimeout(500);
   const paused = await tickOf();
   await pilot.waitForTimeout(1500);
   if ((await tickOf()) !== paused) throw new Error('the sim kept running while paused');

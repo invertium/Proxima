@@ -180,7 +180,7 @@ const drawHud = (s: Snapshot): void => {
     bar('SHIELD', p.shield, p.maxShield, '#38bdf8'),
     bar('BEAM', p.beamCharge, 1, '#f59e0b'),
     bar('WARP', p.warpCharge, 1, '#a78bfa'),
-    `<div class="row"><span>SPD</span><b>${Math.round(p.speed)}</b><span>TORP</span><b>${p.torpedoAmmo}</b><span>CR</span><b>${p.credits}</b></div>`,
+    `<div class="row"><span>SPD</span><b>${Math.round(p.speed)}</b><span>HDG</span><b>${Math.round(((p.heading * 180) / Math.PI + 360) % 360)}</b><span>TORP</span><b>${p.torpedoAmmo}</b><span>CR</span><b>${p.credits}</b></div>`,
     s.mode === 'skirmish' ? `<div class="obj">SKIRMISH — WAVE ${s.skirmishWave}</div>` : '',
     s.objective && s.mode === 'campaign'
       ? `<div class="obj">OBJECTIVE: ${s.objective.name} — ${(s.objective.range / 1000).toFixed(1)} km${s.objective.offered ? ' — press E to ACCEPT' : ''}</div>`

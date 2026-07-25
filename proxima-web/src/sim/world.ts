@@ -18,6 +18,7 @@ import {
   MAX_PER_SYSTEM,
   MAX_SHIELD,
   RAM_DAMAGE,
+  REVERSE_THROTTLE_MIN,
   SCAN_DURATION,
   SECTOR_SPAN,
   SPAWN_GRACE,
@@ -193,7 +194,7 @@ export const applyCommand = (world: World, cmd: Command): void => {
 
   switch (cmd.c) {
     case 'throttle':
-      world.intent.throttle = clamp(cmd.v, -1, 1);
+      world.intent.throttle = clamp(cmd.v, REVERSE_THROTTLE_MIN, 1);
       break;
     case 'turn':
       world.intent.turn = clamp(cmd.v, -1, 1);
@@ -833,6 +834,7 @@ export const snapshot = (world: World): Snapshot => {
       power: { ...p.power },
       beamCharge: p.beamCharge,
       torpedoAmmo: p.torpedoAmmo,
+      torpedoReload: p.torpedoReload,
       warpCharge: p.warpCharge,
       docked: p.docked,
       targetId: p.targetId,
@@ -857,6 +859,7 @@ export const snapshot = (world: World): Snapshot => {
         strafeSpeed: stats.strafeSpeed,
         turretDamage: stats.turretDamage,
         scanRange: stats.scanRange,
+        radarRange: stats.radarRange,
       },
     },
     contacts: world.enemies

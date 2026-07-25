@@ -8,63 +8,80 @@
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      /* The UA's [hidden] rule is display:none at the lowest specificity, so any class
+         that sets display (.grid, .contacts, .pwr) silently defeats it. Everything here
+         hides via the hidden attribute, so make it win. */
+      [hidden] { display: none !important; }
       body { margin: 0; background: #05070f; color: #dbe7ff; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-      .wrap { max-width: 560px; margin: 0 auto; padding: 12px 12px 32px; }
+      .wrap { max-width: 560px; margin: 0 auto; padding: 12px 12px 40px; }
 
       header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
       header h1 { margin: 0; font-size: 14px; letter-spacing: .28em; font-weight: 500; color: #7dd3fc; }
-      #status { font-size: 11px; color: #f87171; }
+      #status { font-size: 11px; color: #f87171; text-align: right; }
       #status.ok { color: #4ade80; }
+      #status.warn { color: #fbbf24; }
+
+      #notice { padding: 10px 12px; margin-bottom: 12px; background: #131a2b; border: 1px solid #33415c; border-left-width: 3px; border-radius: 6px; color: #a8bdd8; font-size: 12px; }
 
       #tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
-      #tabs button { padding: 9px 4px; font-size: 11px; letter-spacing: .05em; }
+      #tabs button { padding: 11px 4px; font-size: 11px; letter-spacing: .05em; }
       #tabs button.sel { background: #123252; border-color: #38bdf8; color: #bae6fd; }
 
-      #radar { width: 100%; aspect-ratio: 1; background: #060d18; border: 1px solid #1e3a5f; border-radius: 8px; margin-bottom: 12px; }
+      #radar { width: 100%; aspect-ratio: 1; background: #060d18; border: 1px solid #1e3a5f; border-radius: 8px; margin-bottom: 12px; display: block; }
 
-      button { background: #0d1c2f; color: #cfe3ff; border: 1px solid #1e3a5f; border-radius: 6px; padding: 12px 8px; font: inherit; font-size: 12px; cursor: pointer; }
-      button:active { background: #16304d; }
-      button:disabled { opacity: .35; cursor: default; }
+      button { background: #0d1c2f; color: #cfe3ff; border: 1px solid #1e3a5f; border-radius: 6px; padding: 13px 8px; font: inherit; font-size: 12px; cursor: pointer; text-align: center; }
+      button:active, button.pressed { background: #1b3a5c; border-color: #38bdf8; }
+      button:disabled { opacity: .32; cursor: default; }
+      button.alert { border-color: #fbbf24; background: #2a2110; color: #fde68a; }
+      button.fire { padding: 15px 8px; }
+      button.wide { width: 100%; margin-bottom: 8px; }
+
+      /* Held controls must never be claimed by the browser's own scroll gesture. */
+      button.hold { touch-action: none; user-select: none; }
 
       .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
       .grid.two { grid-template-columns: repeat(2, 1fr); }
       .grid:has(> :nth-child(3):last-child) { grid-template-columns: repeat(3, 1fr); }
 
-      dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 12px 0 0; }
+      .lever { display: grid; grid-template-columns: 74px 1fr 44px; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .lever label { font-size: 11px; color: #7d9dc4; }
+      .lever b { text-align: right; }
+      input[type=range] { width: 100%; touch-action: none; accent-color: #38bdf8; height: 30px; }
+
+      dl, .dl-row { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 12px 0 0; }
       dt { color: #7d9dc4; font-size: 11px; }
       dd { margin: 0; text-align: right; }
 
       h3 { margin: 16px 0 6px; font-size: 11px; letter-spacing: .1em; color: #7d9dc4; font-weight: 500; }
       .muted { color: #56708f; font-size: 11px; }
+      .bad { color: #f87171; }
+      .ok { color: #4ade80; }
 
       .contacts { display: grid; gap: 6px; margin-bottom: 10px; }
       .contact { display: grid; text-align: left; gap: 1px; }
       .contact.sel { border-color: #fbbf24; background: #2a2110; }
-      .contact b { color: #fca5a5; }
+      .contact b { color: #cfe3ff; }
       .contact span { font-size: 11px; color: #7d9dc4; }
       .contact em { font-size: 10px; font-style: normal; color: #94a3b8; letter-spacing: .06em; }
       .contact em.ok { color: #4ade80; }
 
       .pwr { display: grid; grid-template-columns: 78px 1fr 32px; align-items: center; gap: 8px; margin-bottom: 6px; }
       .pwr label { font-size: 11px; color: #7d9dc4; }
-      .pwr input { width: 100%; }
       .pwr b { text-align: right; }
 
-      .comms p { margin: 0 0 6px; padding: 6px 9px; background: #0a1524; border-left: 2px solid #38bdf8; border-radius: 0 5px 5px 0; }
-      .comms b { color: #38bdf8; margin-right: 6px; }
-
-      button.alert { border-color: #fbbf24; background: #2a2110; color: #fde68a; }
-      .bad { color: #f87171; }
-      .ok { color: #4ade80; }
-      dd.bad, dt.bad { color: #f87171; }
-
       .chips { display: flex; gap: 6px; margin-bottom: 8px; }
-      .chip { flex: 1; padding: 5px 0; text-align: center; font-size: 10px; letter-spacing: .06em; border: 1px solid #1e3a5f; border-radius: 5px; }
+      .chip { flex: 1; padding: 6px 0; text-align: center; font-size: 10px; letter-spacing: .06em; border: 1px solid #1e3a5f; border-radius: 5px; }
       .chip.ok { color: #4ade80; border-color: #14532d; }
       .chip.bad { color: #f87171; border-color: #7f1d1d; background: #1c0f12; }
 
       .bar { height: 8px; background: #10203a; border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
       .bar i { display: block; height: 100%; background: #38bdf8; transition: width .1s linear; }
+
+      .comms p { margin: 0 0 6px; padding: 6px 9px; background: #0a1524; border-left: 2px solid #38bdf8; border-radius: 0 5px 5px 0; }
+      .comms b { color: #38bdf8; }
+
+      .toast { position: sticky; bottom: 8px; margin-top: 10px; padding: 9px 12px; background: #14304d; border: 1px solid #38bdf8; border-radius: 6px; font-size: 12px; }
+      .toast.bad { background: #3b0d12; border-color: #ff3b30; color: #fecaca; }
     </style>
   </head>
   <body>
@@ -73,6 +90,7 @@
         <h1>PROXIMA</h1>
         <div id="status">WAITING FOR HOST…</div>
       </header>
+      <div id="notice" hidden></div>
       <div id="tabs">
         <button data-station="helm">HELM</button>
         <button data-station="weapons">WEAPONS</button>
