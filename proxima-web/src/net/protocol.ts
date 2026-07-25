@@ -5,13 +5,16 @@
 // state update look like — the protocol drift the C++/JSON/embedded-HTML split
 // invited can't happen here.
 
-import type { Command, SimEvent, Snapshot } from '../sim/types';
+import type { SaveGame } from '../sim/save';
+import type { Command, Difficulty, GameMode, PlayerShipType, SimEvent, Snapshot } from '../sim/types';
 
 export const PROTOCOL_VERSION = 1;
 
 /** Host -> sim worker, and host -> crew stations. */
 export type ServerMessage =
   | { m: 'state'; snapshot: Snapshot; events: SimEvent[] }
+  /** Emitted when campaign progress changes, for the host to persist. */
+  | { m: 'save'; save: SaveGame }
   | { m: 'hello'; version: number; station: string }
   | { m: 'error'; reason: string };
 
@@ -22,7 +25,16 @@ export type ClientMessage =
   | { m: 'start'; seed: number; difficulty: string };
 
 /** Sim worker control messages. */
+export interface BootOptions {
+  seed: number;
+  difficulty: Difficulty;
+  shipType: PlayerShipType;
+  mode: GameMode;
+  /** Resume from this save instead of starting fresh. */
+  save?: SaveGame | null;
+}
+
 export type WorkerMessage =
-  | { m: 'boot'; seed: number }
+  | { m: 'boot'; options: BootOptions }
   | { m: 'cmd'; cmd: Command }
   | { m: 'pause'; paused: boolean };

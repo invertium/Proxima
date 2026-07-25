@@ -42,6 +42,9 @@ export interface UpgradeDef {
 
 export type GamePhase = 'playing' | 'victory' | 'defeat';
 
+/** Campaign runs the story; skirmish is endless waves for practice. */
+export type GameMode = 'campaign' | 'skirmish';
+
 export type Difficulty = 'ensign' | 'captain' | 'admiral';
 
 export type PlayerShipType = 'interceptor' | 'cruiser' | 'corvette' | 'gunboat';
@@ -268,6 +271,11 @@ export interface World {
   time: number;
   phase: GamePhase;
   difficulty: Difficulty;
+  mode: GameMode;
+  /** Skirmish only: waves cleared so far. */
+  skirmishWave: number;
+  /** Skirmish only: seconds until the next wave arrives. */
+  waveTimer: number;
   seed: number;
   /** The world's only randomness. Seeded, so damage rolls and fleet layouts replay. */
   rng: Rng;
@@ -320,6 +328,8 @@ export interface Snapshot {
   tick: number;
   time: number;
   phase: GamePhase;
+  mode: GameMode;
+  skirmishWave: number;
   player: {
     pos: Vec3;
     heading: number;

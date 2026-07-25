@@ -58,6 +58,9 @@ export const SALVAGE_CREDITS = 60;
 // ── Contracts (Core/MissionSubsystem.h) ─────────────────────────────────────────
 
 export const CONTRACT_VISIT_RANGE = 9000;
+
+/** Skirmish: gap between waves once the arena is clear. */
+export const WAVE_INTERVAL = 12;
 export const PIRATE_CALLSIGNS = ['KRAIT', 'DUSKRUNNER', 'RED HARROW', 'VULTURE', 'IRONJAW'];
 
 // ── Damage control (Components/DamageControlComponent.h) ────────────────────────

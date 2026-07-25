@@ -29,6 +29,27 @@
       #keys { position: fixed; bottom: 16px; right: 16px; text-align: right; color: #56708f; font-size: 11px; }
       #boot { position: fixed; inset: 0; display: grid; place-content: center; gap: 8px; text-align: center; background: #05070f; z-index: 10; }
       #boot h1 { margin: 0; font-size: 28px; letter-spacing: .3em; font-weight: 500; color: #7dd3fc; }
+
+      #menu { position: fixed; inset: 0; display: grid; place-content: center; background: rgba(3, 6, 14, .93); z-index: 20; }
+      #menu[hidden] { display: none; }
+      #menu .panel { display: grid; gap: 10px; min-width: 340px; max-width: 92vw; padding: 28px 32px; background: #070e1c; border: 1px solid #1e3a5f; border-radius: 12px; text-align: center; }
+      #menu .panel.wide { min-width: 520px; }
+      #menu h1 { margin: 0; font-size: 30px; letter-spacing: .32em; font-weight: 500; color: #7dd3fc; }
+      #menu h1.win { color: #4ade80; }
+      #menu h1.lose { color: #f87171; }
+      #menu h2 { margin: 0 0 4px; font-size: 15px; letter-spacing: .22em; font-weight: 500; color: #7dd3fc; }
+      #menu h3 { margin: 10px 0 2px; font-size: 10px; letter-spacing: .16em; color: #7d9dc4; font-weight: 500; text-align: left; }
+      #menu .sub { margin: 0 0 8px; color: #7d9dc4; font-size: 12px; }
+      #menu .hint { margin: 6px 0 0; color: #56708f; font-size: 11px; }
+      #menu code { color: #7dd3fc; }
+      #menu button { display: grid; gap: 2px; padding: 11px 14px; background: #0d1c2f; color: #cfe3ff; border: 1px solid #1e3a5f; border-radius: 7px; font: inherit; font-size: 12px; cursor: pointer; text-align: center; }
+      #menu button:hover { background: #142942; }
+      #menu button.primary { background: #14425f; border-color: #38bdf8; color: #e0f2fe; }
+      #menu button.sel { border-color: #38bdf8; background: #123252; }
+      #menu .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      #menu .choices button { text-align: left; }
+      #menu .choices b { color: #bae6fd; font-weight: 600; }
+      #menu .choices span { color: #7d9dc4; font-size: 10px; line-height: 1.35; }
     </style>
   </head>
   <body>
@@ -36,8 +57,9 @@
     <div id="hud"></div>
     <div id="comms"></div>
     <div id="keys">
-      W/S throttle · A/D steer · TAB target · SPACE beam · F torpedo · G dock · J warp
+      W/S throttle · A/D steer · TAB target · SPACE beam · F torpedo · G dock · J warp · E accept · R weld · ESC menu
     </div>
+    <div id="menu" hidden></div>
     <div id="boot">
       <h1>PROXIMA</h1>
       <p>spinning up the sector…</p>

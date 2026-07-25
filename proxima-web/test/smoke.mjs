@@ -36,6 +36,11 @@ await pilot.goto(BASE, { waitUntil: 'networkidle' });
 // The splash only clears once every ship model has loaded.
 await pilot.waitForSelector('#boot', { state: 'detached', timeout: 30000 });
 
+// Front end: new game -> difficulty/hull -> launch.
+await pilot.click('button[data-action="newgame"]');
+await pilot.click('button[data-action="difficulty:captain"]');
+await pilot.click('button[data-action="launch"]');
+
 // Wait for the worker to deliver real state, not just for the DOM to exist.
 await pilot.waitForFunction(() => document.querySelector('#hud')?.textContent?.includes('HULL'), null, {
   timeout: 15000,

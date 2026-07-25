@@ -40,6 +40,8 @@ export class SectorView {
   private readonly renderer: WebGLRenderer;
   private readonly fx: CombatFx;
   private readonly contacts = new Map<number, Object3D>();
+  /** Static sector bodies, tracked so a new game can tear them down. */
+  private readonly bodies: Object3D[] = [];
   private playerMesh: Object3D | null = null;
   private playerModel = '';
 
@@ -78,6 +80,28 @@ export class SectorView {
     this.fx.ingest(events);
   }
 
+  /**
+   * Clears everything the previous run built, so starting a new game doesn't leave
+   * the old sector's hostiles and bodies floating in the new one.
+   */
+  reset(): void {
+    for (const obj of this.contacts.values()) this.scene.remove(obj);
+    this.contacts.clear();
+
+    if (this.playerMesh) {
+      this.scene.remove(this.playerMesh);
+      this.playerMesh = null;
+      this.playerModel = '';
+    }
+
+    for (const body of this.bodies) this.scene.remove(body);
+    this.bodies.length = 0;
+
+    this.primed = false;
+    this.camPos.set(0, 0, 0);
+    this.camLook.set(0, 0, 0);
+  }
+
   async load(): Promise<void> {
     await preloadShipModels();
   }
@@ -107,6 +131,7 @@ export class SectorView {
       const body = new Mesh(geo, mat);
       body.position.set(l.pos.x, l.pos.y, l.pos.z);
       this.scene.add(body);
+      this.bodies.push(body);
 
       if (isSun) {
         // A cheap corona: one oversized additive shell, no post-processing pass.

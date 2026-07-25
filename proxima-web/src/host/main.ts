@@ -3,13 +3,17 @@
 
 import { SectorView } from '../render/scene';
 import { RelayHost } from '../net/transport';
+import { Menu, type NewGameChoice } from './menu';
+import { clearCampaign, loadCampaign, saveCampaign } from './storage';
 import type { ServerMessage, WorkerMessage } from '../net/protocol';
+import type { SaveGame } from '../sim/save';
 import type { Command, Snapshot } from '../sim/types';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const hud = document.getElementById('hud') as HTMLDivElement;
 const commsEl = document.getElementById('comms') as HTMLDivElement;
 const bootEl = document.getElementById('boot') as HTMLDivElement;
+const menuEl = document.getElementById('menu') as HTMLDivElement;
 
 const view = new SectorView(canvas);
 const worker = new Worker(new URL('./sim.worker.ts', import.meta.url), { type: 'module' });
@@ -20,12 +24,51 @@ let snap: Snapshot | null = null;
 const send = (msg: WorkerMessage): void => worker.postMessage(msg);
 const cmd = (c: Command): void => send({ m: 'cmd', cmd: c });
 
+let latestSave: SaveGame | null = null;
+
+const menu = new Menu(
+  menuEl,
+  (choice: NewGameChoice) => startGame(choice),
+  () => send({ m: 'pause', paused: false }),
+);
+
 worker.onmessage = (ev: MessageEvent<ServerMessage>) => {
   const msg = ev.data;
+
+  if (msg.m === 'save') {
+    latestSave = msg.save;
+    void saveCampaign(msg.save);
+    return;
+  }
   if (msg.m !== 'state') return;
+
   snap = msg.snapshot;
   view.ingest(msg.events);
   crew.broadcast(msg);
+
+  // The sim owns the outcome; the menu just reflects it.
+  if (msg.snapshot.phase !== 'playing') {
+    menu.setSave(latestSave);
+    menu.showOutcome(msg.snapshot.phase === 'victory' ? 'victory' : 'defeat');
+    // A finished campaign shouldn't resume into a dead ship on the next launch.
+    if (msg.snapshot.phase === 'victory') void clearCampaign();
+  }
+};
+
+const startGame = (choice: NewGameChoice): void => {
+  view.reset();
+  snap = null;
+  send({
+    m: 'boot',
+    options: {
+      seed: choice.save?.seed ?? Math.floor(Math.random() * 1e9),
+      difficulty: choice.difficulty,
+      shipType: choice.shipType,
+      mode: choice.mode,
+      save: choice.save ?? null,
+    },
+  });
+  send({ m: 'pause', paused: false });
 };
 
 // Crew stations are untrusted: they may only submit commands, which the sim validates
@@ -49,9 +92,15 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') cmd({ c: 'fireTorpedo' });
   if (e.code === 'KeyG') cmd({ c: 'dock' });
   if (e.code === 'KeyJ') cmd({ c: 'warp' });
+  if (e.code === 'KeyE') cmd({ c: 'acceptObjective' });
+  if (e.code === 'KeyR') cmd({ c: 'weld' });
   if (e.code === 'Tab') {
     e.preventDefault();
     cycleTarget();
+  }
+  if (e.code === 'Escape' && snap) {
+    menu.togglePause();
+    send({ m: 'pause', paused: menu.isOpen });
   }
 });
 
@@ -59,7 +108,10 @@ window.addEventListener('keyup', (e) => held.delete(e.code));
 window.addEventListener('blur', () => held.clear());
 
 // A backgrounded tab gets throttled to ~1 Hz; pause rather than let the sim lurch.
-document.addEventListener('visibilitychange', () => send({ m: 'pause', paused: document.hidden }));
+// An open menu keeps it paused regardless of what the tab is doing.
+document.addEventListener('visibilitychange', () =>
+  send({ m: 'pause', paused: document.hidden || menu.isOpen }),
+);
 
 const cycleTarget = (): void => {
   if (!snap || snap.contacts.length === 0) return;
@@ -103,12 +155,18 @@ const drawHud = (s: Snapshot): void => {
     bar('BEAM', p.beamCharge, 1, '#f59e0b'),
     bar('WARP', p.warpCharge, 1, '#a78bfa'),
     `<div class="row"><span>SPD</span><b>${Math.round(p.speed)}</b><span>TORP</span><b>${p.torpedoAmmo}</b><span>CR</span><b>${p.credits}</b></div>`,
-    s.objective ? `<div class="obj">OBJECTIVE: ${s.objective.name} — ${(s.objective.range / 1000).toFixed(1)} km</div>` : '',
+    s.mode === 'skirmish' ? `<div class="obj">SKIRMISH — WAVE ${s.skirmishWave}</div>` : '',
+    s.objective && s.mode === 'campaign'
+      ? `<div class="obj">OBJECTIVE: ${s.objective.name} — ${(s.objective.range / 1000).toFixed(1)} km${s.objective.offered ? ' — press E to ACCEPT' : ''}</div>`
+      : '',
+    s.event ? `<div class="obj">EVENT: ${s.event.kind.toUpperCase()} — ${Math.ceil(s.event.timeLeft)}s</div>` : '',
+    s.contract ? `<div class="tgt">${s.contract.text}</div>` : '',
+    p.repairTarget ? `<div class="tgt">DAMAGE: ${p.repairTarget.toUpperCase()} offline — R to weld (${p.repairWelds}/3)</div>` : '',
     target
       ? `<div class="tgt ${target.inBeamArc ? 'ok' : ''}">TARGET: ${target.name} — hull ${Math.round(target.hull)} — ${(target.range / 1000).toFixed(1)} km ${target.inBeamArc ? '[IN ARC]' : '[NO SOLUTION]'}</div>`
       : '<div class="tgt">NO TARGET — press TAB</div>',
     p.docked ? '<div class="obj">DOCKED — repaired and resupplied</div>' : '',
-    s.phase !== 'playing' ? `<div class="end">${s.phase === 'victory' ? 'THE VEIL IS SECURE' : 'SHIP LOST'}</div>` : '',
+
   ].join('');
 
   commsEl.innerHTML = s.comms
@@ -128,7 +186,7 @@ const frame = (): void => {
   const dt = Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
 
-  pumpInput();
+  if (!menu.isOpen) pumpInput();
   if (snap) {
     view.update(snap, dt);
     drawHud(snap);
@@ -138,7 +196,8 @@ const frame = (): void => {
 const boot = async (): Promise<void> => {
   try {
     await view.load();
-  } catch (err) {
+  } catch (err0) {
+    const err = err0;
     // Asset failures are the most likely thing to go wrong on a fresh checkout
     // (forgot `npm run assets`), so say so on the page instead of hanging on the
     // splash — that silence is expensive to debug from a screenshot.
@@ -146,7 +205,12 @@ const boot = async (): Promise<void> => {
     throw err;
   }
   bootEl.remove();
-  send({ m: 'boot', seed: Math.floor(Math.random() * 1e9) });
+
+  // Offer CONTINUE only if there is something to continue.
+  latestSave = await loadCampaign();
+  menu.setSave(latestSave);
+  menu.showMain();
+
   frame();
 };
 

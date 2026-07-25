@@ -32,6 +32,7 @@ import {
   TRIGGER_RADIUS,
   TURRET_INTERVAL,
   TURRET_RANGE,
+  WAVE_INTERVAL,
   WARP_CHARGE_RATE,
   WARP_DISTANCE,
   WELDS_PER_SYSTEM_REPAIR,
@@ -50,6 +51,8 @@ import type {
   DamageSystem,
   Difficulty,
   EnemyShip,
+  EnemyType,
+  GameMode,
   Landmark,
   PlayerShip,
   PlayerShipType,
@@ -68,7 +71,13 @@ const sectorPos = (mapX: number, mapY: number) =>
   vec((mapX - 0.5) * SECTOR_SPAN, 0, (mapY - 0.5) * SECTOR_SPAN);
 
 export const createWorld = (
-  opts: { seed?: number; difficulty?: Difficulty; shipType?: PlayerShipType; missionIndex?: number } = {},
+  opts: {
+    seed?: number;
+    difficulty?: Difficulty;
+    shipType?: PlayerShipType;
+    missionIndex?: number;
+    mode?: GameMode;
+  } = {},
 ): World => {
   const seed = opts.seed ?? 1;
   const def = shipDef(opts.shipType ?? 'interceptor');
@@ -134,6 +143,9 @@ export const createWorld = (
     time: 0,
     phase: 'playing',
     difficulty: opts.difficulty ?? 'captain',
+    mode: opts.mode ?? 'campaign',
+    skirmishWave: 0,
+    waveTimer: 0,
     seed,
     rng: makeRng(seed),
     intent: { throttle: 0, turn: 0, strafe: 0 },
@@ -437,7 +449,8 @@ export const step = (world: World, dt: number): void => {
   world.pending.length = 0;
 
   stepPlayer(world, dt);
-  stepDirector(world, dt);
+  if (world.mode === 'skirmish') stepSkirmish(world, dt);
+  else stepDirector(world, dt);
 
   // Any hull the player loses this tick — from any source — can knock out a system.
   // Measuring the delta here catches beams, torpedoes and rams with one hook.
@@ -452,9 +465,12 @@ export const step = (world: World, dt: number): void => {
   rollSystemDamage(world, hullBefore - world.player.hull);
   resolveEncounter(world);
 
-  const comms = (sender: string, text: string) => pushComms(world, sender, text);
-  stepEvents(world, dt, comms);
-  stepContracts(world, comms);
+  // Sector life is campaign-only: skirmish is a pure practice arena.
+  if (world.mode === 'campaign') {
+    const comms = (sender: string, text: string) => pushComms(world, sender, text);
+    stepEvents(world, dt, comms);
+    stepContracts(world, comms);
+  }
 
   if (world.player.hull <= 0) {
     world.player.alive = false;
@@ -665,7 +681,69 @@ const stepCollisions = (world: World): void => {
   }
 };
 
+/**
+ * Skirmish: endless waves that grow with the count. No campaign, no sector events —
+ * a practice arena for the crew to drill in.
+ */
+const stepSkirmish = (world: World, dt: number): void => {
+  if (world.enemies.some((e) => e.alive)) return;
+
+  world.waveTimer -= dt;
+  if (world.waveTimer > 0) return;
+
+  world.enemies.length = 0;
+  world.skirmishWave += 1;
+  world.waveTimer = WAVE_INTERVAL;
+
+  // Wave 1 is a pair of scouts; every second wave adds a gunship, every third a cruiser.
+  const types: EnemyType[] = ['scout', 'scout'];
+  for (let i = 0; i < Math.floor(world.skirmishWave / 2); i++) types.push('gunship');
+  for (let i = 0; i < Math.floor(world.skirmishWave / 3); i++) types.push('cruiser');
+
+  const scale = DIFFICULTY_SCALE[world.difficulty];
+  world.fleetIds = [];
+
+  types.forEach((type, i) => {
+    const def = ENEMIES[type];
+    const angle = (i / types.length) * Math.PI * 2;
+    const id = world.nextId++;
+    world.fleetIds.push(id);
+    world.enemies.push({
+      kind: 'enemy',
+      id,
+      enemyType: type,
+      pos: vec(world.player.pos.x + Math.cos(angle) * 9000, 0, world.player.pos.z + Math.sin(angle) * 9000),
+      heading: angle + Math.PI,
+      hull: def.maxHull * scale.hull,
+      maxHull: def.maxHull * scale.hull,
+      shield: def.maxShield,
+      maxShield: def.maxShield,
+      alive: true,
+      fireCooldown: def.fireInterval,
+      graceTimer: SPAWN_GRACE * 0.3,
+      rewarded: false,
+      aiState: 'approach',
+      strafeSide: i % 2 === 0 ? 1 : -1,
+      volleyRemaining: 0,
+      volleyTimer: 0,
+    });
+  });
+
+  pushComms(world, 'TACTICAL', `Wave ${world.skirmishWave} inbound — ${types.length} contacts.`);
+};
+
 const resolveEncounter = (world: World): void => {
+  // Skirmish banks its own kills; it has no campaign to advance.
+  if (world.mode === 'skirmish') {
+    for (const e of world.enemies) {
+      if (e.alive || e.rewarded) continue;
+      e.rewarded = true;
+      const def = ENEMIES[e.enemyType];
+      world.player.credits += def.rewardCredits;
+      world.player.xp += def.rewardXp;
+    }
+    return;
+  }
   if (!world.encounterLive) return;
 
   // Bank the bounty for anything that has died and not yet paid out. Keyed off the
@@ -715,6 +793,8 @@ export const snapshot = (world: World): Snapshot => {
     tick: world.tick,
     time: world.time,
     phase: world.phase,
+    mode: world.mode,
+    skirmishWave: world.skirmishWave,
     player: {
       pos: { ...p.pos },
       heading: p.heading,

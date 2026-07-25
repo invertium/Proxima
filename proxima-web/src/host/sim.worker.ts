@@ -4,12 +4,16 @@
 // frame — the two only ever exchange structured-cloneable snapshots.
 
 import { TICK_DT } from '../sim/data';
+import { applySave, toSave } from '../sim/save';
 import { createWorld, queueCommand, snapshot, step } from '../sim/world';
 import type { ServerMessage, WorkerMessage } from '../net/protocol';
 import type { World } from '../sim/types';
 
 let world: World | null = null;
 let paused = false;
+/** Last save posted, so progress is only persisted when it actually changes. */
+let lastSave = '';
+let sinceSaveCheck = 0;
 let accumulator = 0;
 let last = performance.now();
 
@@ -19,7 +23,15 @@ self.onmessage = (ev: MessageEvent<WorkerMessage>) => {
   const msg = ev.data;
 
   if (msg.m === 'boot') {
-    world = createWorld({ seed: msg.seed });
+    const o = msg.options;
+    world = createWorld({
+      seed: o.save?.seed ?? o.seed,
+      difficulty: o.save?.difficulty ?? o.difficulty,
+      shipType: o.save?.shipType ?? o.shipType,
+      mode: o.mode,
+    });
+    if (o.save) applySave(world, o.save);
+    lastSave = '';
     last = performance.now();
     accumulator = 0;
   } else if (msg.m === 'cmd' && world) {
@@ -53,6 +65,19 @@ const loop = (): void => {
       // Events are per-tick and must not be coalesced away, so each stepped tick
       // ships its own payload.
       post({ m: 'state', snapshot: snapshot(world), events: [...world.events] });
+    }
+
+    // Campaign progress is checked twice a second rather than every tick: it changes
+    // rarely, and serialising it at 60Hz would be pure waste.
+    sinceSaveCheck += elapsed;
+    if (world.mode === 'campaign' && sinceSaveCheck > 0.5) {
+      sinceSaveCheck = 0;
+      const save = toSave(world);
+      const encoded = JSON.stringify(save);
+      if (encoded !== lastSave) {
+        lastSave = encoded;
+        post({ m: 'save', save });
+      }
     }
   }
 
