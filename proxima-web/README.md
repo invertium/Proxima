@@ -1,6 +1,6 @@
 # proxima-web — browser-native Proxima (Three.js)
 
-A working vertical slice of [issue #16](https://github.com/invertium/Proxima/issues/16):
+A feature-complete port of [issue #16](https://github.com/invertium/Proxima/issues/16):
 Proxima as a browser-first game. One player opens the page and hosts the authoritative
 simulation; the crew joins from phones on the LAN and runs Helm / Weapons / Engineering
 / Science.
@@ -22,16 +22,28 @@ rides on the dev server, so there is no second process to start.
 
 ## Status
 
+The port is feature-complete against the Unreal build. See [PORT_PLAN.md](PORT_PLAN.md)
+for how it was sequenced.
+
 | | |
 |---|---|
 | Ship movement, power, shields, beams, torpedoes, ramming | ported, tested |
-| Open sector, proximity mission triggers, seamless clears | ported, tested |
-| Docking, repair/resupply, drydock hull purchase | ported, tested |
-| Warp | ported, tested |
+| Damage control — 3 systems, weld repair, hull alarm | ported, tested |
+| Science scans (and the cruiser armour they break) | ported, tested |
+| Drydock — 9 upgrade paths, hull purchases, rank/XP gates | ported, tested |
+| Auto-turret, manoeuvring thrusters | ported, tested |
+| Hostile AI — 4 states, strafe runs, torpedo volleys, archetypes | ported, tested |
+| Open sector, objective hail/accept, seamless clears | ported, tested |
+| Sector events — distress, interdiction, salvage | ported, tested |
+| Contracts — bounty, patrol, delivery | ported, tested |
+| Gravity wells | ported, tested |
+| Save/load with versioned migration | ported, tested |
+| Difficulty, skirmish waves, defeat/retry | ported, tested |
+| Menus, pause, outcome screens | working |
 | Four crew stations over the LAN | working |
-| Three.js sector: hulls, planets, sun, starfield, beams, blasts | working |
-| Enemy AI | simplified — standoff ring + fire interval; no strafing passes or torpedo volleys yet |
-| Save/load, contracts, upgrades, science scans, damage control | **not ported** |
+| Three.js sector, camera trauma, torpedoes, FX | working |
+| Audio | bus is real, **cues are synthesised stand-ins** (the Unreal `.uasset` samples aren't readable from the browser) |
+| Art | **placeholder** TRELLIS hulls; procedural models via img2threejs come later |
 | WebRTC peer-to-peer | **not started** — the relay is a plain WebSocket pipe today |
 
 All gameplay numbers are ported verbatim from the C++ (`ShipCatalogue.h`,
@@ -46,12 +58,15 @@ src/sim/        authoritative simulation — no Three.js, no DOM, no timers
   world.ts      createWorld / step / snapshot
   combat.ts     damage model, firing arcs
   ai.ts         hostile behaviour
+  save.ts       pure serialisation; the storage adapter lives in src/host
+  sector.ts     events, contracts, gravity
+  stats.ts      base hull + upgrades - damage -> the numbers everything reads
 src/render/     Three.js. Reads snapshots, owns no game state
 src/net/        protocol + transport (the seam WebRTC lands on)
-src/host/       pilot app + the sim Web Worker
+src/host/       pilot app, front-end menus, IndexedDB save, the sim Web Worker
 src/stations/   crew console (one page, four stations)
 server/relay.ts dumb pipe: host <-> stations. No game state, no validation
-test/           vitest (headless sim) + smoke.mjs (real browser)
+test/           vitest (unit + full-campaign replay), e2e.mjs, budget.mjs
 ```
 
 The dependency rule that makes the rest work: **`src/sim` imports nothing from
@@ -60,15 +75,38 @@ a test, and in CI without a GPU.
 
 ## Verification
 
+Three layers, cheapest first.
+
 ```bash
-npm test          # 13 headless sim tests, ~1s — determinism, damage, director, docking, warp
-npm run typecheck
-node test/smoke.mjs   # real browser: boots, flies, links a crew station, drives it, screenshots
+npm run verify    # typecheck + unit + build + browser E2E
+npm test          # 78 headless sim tests, ~1s
+npm run e2e       # 8 browser user journeys (needs `npm run dev` running)
+npm run budget    # bundle size + frame time under load (needs a built `npm run relay`)
 ```
 
-`smoke.mjs` asserts the whole crew loop: it clicks STOP and FULL AHEAD on a *station*
-page and waits for the *pilot* HUD to reflect it. Screenshots land in `shots/`. It uses
-the system Chromium (`CHROME=` to override) so nothing has to be downloaded.
+**Unit + replay (78 tests, ~1 s).** Per-system rules, plus a full-campaign replay: a
+scripted crew flies start to victory headlessly. That catches what unit tests can't — a
+mission that can't be reached, an encounter that never clears, a comms beat that never
+fires, or a balance change that makes the campaign unwinnable.
+
+The replay's win assertion is a *threshold* (75% of seeds), not "always". The scripted
+crew trades rather than kiting, so an ambush mission can legitimately kill it — that's a
+statement about the bot, not the game. The value is the cliff: real breakage drops it to
+near zero.
+
+**Browser E2E (8 journeys).** Real pages driven through Playwright, each asserting
+host-side state rather than pixels: new game → hail → accept → engage; a station flying
+the ship the pilot renders; an Engineering preset changing top speed; a Science scan
+resolving a contact that Weapons then reads; four stations linked at once; pause;
+skirmish; and progress surviving a reload. Uses system Chromium (`CHROME=` to override),
+so nothing is downloaded.
+
+**Budgets.** Host 168 KB gzipped, station 16 KB, median frame time under a full skirmish
+fight ~30 ms on software rendering. All three fail the build if they regress.
+
+Deep paths needing a long flight — docking, repair, the drydock purchase loop — are
+covered in the headless replay rather than E2E, because clicking a ship across 200 000
+units to reach them is a worse test than simulating it.
 
 ## Asset pipeline
 
@@ -107,8 +145,8 @@ material graphs rebuilt over MCP, and 79 MB of `.uasset` for the same four ships
 - One `Points` cloud for 4000 stars; ships clone shared prototypes so materials batch.
 - Pooled beams and blasts; nothing allocates per shot.
 - Logarithmic depth buffer, because the sector spans ~220 000 units and a ship is ~1000.
-- Bundle: **157 KB gzipped** for the pilot (mostly Three.js), **2.3 KB** for a crew
-  station. Build is ~1 s.
+- Bundle: **168 KB gzipped** for the pilot (mostly Three.js), **16 KB** for a crew
+  station. Build is ~1 s. Both are budget-checked (`npm run budget`).
 - Still on WebGL. Materials are deliberately kept node-compatible (no raw GLSL), so
   moving to `WebGPURenderer` is a renderer swap rather than a shader rewrite.
 
@@ -150,7 +188,17 @@ cost-free renderer swap.
 
 ## Not done
 
-Honest list, beyond the status table: no save/load, no host migration when the host tab
-closes, no reconnect state resync beyond "next snapshot wins", no protocol versioning
-enforcement, no TURN/NAT traversal (LAN only), no audio, no accessibility pass on the
-station UIs, and the enemy AI is a simplification rather than a port.
+Honest list, beyond the status table:
+
+- **Art and audio are placeholders.** Hulls are the TRELLIS GLBs; audio cues are
+  synthesised. Real art comes from **img2threejs** (procedural Three.js models built in
+  code) in a later pass — no other content engine. `makeShip()` is the seam it lands on.
+- **No WebRTC.** The relay is a plain WebSocket pipe, so play is LAN-only: no TURN, no
+  NAT traversal, no peer-to-peer.
+- **No host migration.** If the host tab closes, the game ends.
+- **Reconnect is "next snapshot wins."** No state-resync protocol, no command
+  acknowledgement or replay.
+- **Protocol versioning is declared but not enforced** — `PROTOCOL_VERSION` exists and
+  nothing rejects a mismatch.
+- **No accessibility pass** on the station UIs.
+- **Session recorder / telemetry** (`sg.RecordSession`) is not ported.
