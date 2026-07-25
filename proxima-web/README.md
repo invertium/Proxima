@@ -22,8 +22,11 @@ rides on the dev server, so there is no second process to start.
 
 ## Status
 
-The port is feature-complete against the Unreal build. See [PORT_PLAN.md](PORT_PLAN.md)
-for how it was sequenced.
+**Playable as a bridge simulator.** An earlier revision of this file claimed
+feature-completeness; that was wrong — an audit against the C++ found roughly a third
+of the simulation and half the console controls missing, and the crew consoles could
+not be operated by a human at all. See [PORT_PLAN.md](PORT_PLAN.md) for the staged
+repair, and §Not done for what genuinely remains.
 
 | | |
 |---|---|
@@ -42,6 +45,12 @@ for how it was sequenced.
 | Menus, pause, outcome screens | working |
 | Four crew stations over the LAN | working |
 | Three.js sector, camera trauma, torpedoes, FX | working |
+| Red alert doctrine — shields charge at red, bleed at green | ported, tested |
+| Engineering weld minigame — 1.2s sweep, green band, rate limit | ported, tested |
+| Enemy callsigns (WASP-1, VIPER-2) | ported, tested |
+| Solid planets and sun | ported, tested |
+| Docked invulnerability; ram debounce and speed scaling | ported, tested |
+| Reactor power is linear — 0 power is a dead system | ported, tested |
 | Audio | bus is real, **cues are synthesised stand-ins** (the Unreal `.uasset` samples aren't readable from the browser) |
 | Art | **placeholder** TRELLIS hulls; procedural models via img2threejs come later |
 | WebRTC peer-to-peer | **not started** — the relay is a plain WebSocket pipe today |
@@ -188,7 +197,25 @@ cost-free renderer swap.
 
 ## Not done
 
-Honest list, beyond the status table:
+Honest list, beyond the status table. Stages 4b-6 of [PORT_PLAN.md](PORT_PLAN.md) are
+outstanding:
+
+- **Homing torpedoes.** They fly dead straight and cannot miss a stationary target or
+  track a turning one. The C++ homes at 75 deg/s with a 700 blast radius, which is what
+  makes an enemy volley dodgeable — a Helm skill this build doesn't have yet.
+- **NEW GAME / RESTART from a crew console, and a game-phase footer.** When the ship
+  dies, four crew phones go quiet and only the pilot can act.
+- **The flagship climax.** The final mission is structurally a fourth brawl; the C++
+  makes the flagship invulnerable until its AEGIS escorts die.
+- **Command rejection feedback.** A refused command is silent, so a crew can't tell a
+  bad shot from a broken link. The ack channel is designed but not built.
+- **~20 tunables still differ from the C++** (sector span, gravity constants, difficulty
+  multipliers, skirmish composition). The `CPP_REFERENCE`/`DIVERGENCES` table that would
+  make drift fail CI is not in yet.
+- **Settings menu** (volume/quality — `BridgeAudio.setVolume` is still orphaned),
+  controls overlay, screen wake-lock on stations, session telemetry, relay PIN.
+
+And beyond that:
 
 - **Art and audio are placeholders.** Hulls are the TRELLIS GLBs; audio cues are
   synthesised. Real art comes from **img2threejs** (procedural Three.js models built in
