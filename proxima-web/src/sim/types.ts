@@ -138,6 +138,8 @@ export interface Landmark {
   pos: Vec3;
   radius: number;
   color: number;
+  /** Which procedural surface the renderer paints on this body. */
+  surface: string;
   /** Only stations can be docked with. */
   dockable: boolean;
 }
@@ -160,6 +162,8 @@ export interface MissionDef {
   mapX: number;
   mapY: number;
   landmarkName: string;
+  /** Which procedural surface the renderer paints on this body. */
+  landmarkSurface: string;
   landmarkKind: LandmarkKind;
   landmarkColor: number;
   landmarkScale: number;
@@ -441,7 +445,15 @@ export interface Snapshot {
     /** Escort-shielded: damage does nothing until the escorts are dead. Says WHY. */
     shielded: boolean;
   }[];
-  landmarks: { id: string; name: string; kind: LandmarkKind; pos: Vec3; radius: number; color: number }[];
+  landmarks: {
+    id: string;
+    name: string;
+    kind: LandmarkKind;
+    pos: Vec3;
+    radius: number;
+    color: number;
+    surface: string;
+  }[];
   /** In-flight torpedoes, so the renderer can draw them and the crew can see them coming. */
   torpedoes: { id: number; pos: Vec3; heading: number; friendly: boolean }[];
   objective: { name: string; pos: Vec3; range: number; offered: boolean; live: boolean } | null;

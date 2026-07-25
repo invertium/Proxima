@@ -6,7 +6,6 @@
 // while a ship is ~1 000.
 
 import {
-  AdditiveBlending,
   AmbientLight,
   BufferGeometry,
   Color,
@@ -15,7 +14,6 @@ import {
   Fog,
   Mesh,
   MeshBasicMaterial,
-  MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
   Points,
@@ -26,6 +24,8 @@ import {
   WebGLRenderer,
 } from 'three';
 import { CombatFx } from './fx';
+import { PLANET_PALETTES, createBody, type Body } from './models/planet';
+import { createStarbase, type Starbase } from './models/starbase';
 import { makeShip, preloadShipModels } from './ships';
 import { ENEMIES, shipDef } from '../sim/data';
 import { makeRng } from '../sim/math';
@@ -65,6 +65,8 @@ export class SectorView {
   private readonly contacts = new Map<number, Object3D>();
   /** Static sector bodies, tracked so a new game can tear them down. */
   private readonly bodies: Object3D[] = [];
+  /** Bodies and stations that animate (axial spin, ring rotation). */
+  private readonly animated: (Body | Starbase)[] = [];
   private playerMesh: Object3D | null = null;
   private playerModel = '';
 
@@ -148,6 +150,7 @@ export class SectorView {
   reset(): void {
     this.buffer.length = 0;
     this.clockPrimed = false;
+    this.animated.length = 0;
     for (const obj of this.contacts.values()) this.scene.remove(obj);
     this.contacts.clear();
 
@@ -179,32 +182,31 @@ export class SectorView {
 
   /** Builds the static bodies once; they never move, so this runs on first snapshot. */
   private buildLandmarks(snap: Snapshot): void {
-    for (const l of snap.landmarks) {
-      const isSun = l.kind === 'sun';
-      const geo = new SphereGeometry(l.radius, isSun ? 48 : 32, isSun ? 32 : 24);
-      const mat = isSun
-        ? new MeshBasicMaterial({ color: l.color })
-        : new MeshStandardMaterial({
-            color: l.color,
-            roughness: 0.85,
-            metalness: 0.05,
-            emissive: new Color(l.color).multiplyScalar(0.08),
-          });
-
-      const body = new Mesh(geo, mat);
-      body.position.set(l.pos.x, l.pos.y, l.pos.z);
-      this.scene.add(body);
-      this.bodies.push(body);
-
-      if (isSun) {
-        // A cheap corona: one oversized additive shell, no post-processing pass.
-        const glow = new Mesh(
-          new SphereGeometry(l.radius * 1.5, 32, 24),
-          new MeshBasicMaterial({ color: l.color, transparent: true, opacity: 0.18, blending: AdditiveBlending }),
-        );
-        body.add(glow);
+    snap.landmarks.forEach((l, index) => {
+      // The starbase is a built object, not a body — it gets the procedural model.
+      if (l.kind === 'station') {
+        const station = createStarbase();
+        station.root.position.set(l.pos.x, l.pos.y, l.pos.z);
+        // The model is authored ~2 units across; scale it to the landmark's radius.
+        station.root.scale.setScalar(l.radius * 1.6);
+        this.scene.add(station.root);
+        this.bodies.push(station.root);
+        this.animated.push(station);
+        return;
       }
-    }
+
+      const body = createBody({
+        kind: l.kind,
+        radius: l.radius,
+        color: l.color,
+        palette: PLANET_PALETTES[l.surface],
+        seed: 1000 + index * 37,
+      });
+      body.root.position.set(l.pos.x, l.pos.y, l.pos.z);
+      this.scene.add(body.root);
+      this.bodies.push(body.root);
+      this.animated.push(body);
+    });
   }
 
   update(snap: Snapshot, dt: number): void {
@@ -219,6 +221,7 @@ export class SectorView {
     this.syncContacts(view);
     this.syncTorpedoes(view);
     this.updateCamera(view, dt);
+    for (const body of this.animated) body.update(dt);
     this.fx.update(dt);
     this.renderer.render(this.scene, this.camera);
   }

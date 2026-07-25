@@ -111,6 +111,7 @@ export const createWorld = (
     pos: sectorPos(m.mapX, m.mapY),
     radius: (m.landmarkKind === 'sun' ? 9000 : 4200) * m.landmarkScale,
     color: m.landmarkColor,
+    surface: m.landmarkSurface,
     dockable: false,
   }));
 
@@ -122,6 +123,7 @@ export const createWorld = (
     pos: vec(home.x + 9000, 0, home.z + 5000),
     radius: 900,
     color: 0x9fd8ff,
+    surface: 'station',
     dockable: true,
   });
 
@@ -1167,6 +1169,7 @@ export const snapshot = (world: World): Snapshot => {
       pos: { ...l.pos },
       radius: l.radius,
       color: l.color,
+      surface: l.surface,
     })),
     objective: objectiveLandmark
       ? {
