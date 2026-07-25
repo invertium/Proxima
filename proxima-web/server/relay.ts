@@ -18,6 +18,13 @@ export const attachRelay = (server: Server): WebSocketServer => {
   const stations = new Set<WebSocket>();
 
   /**
+   * The host mints a session PIN and hands it over on connect. The relay only ever
+   * compares strings — it still holds no game state, and it cannot tell you anything
+   * about the session beyond whether you knew the number.
+   */
+  let pin: string | null = null;
+
+  /**
    * The host needs to know whether anyone is actually listening, so it can decide
    * whether backgrounding its tab is safe. This is connection bookkeeping, not game
    * state — the relay still knows nothing about the simulation.
@@ -39,7 +46,15 @@ export const attachRelay = (server: Server): WebSocketServer => {
     wss.handleUpgrade(req, socket, head, (ws) => {
       const role = url.searchParams.get('role') === 'host' ? 'host' : 'station';
 
+      // 4003: application close code for "wrong PIN". The station shows an entry form
+      // rather than a dead end.
+      if (role === 'station' && pin !== null && url.searchParams.get('pin') !== pin) {
+        ws.close(4003, 'bad pin');
+        return;
+      }
+
       if (role === 'host') {
+        pin = url.searchParams.get('pin');
         // Tell the outgoing host it was replaced *before* closing it. Without this it
         // sees a plain close, reconnects, and evicts the new host in turn — two pilot
         // tabs then flap against each other forever.

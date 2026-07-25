@@ -30,15 +30,48 @@ export interface StationTransport {
   sendCommand(msg: ClientMessage & { m: 'cmd' }): number;
   /** True for ids this page minted, so acks broadcast to every station filter cleanly. */
   ownsId(id: number | undefined): boolean;
+  /** The relay refused our PIN. */
+  onRejected(handler: () => void): void;
   onMessage(handler: (msg: ServerMessage) => void): void;
   onStatus(handler: (connected: boolean) => void): void;
   close(): void;
 }
 
 /** The relay listens on the page's own host, so a phone hitting the LAN IP just works. */
-export const relayUrl = (role: 'host' | 'station'): string => {
+export const relayUrl = (role: 'host' | 'station', pin?: string | null): string => {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${location.host}/__relay?role=${role}`;
+  const query = pin ? `&pin=${encodeURIComponent(pin)}` : '';
+  return `${proto}//${location.host}/__relay?role=${role}${query}`;
+};
+
+/** Close code the relay uses to say "that PIN was wrong". */
+export const BAD_PIN = 4003;
+
+/**
+ * The host's session PIN, minted once per browser session. Kept in sessionStorage so a
+ * host reload rejoins its own session instead of locking out the crew.
+ */
+export const sessionPin = (): string => {
+  let pin = storedPin();
+  if (!pin) {
+    pin = String(Math.floor(1000 + Math.random() * 9000));
+    sessionStorage.setItem('proxima.pin', pin);
+  }
+  return pin;
+};
+
+/**
+ * The PIN this page should join with. A `?pin=` in the URL wins and is remembered, so
+ * a crew can be handed a join link (or a QR code) instead of typing four digits on a
+ * phone; otherwise whatever they typed last stands.
+ */
+export const storedPin = (): string | null => {
+  const fromUrl = new URLSearchParams(location.search).get('pin');
+  if (fromUrl) {
+    sessionStorage.setItem('proxima.pin', fromUrl);
+    return fromUrl;
+  }
+  return sessionStorage.getItem('proxima.pin');
 };
 
 /** Shared reconnect behaviour — a crew phone that sleeps must come back on its own. */
@@ -51,6 +84,7 @@ class Socket {
     private readonly url: string,
     private readonly onData: (data: unknown) => void,
     private readonly onStatusChange: (connected: boolean) => void = () => {},
+    private readonly onRejected: () => void = () => {},
   ) {
     this.connect();
   }
@@ -72,8 +106,15 @@ class Socket {
         // A malformed frame is the relay's problem, not the game's — drop it.
       }
     };
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       this.onStatusChange(false);
+      // A wrong PIN is not a transient failure; reconnecting in a loop would just
+      // hammer the relay and never succeed.
+      if (ev.code === BAD_PIN) {
+        this.closed = true;
+        this.onRejected();
+        return;
+      }
       if (this.closed) return;
       // Back off to a couple of seconds, so a host that's gone doesn't spin the phone's radio.
       this.retry = Math.min(this.retry + 1, 8);
@@ -103,7 +144,7 @@ export class RelayHost implements HostTransport {
   private evicted: () => void = () => {};
   private crew: (count: number) => void = () => {};
 
-  private readonly sock = new Socket(relayUrl('host'), (data) => {
+  private readonly sock = new Socket(relayUrl('host', sessionPin()), (data) => {
     // Two relay-level messages the host cares about, neither of which is game state.
     const msg = data as { m?: string; count?: number };
     if (msg.m === 'evicted') {
@@ -152,10 +193,12 @@ export class RelayStation implements StationTransport {
    */
   private readonly nonce = Math.floor(Math.random() * 1e6) * 1e6;
   private seq = 0;
+  private rejected: () => void = () => {};
   private readonly sock = new Socket(
-    relayUrl('station'),
+    relayUrl('station', storedPin()),
     (data) => this.handler(data as ServerMessage),
     (connected) => this.status(connected),
+    () => this.rejected(),
   );
 
   send(msg: ClientMessage): void {
@@ -178,6 +221,11 @@ export class RelayStation implements StationTransport {
 
   onStatus(handler: (connected: boolean) => void): void {
     this.status = handler;
+  }
+
+  /** The relay refused our PIN. The console should ask for one. */
+  onRejected(handler: () => void): void {
+    this.rejected = handler;
   }
 
   close(): void {

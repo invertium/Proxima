@@ -63,6 +63,7 @@ const openPilot = async (ctx) => {
   });
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('#boot', { state: 'detached', timeout: 30000 });
+  sessionPin = await page.evaluate(() => sessionStorage.getItem('proxima.pin'));
   return page;
 };
 
@@ -75,9 +76,18 @@ const startNewGame = async (page, difficulty = 'captain') => {
   });
 };
 
+/**
+ * Stations join with the host's session PIN. The E2E reads it out of the pilot page
+ * rather than hard-coding one, which is also what a crew does — the pilot reads the
+ * number off the menu.
+ */
+let sessionPin = null;
+
 const openStation = async (ctx, which) => {
   const page = await ctx.newPage();
-  await page.goto(`${BASE}/station.html#${which}`, { waitUntil: 'networkidle' });
+  // Join by link, carrying the PIN — the same way a crew would be handed a QR code.
+  const pin = sessionPin ? `?pin=${sessionPin}` : '';
+  await page.goto(`${BASE}/station.html${pin}#${which}`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => document.querySelector('#status')?.textContent === 'LINKED', null, {
     timeout: 15000,
   });
@@ -366,6 +376,29 @@ await journey('campaign progress survives a page reload', async (ctx) => {
     timeout: 15000,
   });
   await pilot.screenshot({ path: `${OUT}/e2e-continue.png` });
+});
+
+// ── Journey 9: the PIN gate ───────────────────────────────────────────────────
+
+await journey('a wrong session PIN is refused with a way back in', async (ctx) => {
+  const pilot = await openPilot(ctx);
+  await startNewGame(pilot);
+
+  const station = await ctx.newPage();
+  await station.goto(`${BASE}/station.html?pin=0000#helm`, { waitUntil: 'networkidle' });
+
+  // Refused, and offered a form rather than a dead end.
+  await station.waitForFunction(() => document.querySelector('#status')?.textContent === 'PIN REQUIRED', null, {
+    timeout: 15000,
+  });
+  await station.waitForSelector('#pinform:not([hidden])', { timeout: 5000 });
+
+  // The right PIN, typed into the form, gets in.
+  await station.fill('#pin', sessionPin);
+  await station.click('#pinform button');
+  await station.waitForFunction(() => document.querySelector('#status')?.textContent === 'LINKED', null, {
+    timeout: 15000,
+  });
 });
 
 await browser.close();

@@ -29,6 +29,7 @@ export class Menu {
   private difficulty: Difficulty = 'captain';
   private shipType: PlayerShipType = 'interceptor';
   private save: SaveGame | null = null;
+  private pin = '';
   private outcome: 'victory' | 'defeat' = 'defeat';
 
   constructor(
@@ -44,6 +45,12 @@ export class Menu {
   /** The menu owns whether the sim should be running. */
   get isOpen(): boolean {
     return this.screen !== 'none';
+  }
+
+  /** Shown on the menu so the crew can be told the number out loud. */
+  setPin(pin: string): void {
+    this.pin = pin;
+    if (this.screen === 'main') this.render();
   }
 
   setSave(save: SaveGame | null): void {
@@ -175,6 +182,7 @@ export class Menu {
           <button data-action="settings">SETTINGS</button>
           <button data-action="controls">CONTROLS</button>
           <p class="hint">Crew joins at <code>/station.html</code> on this machine's LAN address.</p>
+          ${this.pin ? `<p class="hint">Session PIN <code>${this.pin}</code> — or hand out <code>/station.html?pin=${this.pin}</code></p>` : ''}
         </div>`;
     }
 

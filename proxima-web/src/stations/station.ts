@@ -97,12 +97,48 @@ link.onStatus((isConnected) => {
 });
 
 /**
+ * A refused PIN is a dead end unless the console asks for one. Mirrors the friendly
+ * form the C++ build showed rather than an error page.
+ */
+let pinRejected = false;
+link.onRejected(() => {
+  pinRejected = true;
+  sessionStorage.removeItem('proxima.pin');
+  dirty = true;
+});
+
+const pinForm = document.getElementById('pinform') as HTMLFormElement;
+const pinInput = document.getElementById('pin') as HTMLInputElement;
+
+pinForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const value = pinInput.value.trim();
+  if (!value) return;
+  sessionStorage.setItem('proxima.pin', value);
+  // The socket latched on rejection, so the cleanest way back in is a reload — and
+  // drop any ?pin= from the URL, or the bad one would just be reapplied.
+  location.replace(`${location.pathname}${location.hash}`);
+});
+
+/**
  * Three states, not two. "The relay accepted my socket" is not the same as "there is a
  * ship to fly" — a crew member staring at a dead console needs to know which end to go
  * and fix, and the old console showed a confident green LINKED next to an empty panel.
  */
 const updateLinkState = (): void => {
   const fresh = snap !== null && performance.now() - lastSnapAt < 2000;
+
+  if (pinRejected) {
+    statusEl.textContent = 'PIN REQUIRED';
+    statusEl.className = '';
+    noticeEl.textContent = 'That session PIN was wrong. The pilot screen shows the current one.';
+    noticeEl.hidden = false;
+    pinForm.hidden = false;
+    panelHost.hidden = true;
+    canvas.hidden = true;
+    return;
+  }
+  pinForm.hidden = true;
 
   if (!connected) {
     statusEl.textContent = 'NO LINK — RECONNECTING…';

@@ -32,6 +32,9 @@
 
       #notice { padding: 10px 12px; margin-bottom: 12px; background: #131a2b; border: 1px solid #33415c; border-left-width: 3px; border-radius: 6px; color: #a8bdd8; font-size: 12px; }
 
+      #pinform { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-bottom: 12px; }
+      #pin { padding: 12px; background: #0d1c2f; border: 1px solid #1e3a5f; border-radius: 6px; color: #cfe3ff; font: inherit; font-size: 18px; letter-spacing: .4em; text-align: center; }
+
       #tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
       #tabs button { padding: 11px 4px; font-size: 11px; letter-spacing: .05em; }
       #tabs button.sel { background: #123252; border-color: #38bdf8; color: #bae6fd; }
@@ -117,6 +120,10 @@
            reachable from every station rather than living on one console. -->
       <button id="alert" hidden>SOUND RED ALERT</button>
       <div id="notice" hidden></div>
+      <form id="pinform" hidden>
+        <input id="pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="PIN" aria-label="Session PIN" />
+        <button type="submit">JOIN</button>
+      </form>
       <div id="tabs">
         <button data-station="helm">HELM</button>
         <button data-station="weapons">WEAPONS</button>

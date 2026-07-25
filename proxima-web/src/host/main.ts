@@ -3,7 +3,7 @@
 
 import { BridgeAudio } from '../render/audio';
 import { SectorView } from '../render/scene';
-import { RelayHost } from '../net/transport';
+import { RelayHost, sessionPin } from '../net/transport';
 import { Menu, type NewGameChoice } from './menu';
 import { clearCampaign, loadCampaign, saveCampaign } from './storage';
 import { PIXEL_RATIO_CAP, keepAwake, loadSettings, saveSettings } from '../settings';
@@ -299,6 +299,7 @@ const boot = async (): Promise<void> => {
   // Offer CONTINUE only if there is something to continue.
   latestSave = await loadCampaign();
   menu.setSave(latestSave);
+  menu.setPin(sessionPin());
   menu.showMain();
 
   frame();

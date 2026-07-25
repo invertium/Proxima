@@ -22,11 +22,11 @@ rides on the dev server, so there is no second process to start.
 
 ## Status
 
-**Playable as a bridge simulator.** An earlier revision of this file claimed
-feature-completeness; that was wrong — an audit against the C++ found roughly a third
-of the simulation and half the console controls missing, and the crew consoles could
-not be operated by a human at all. See [PORT_PLAN.md](PORT_PLAN.md) for the staged
-repair, and §Not done for what genuinely remains.
+**Playable as a bridge simulator, and now at parity with the Unreal build.** An
+earlier revision of this file claimed feature-completeness while roughly a third of
+the simulation and half the console controls were missing, and the crew consoles
+could not be operated by a human at all. [PORT_PLAN.md](PORT_PLAN.md) documents the
+staged repair; §Not done lists what genuinely remains.
 
 | | |
 |---|---|
@@ -46,6 +46,13 @@ repair, and §Not done for what genuinely remains.
 | Four crew stations over the LAN | working |
 | Three.js sector, camera trauma, torpedoes, FX | working |
 | Red alert doctrine — shields charge at red, bleed at green | ported, tested |
+| Homing torpedoes with a turn-rate limit and blast radius | ported, tested |
+| Flagship climax — invulnerable until its AEGIS escorts die | ported, tested |
+| Command rejection reasons, surfaced as console toasts | ported, tested |
+| Crew-side RESTART / NEW CAMPAIGN and a game-phase footer | working |
+| Settings (volume, quality, wake lock), controls card | working |
+| Session PIN, joinable by link or QR | working |
+| Session telemetry (`?record=1`) | working |
 | Engineering weld minigame — 1.2s sweep, green band, rate limit | ported, tested |
 | Enemy callsigns (WASP-1, VIPER-2) | ported, tested |
 | Solid planets and sun | ported, tested |
@@ -88,12 +95,12 @@ Three layers, cheapest first.
 
 ```bash
 npm run verify    # typecheck + unit + build + browser E2E
-npm test          # 78 headless sim tests, ~1s
-npm run e2e       # 8 browser user journeys (needs `npm run dev` running)
+npm test          # 198 headless sim tests, ~2s
+npm run e2e       # 12 browser user journeys (needs `npm run dev` running)
 npm run budget    # bundle size + frame time under load (needs a built `npm run relay`)
 ```
 
-**Unit + replay (78 tests, ~1 s).** Per-system rules, plus a full-campaign replay: a
+**Unit + replay (198 tests, ~2 s).** Per-system rules, plus a full-campaign replay: a
 scripted crew flies start to victory headlessly. That catches what unit tests can't — a
 mission that can't be reached, an encounter that never clears, a comms beat that never
 fires, or a balance change that makes the campaign unwinnable.
@@ -103,15 +110,19 @@ crew trades rather than kiting, so an ambush mission can legitimately kill it �
 statement about the bot, not the game. The value is the cliff: real breakage drops it to
 near zero.
 
-**Browser E2E (8 journeys).** Real pages driven through Playwright, each asserting
+**Browser E2E (12 journeys).** Real pages driven through Playwright, each asserting
 host-side state rather than pixels: new game → hail → accept → engage; a station flying
 the ship the pilot renders; an Engineering preset changing top speed; a Science scan
 resolving a contact that Weapons then reads; four stations linked at once; pause;
 skirmish; and progress surviving a reload. Uses system Chromium (`CHROME=` to override),
 so nothing is downloaded.
 
-**Budgets.** Host 168 KB gzipped, station 16 KB, median frame time under a full skirmish
-fight ~30 ms on software rendering. All three fail the build if they regress.
+**Budgets.** Host 173 KB gzipped, station 22 KB, median frame time under a full skirmish
+fight ~38 ms on software rendering. All three fail the build if they regress.
+
+**Tunable drift.** `CPP_REFERENCE` in `src/sim/data.ts` records the Unreal value of every
+ported constant, and a test asserts each one matches unless it appears in `DIVERGENCES`
+with a justification. There is currently one declared divergence (`DOCK_RANGE`).
 
 Deep paths needing a long flight — docking, repair, the drydock purchase loop — are
 covered in the headless replay rather than E2E, because clicking a ship across 200 000
@@ -197,31 +208,14 @@ cost-free renderer swap.
 
 ## Not done
 
-Honest list, beyond the status table. Stages 4b-6 of [PORT_PLAN.md](PORT_PLAN.md) are
-outstanding:
-
-- **Homing torpedoes.** They fly dead straight and cannot miss a stationary target or
-  track a turning one. The C++ homes at 75 deg/s with a 700 blast radius, which is what
-  makes an enemy volley dodgeable — a Helm skill this build doesn't have yet.
-- **NEW GAME / RESTART from a crew console, and a game-phase footer.** When the ship
-  dies, four crew phones go quiet and only the pilot can act.
-- **The flagship climax.** The final mission is structurally a fourth brawl; the C++
-  makes the flagship invulnerable until its AEGIS escorts die.
-- **Command rejection feedback.** A refused command is silent, so a crew can't tell a
-  bad shot from a broken link. The ack channel is designed but not built.
-- **~20 tunables still differ from the C++** (sector span, gravity constants, difficulty
-  multipliers, skirmish composition). The `CPP_REFERENCE`/`DIVERGENCES` table that would
-  make drift fail CI is not in yet.
-- **Settings menu** (volume/quality — `BridgeAudio.setVolume` is still orphaned),
-  controls overlay, screen wake-lock on stations, session telemetry, relay PIN.
-
-And beyond that:
+Honest list, beyond the status table:
 
 - **Art and audio are placeholders.** Hulls are the TRELLIS GLBs; audio cues are
   synthesised. Real art comes from **img2threejs** (procedural Three.js models built in
   code) in a later pass — no other content engine. `makeShip()` is the seam it lands on.
 - **No WebRTC.** The relay is a plain WebSocket pipe, so play is LAN-only: no TURN, no
-  NAT traversal, no peer-to-peer.
+  NAT traversal, no peer-to-peer. The session PIN is a courtesy lock on a trusted LAN,
+  not authentication — it is sent in the URL and the relay is unencrypted over `ws:`.
 - **No host migration.** If the host tab closes, the game ends.
 - **Reconnect is "next snapshot wins."** No state-resync protocol, no command
   acknowledgement or replay.
