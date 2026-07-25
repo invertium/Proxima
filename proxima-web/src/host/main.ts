@@ -31,7 +31,7 @@ let latestSave: SaveGame | null = null;
 const menu = new Menu(
   menuEl,
   (choice: NewGameChoice) => startGame(choice),
-  () => send({ m: 'pause', paused: false }),
+  () => updatePause(),
 );
 
 worker.onmessage = (ev: MessageEvent<ServerMessage>) => {
@@ -71,13 +71,29 @@ const startGame = (choice: NewGameChoice): void => {
       save: choice.save ?? null,
     },
   });
-  send({ m: 'pause', paused: false });
+  updatePause();
 };
 
 // Crew stations are untrusted: they may only submit commands, which the sim validates
 // (range, arc, charge, reactor headroom) exactly as it does the pilot's.
 crew.onMessage((msg) => {
   if (msg.m === 'cmd') cmd(msg.cmd);
+});
+
+/** Stations currently connected. Drives whether backgrounding this tab may pause. */
+let crewCount = 0;
+crew.onCrewCount((n) => {
+  crewCount = n;
+});
+
+crew.onEvicted(() => {
+  // Another pilot tab claimed the host role. Stop simulating and say so plainly,
+  // rather than fighting it for the relay.
+  send({ m: 'pause', paused: true });
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    '<div id="spectator">ANOTHER PILOT WINDOW TOOK OVER THIS SESSION — close this tab, or reload it to take control back.</div>',
+  );
 });
 
 // ── Pilot input ─────────────────────────────────────────────────────────────────
@@ -105,18 +121,23 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'Escape' && snap) {
     menu.togglePause();
-    send({ m: 'pause', paused: menu.isOpen });
+    updatePause();
   }
 });
 
 window.addEventListener('keyup', (e) => held.delete(e.code));
 window.addEventListener('blur', () => held.clear());
 
-// A backgrounded tab gets throttled to ~1 Hz; pause rather than let the sim lurch.
-// An open menu keeps it paused regardless of what the tab is doing.
-document.addEventListener('visibilitychange', () =>
-  send({ m: 'pause', paused: document.hidden || menu.isOpen }),
-);
+/**
+ * A backgrounded tab gets throttled, so pausing avoids a lurch on return — but only
+ * when nobody is depending on this tab. With crew connected, hiding the host window is
+ * normal (it's the main screen, or the pilot alt-tabbed) and freezing the sim would
+ * silently kill every station. Rendering stops on its own: rAF doesn't run when hidden.
+ */
+const updatePause = (): void => {
+  send({ m: 'pause', paused: menu.isOpen || (document.hidden && crewCount === 0) });
+};
+document.addEventListener('visibilitychange', updatePause);
 
 const cycleTarget = (): void => {
   if (!snap || snap.contacts.length === 0) return;

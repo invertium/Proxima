@@ -17,6 +17,10 @@ import type { ClientMessage, ServerMessage } from './protocol';
 export interface HostTransport {
   broadcast(msg: ServerMessage): void;
   onMessage(handler: (msg: ClientMessage) => void): void;
+  /** Fires when another pilot tab takes the host role; this one becomes a spectator. */
+  onEvicted(handler: () => void): void;
+  /** Number of crew stations currently connected. */
+  onCrewCount(handler: (count: number) => void): void;
   close(): void;
 }
 
@@ -74,6 +78,12 @@ class Socket {
     ws.onerror = () => ws.close();
   }
 
+  /** Stops reconnecting for good. Used when the relay says we were replaced. */
+  latch(): void {
+    this.closed = true;
+    this.ws?.close();
+  }
+
   send(value: unknown): void {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(value));
   }
@@ -86,7 +96,25 @@ class Socket {
 
 export class RelayHost implements HostTransport {
   private handler: (msg: ClientMessage) => void = () => {};
-  private readonly sock = new Socket(relayUrl('host'), (data) => this.handler(data as ClientMessage));
+  private evicted: () => void = () => {};
+  private crew: (count: number) => void = () => {};
+
+  private readonly sock = new Socket(relayUrl('host'), (data) => {
+    // Two relay-level messages the host cares about, neither of which is game state.
+    const msg = data as { m?: string; count?: number };
+    if (msg.m === 'evicted') {
+      // Another pilot tab took over. Stop reconnecting — otherwise the two tabs evict
+      // each other in a loop and every station sees interleaved snapshots.
+      this.sock.latch();
+      this.evicted();
+      return;
+    }
+    if (msg.m === 'crew') {
+      this.crew(msg.count ?? 0);
+      return;
+    }
+    this.handler(data as ClientMessage);
+  });
 
   broadcast(msg: ServerMessage): void {
     this.sock.send(msg);
@@ -94,6 +122,14 @@ export class RelayHost implements HostTransport {
 
   onMessage(handler: (msg: ClientMessage) => void): void {
     this.handler = handler;
+  }
+
+  onEvicted(handler: () => void): void {
+    this.evicted = handler;
+  }
+
+  onCrewCount(handler: (count: number) => void): void {
+    this.crew = handler;
   }
 
   close(): void {

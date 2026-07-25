@@ -24,5 +24,7 @@ export default defineConfig({
       },
     },
   },
-  server: { host: true, port: 5173 },
+  // strictPort: silently sliding to 5174 when 5173 is busy means the docs, the tests
+  // and the human all end up talking to different servers.
+  server: { host: true, port: 5173, strictPort: true },
 });

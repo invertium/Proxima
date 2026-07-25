@@ -17,20 +17,43 @@ export const attachRelay = (server: Server): WebSocketServer => {
   let host: WebSocket | null = null;
   const stations = new Set<WebSocket>();
 
+  /**
+   * The host needs to know whether anyone is actually listening, so it can decide
+   * whether backgrounding its tab is safe. This is connection bookkeeping, not game
+   * state — the relay still knows nothing about the simulation.
+   */
+  const reportCrew = (): void => {
+    if (host?.readyState === WebSocket.OPEN) {
+      host.send(JSON.stringify({ m: 'crew', count: stations.size }));
+    }
+  };
+
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    if (url.pathname !== RELAY_PATH) return;
+    if (url.pathname !== RELAY_PATH) {
+      // Not ours. Leave the socket alone — Vite's HMR handler is on the same event
+      // and owns its own paths.
+      return;
+    }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       const role = url.searchParams.get('role') === 'host' ? 'host' : 'station';
 
       if (role === 'host') {
+        // Tell the outgoing host it was replaced *before* closing it. Without this it
+        // sees a plain close, reconnects, and evicts the new host in turn — two pilot
+        // tabs then flap against each other forever.
+        if (host && host.readyState === WebSocket.OPEN) {
+          host.send(JSON.stringify({ m: 'evicted' }));
+        }
         host?.close();
         host = ws;
         console.log('[relay] host connected');
+        reportCrew();
       } else {
         stations.add(ws);
         console.log(`[relay] station connected (${stations.size} total)`);
+        reportCrew();
       }
 
       ws.on('message', (raw) => {
@@ -52,6 +75,7 @@ export const attachRelay = (server: Server): WebSocketServer => {
           console.log('[relay] host disconnected');
         } else {
           stations.delete(ws);
+          reportCrew();
         }
       });
     });

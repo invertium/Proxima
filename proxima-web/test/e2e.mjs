@@ -9,15 +9,23 @@
 // purchase loop — are covered headlessly in replay.test.ts instead. This file covers
 // what a user actually touches.
 //
-//   node test/e2e.mjs           (against a running `npm run dev` on :5174)
+//   node test/e2e.mjs           (against a running `npm run dev` on :5173)
 //   BASE=... OUT=... node test/e2e.mjs
 
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
-const BASE = process.env.BASE ?? 'http://localhost:5174';
+const BASE = process.env.BASE ?? 'http://localhost:5173';
 const OUT = process.env.OUT ?? 'shots';
 mkdirSync(OUT, { recursive: true });
+
+try {
+  const probe = await fetch(BASE, { signal: AbortSignal.timeout(3000) });
+  if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
+} catch (err) {
+  console.error(`nothing serving ${BASE} (${err.message}) — run \`npm run dev\` first`);
+  process.exit(1);
+}
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROME ?? '/usr/bin/chromium',
