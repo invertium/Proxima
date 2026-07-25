@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { applyCommand, createWorld, snapshot, step } from '../src/sim/world';
 import { SAVE_VERSION, applySave, migrate, toSave } from '../src/sim/save';
 import { applyDamage } from '../src/sim/combat';
-import { DIFFICULTY_SCALE, ENEMIES, TICK_DT, WAVE_INTERVAL } from '../src/sim/data';
+import { CAMPAIGN, DIFFICULTY_SCALE, ENEMIES, TICK_DT, WAVE_INTERVAL } from '../src/sim/data';
 import type { World } from '../src/sim/types';
 
 const run = (w: World, seconds: number): void => {
@@ -190,5 +190,62 @@ describe('skirmish', () => {
     const snap = snapshot(w);
     expect(snap.mode).toBe('skirmish');
     expect(snap.skirmishWave).toBe(1);
+  });
+});
+
+describe('flagship fight', () => {
+  it('the warlord is untouchable until both escorts die', () => {
+    const w = createWorld({ seed: 21 });
+    // Jump to the final objective and commit.
+    w.missionIndex = CAMPAIGN.length - 1;
+    w.player.pos = { ...w.landmarks[w.missionIndex]!.pos };
+    step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
+    step(w, TICK_DT);
+
+    const flagship = w.enemies.find((e) => e.id === w.flagshipId);
+    expect(flagship, 'the final fleet should have a flagship').toBeDefined();
+    expect(flagship!.callsign).toBe('WARLORD');
+    expect(w.escortIds.length).toBeGreaterThan(0);
+
+    // Everything bounces while the screen is up.
+    const hull = flagship!.hull;
+    applyDamage(flagship!, 9999, true, 0, w.events);
+    expect(flagship!.hull).toBe(hull);
+
+    // Kill the escorts; the screen drops on the next tick.
+    for (const id of w.escortIds) {
+      const escort = w.enemies.find((e) => e.id === id)!;
+      applyDamage(escort, escort.hull + escort.shield, true, 0, w.events);
+    }
+    step(w, TICK_DT);
+
+    expect(flagship!.invulnerable).toBe(false);
+    applyDamage(flagship!, 40, true, 0, w.events);
+    expect(flagship!.hull).toBeLessThan(hull);
+  });
+
+  it('tells Weapons why its shots are doing nothing', () => {
+    const w = createWorld({ seed: 21 });
+    w.missionIndex = CAMPAIGN.length - 1;
+    w.player.pos = { ...w.landmarks[w.missionIndex]!.pos };
+    step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
+    step(w, TICK_DT);
+
+    const contact = snapshot(w).contacts.find((c) => c.name === 'WARLORD');
+    expect(contact?.shielded).toBe(true);
+  });
+
+  it('only rigs the final mission, not every cruiser fight', () => {
+    const w = createWorld({ seed: 21 });
+    w.missionIndex = 2; // Patrol Ambush also fields a cruiser
+    w.player.pos = { ...w.landmarks[2]!.pos };
+    step(w, TICK_DT);
+    applyCommand(w, { c: 'acceptObjective' });
+    step(w, TICK_DT);
+
+    expect(w.flagshipId).toBeNull();
+    expect(w.enemies.every((e) => !e.invulnerable)).toBe(true);
   });
 });

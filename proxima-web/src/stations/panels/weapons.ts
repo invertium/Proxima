@@ -58,11 +58,19 @@ export const createWeaponsPanel = (send: Send): Panel => {
         ? `${km(c.range)} · hull ${Math.round(c.hull)}/${Math.round(c.maxHull)} · shield ${Math.round(c.shield)}`
         : `${km(c.range)} · unscanned — Science can resolve it`,
     );
+    // A target that eats damage with no explanation reads as a bug. Say why.
     setText(
       solution!,
-      c.inBeamArc ? 'BEAM SOLUTION' : c.inTorpedoArc ? 'TORPEDO ARC ONLY' : 'NO SOLUTION',
+      c.shielded
+        ? 'SHIELDED BY ESCORTS — kill them first'
+        : c.inBeamArc
+          ? 'BEAM SOLUTION'
+          : c.inTorpedoArc
+            ? 'TORPEDO ARC ONLY'
+            : 'NO SOLUTION',
     );
-    setFlag(solution!, 'ok', c.inBeamArc);
+    setFlag(solution!, 'ok', c.inBeamArc && !c.shielded);
+    setFlag(solution!, 'bad', c.shielded);
   };
 
   return {

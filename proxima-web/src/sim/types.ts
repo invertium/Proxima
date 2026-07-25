@@ -310,6 +310,9 @@ export interface World {
   touching: number[];
   /** Running count per archetype, so callsigns number within their class. */
   typeOrdinals: Record<string, number>;
+  /** Final mission only: the flagship, invulnerable while its escorts live. */
+  flagshipId: number | null;
+  escortIds: number[];
   /** Skirmish only: waves cleared so far. */
   skirmishWave: number;
   /** Skirmish only: seconds until the next wave arrives. */
@@ -430,6 +433,8 @@ export interface Snapshot {
     range: number;
     /** Hull/shield numbers are only trustworthy once Science has scanned the contact. */
     scanned: boolean;
+    /** Escort-shielded: damage does nothing until the escorts are dead. Says WHY. */
+    shielded: boolean;
   }[];
   landmarks: { id: string; name: string; kind: LandmarkKind; pos: Vec3; radius: number; color: number }[];
   /** In-flight torpedoes, so the renderer can draw them and the crew can see them coming. */

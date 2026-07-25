@@ -170,6 +170,8 @@ export const createWorld = (
     alert: 'green',
     touching: [],
     typeOrdinals: {},
+    flagshipId: null,
+    escortIds: [],
     skirmishWave: 0,
     waveTimer: 0,
     seed,
@@ -590,6 +592,7 @@ export const step = (world: World, dt: number): void => {
 
   stepTorpedoes(world, dt);
   stepCollisions(world);
+  stepFlagship(world);
   rollSystemDamage(world, hullBefore - world.player.hull);
   resolveEncounter(world);
 
@@ -774,6 +777,52 @@ const beginEncounter = (world: World): void => {
   world.encounterLive = true;
   world.encounterTime = 0;
   world.killsThisEncounter = 0;
+
+  if (world.missionIndex === CAMPAIGN.length - 1) wireFlagshipFight(world);
+};
+
+/**
+ * The campaign climax. The warlord's cruiser rides an escort-linked screen and takes
+ * no damage at all until both AEGIS escorts are dead — so the last mission is a
+ * priority-targeting problem rather than a fourth brawl. Weapons is told *why* its
+ * shots are doing nothing, which is the difference between a puzzle and a bug.
+ */
+const wireFlagshipFight = (world: World): void => {
+  const fleet = world.enemies.filter((e) => world.fleetIds.includes(e.id));
+  const flagship = fleet.find((e) => e.enemyType === 'cruiser');
+  if (!flagship) return;
+
+  const escorts = fleet.filter((e) => e !== flagship && e.enemyType !== 'derelict').slice(0, 2);
+  if (escorts.length === 0) return;
+
+  world.flagshipId = flagship.id;
+  world.escortIds = escorts.map((e) => e.id);
+
+  flagship.callsign = 'WARLORD';
+  flagship.invulnerable = true;
+  escorts.forEach((e, i) => {
+    e.callsign = `AEGIS-${i + 1}`;
+  });
+
+  pushComms(
+    world,
+    'SCIENCE',
+    'The flagship is riding an escort-linked screen — those AEGIS ships are carrying it. Kill the escorts and the screen drops.',
+  );
+};
+
+/** Drops the flagship's screen once its escorts are gone. */
+const stepFlagship = (world: World): void => {
+  if (world.flagshipId === null) return;
+
+  const flagship = world.enemies.find((e) => e.id === world.flagshipId);
+  if (!flagship || !flagship.invulnerable) return;
+
+  const escortsAlive = world.enemies.some((e) => world.escortIds.includes(e.id) && e.alive);
+  if (escortsAlive) return;
+
+  flagship.invulnerable = false;
+  pushComms(world, 'TACTICAL', 'Screen is down — the flagship is exposed. Hit her now, Captain.');
 };
 
 const spawnFleet = (world: World, around: { x: number; y: number; z: number }): void => {
@@ -1013,6 +1062,8 @@ const resolveEncounter = (world: World): void => {
   // fleet is cleared away; event raiders and bounty targets fight on.
   world.enemies = world.enemies.filter((e) => !world.fleetIds.includes(e.id));
   world.fleetIds = [];
+  world.flagshipId = null;
+  world.escortIds = [];
   world.encounterLive = false;
   world.missionIndex += 1;
 
@@ -1100,6 +1151,7 @@ export const snapshot = (world: World): Snapshot => {
         inTorpedoArc: inArc(p, e, TORPEDO_ARC_DEG),
         range: dist(p.pos, e.pos),
         scanned: p.scanned.includes(e.id),
+        shielded: e.invulnerable === true,
       })),
     torpedoes: world.torpedoes.map((t) => ({
       id: t.id,
