@@ -13,7 +13,7 @@ import {
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { ENEMIES, SHIPS } from '../sim/data';
+import { MODEL_YAW, allModels } from '../sim/data';
 
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 
@@ -24,16 +24,30 @@ const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
  *
  * So derive it: a ship is longest along its keel, widest across its wings, and shortest
  * top-to-bottom. Sort the bounding box and rotate so length lands on +X (the sim's
- * forward), width on Z, and height on Y. Bow-vs-stern is the one thing a box can't tell
- * us — flip that with `modelYaw` in the catalogue if a hull flies backwards.
+ * forward), width on Z, and height on Y.
+ *
+ * Bow-vs-stern is the one thing a box genuinely cannot tell us; that lives in
+ * MODEL_YAW, applied below.
  */
-const axisAlign = (size: Vector3): Matrix4 => {
+const axisAlign = (model: string, size: Vector3): Matrix4 => {
   const axes: [number, Vector3][] = [
     [size.x, new Vector3(1, 0, 0)],
     [size.y, new Vector3(0, 1, 0)],
     [size.z, new Vector3(0, 0, 1)],
   ];
   axes.sort((a, b) => b[0] - a[0]);
+
+  // The keel pick is a comparison between the two longest extents, and on these hulls
+  // that margin can be tiny — the interceptor's top two differ by 0.19%. A re-export
+  // with different tessellation would flip the sort and render the player's ship
+  // sideways, so say so rather than failing silently later.
+  const margin = axes[0]![0] > 0 ? (axes[0]![0] - axes[1]![0]) / axes[0]![0] : 1;
+  if (margin < 0.05) {
+    console.warn(
+      `[ships] ${model}: keel axis is ambiguous (top two extents differ by ${(margin * 100).toFixed(2)}%). ` +
+        `If this hull renders sideways, that is why.`,
+    );
+  }
 
   const length = axes[0]![1];
   const width = axes[1]![1];
@@ -70,7 +84,12 @@ const load = async (model: string): Promise<Object3D> => {
   const holder = new Group();
   holder.add(root);
   holder.scale.setScalar(1 / longest);
-  holder.applyMatrix4(axisAlign(size));
+  holder.applyMatrix4(axisAlign(model, size));
+
+  // Then turn the hull the right way round. applyMatrix4 pre-multiplies, so this yaw
+  // is about world +Y — which is what we want. Rotating about the model's own Y
+  // (holder.rotateY) would compose with the alignment and tilt the ship instead.
+  holder.applyMatrix4(new Matrix4().makeRotationY(MODEL_YAW[model] ?? 0));
 
   root.traverse((o) => {
     const mesh = o as Mesh;
@@ -94,11 +113,7 @@ const load = async (model: string): Promise<Object3D> => {
 
 /** Warms the cache for every model the campaign can show, so nothing pops in mid-fight. */
 export const preloadShipModels = async (): Promise<void> => {
-  const models = new Set<string>([
-    ...SHIPS.map((s) => s.model),
-    ...Object.values(ENEMIES).map((e) => e.model),
-  ]);
-  await Promise.all([...models].map(load));
+  await Promise.all(allModels().map(load));
 };
 
 /**

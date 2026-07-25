@@ -174,6 +174,33 @@ export const SHIPS: ShipDef[] = [
 
 export const shipDef = (type: ShipDef['type']): ShipDef => SHIPS.find((s) => s.type === type) ?? SHIPS[0]!;
 
+/**
+ * Extra yaw, in radians, applied after the loader levels a hull onto the world axes.
+ *
+ * A bounding box tells you which axis is the keel but not which end is the nose, so
+ * this is the one orientation fact that cannot be derived and has to be recorded.
+ * Values come from a vertex-taper analysis of each GLB: bin vertices along the keel
+ * and compare the surface area of the two end slabs — the blunt, heavy end is the
+ * stern. Every one of these hulls except the corvette came out of the generator
+ * pointing the wrong way.
+ *
+ * Keyed by MODEL, not by ship: hostiles reuse the player GLBs (scout and derelict are
+ * both `corvette`), so a per-ship field would be duplicated and would drift.
+ */
+export const MODEL_YAW: Record<string, number> = {
+  // Narrow nose at the low end of the keel, bulky engine block at the high end, and
+  // axisAlign puts the keel on +X — so these three came out flying tail-first.
+  interceptor: Math.PI, // lateral span 0.31 at the nose vs 0.99 at the stern
+  cruiser: Math.PI, //     0.19 vs 0.57
+  gunboat: Math.PI, //     0.57 vs 0.57 — near-symmetric, the least certain of the four
+  corvette: 0, //          tapers the other way (0.34 -> 0.18), already correct
+};
+
+/** Every distinct GLB the catalogue can ask the renderer for. */
+export const allModels = (): string[] => [
+  ...new Set([...SHIPS.map((s) => s.model), ...Object.values(ENEMIES).map((e) => e.model)]),
+];
+
 // ── Hostiles (Ships/EnemyShip.h) ────────────────────────────────────────────────
 
 export const ENEMIES: Record<EnemyType, EnemyDef> = {

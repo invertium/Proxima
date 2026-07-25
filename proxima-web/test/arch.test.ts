@@ -51,6 +51,19 @@ describe('sim purity', () => {
   });
 });
 
+describe('ship models', () => {
+  it('every model the catalogue can show has an explicit bow orientation', async () => {
+    // A bounding box cannot tell nose from tail, so each GLB needs a recorded yaw.
+    // The real regression here is a NEW model landing with no entry and silently
+    // flying backwards — which is exactly what happened to three of the four hulls.
+    const { MODEL_YAW, allModels } = await import('../src/sim/data');
+
+    for (const model of allModels()) {
+      expect(MODEL_YAW[model], `no MODEL_YAW entry for "${model}"`).toBeTypeOf('number');
+    }
+  });
+});
+
 describe('console controls are built once', () => {
   it('no station panel assigns innerHTML', () => {
     // Rebuilding markup is what destroys a button mid-press. Panels may only write
