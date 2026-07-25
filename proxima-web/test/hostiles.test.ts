@@ -40,6 +40,7 @@ const duel = (type: EnemyType, range: number, opts: { grace?: number } = {}): { 
     fireCooldown: def.fireInterval,
     graceTimer: opts.grace ?? 0,
     rewarded: false,
+    callsign: 'TEST-1',
     aiState: 'approach',
     strafeSide: 1,
     volleyRemaining: 0,

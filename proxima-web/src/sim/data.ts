@@ -75,6 +75,21 @@ export const CONTRACT_VISIT_RANGE = 9000;
 export const WAVE_INTERVAL = 12;
 export const PIRATE_CALLSIGNS = ['KRAIT', 'DUSKRUNNER', 'RED HARROW', 'VULTURE', 'IRONJAW'];
 
+/**
+ * Hostile callsigns (EnemyShip.cpp MakeCallsign). A fleet of three identical rows
+ * reading "Pact Gunship" is unusable over voice — "VIPER-2 is on our six" is the
+ * whole point of a crew.
+ */
+export const CALLSIGN_POOL: Record<string, string> = {
+  scout: 'WASP',
+  gunship: 'VIPER',
+  cruiser: 'LEVIATHAN',
+  derelict: 'HULK',
+};
+
+/** How close a ship may get to a planet or sun before the hull stops it. */
+export const BODY_CLEARANCE = 500;
+
 // ── Damage control (Components/DamageControlComponent.h) ────────────────────────
 
 /** Chance a hull-reaching hit knocks out one still-working system. */
@@ -84,8 +99,17 @@ export const DAMAGED_MULTIPLIER = 0.5;
 export const WELDS_PER_SYSTEM_REPAIR = 3;
 /** Hull fraction below which the bridge alarm sounds. */
 export const ALARM_HULL_FRACTION = 0.3;
-/** Hull restored by a weld once nothing is broken. */
-export const WELD_HULL_REPAIR = 4;
+/** Hull restored by a credited weld once nothing is broken (C++ RepairPerHit). */
+export const WELD_HULL_REPAIR = 8;
+
+// The repair sweep: a marker runs a 1.2s triangle and Engineering has to release it
+// inside the green band. This is the only skill-based act on a crew console — without
+// it, damage control is a spam button and hull damage carries no tension.
+export const WELD_SWEEP_PERIOD = 1.2;
+export const WELD_GREEN_MIN = 0.4;
+export const WELD_GREEN_MAX = 0.6;
+/** Minimum seconds between credited welds. This, not the phase, is the anti-spam. */
+export const WELD_MIN_INTERVAL = 0.25;
 
 // ── Science (Components/ScienceComponent.h) ─────────────────────────────────────
 

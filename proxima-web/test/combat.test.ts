@@ -41,6 +41,7 @@ const withEnemy = (range: number): { w: World; e: EnemyShip } => {
     fireCooldown: 9999, // never shoots; this fixture is about collisions
     graceTimer: 9999,
     rewarded: false,
+    callsign: 'TEST-1',
     aiState: 'idle',
     strafeSide: 1,
     volleyRemaining: 0,

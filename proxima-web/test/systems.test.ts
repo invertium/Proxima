@@ -11,6 +11,8 @@ import {
   TURRET_INTERVAL,
   UPGRADES,
   WELDS_PER_SYSTEM_REPAIR,
+  WELD_HULL_REPAIR,
+  WELD_MIN_INTERVAL,
   XP_PER_RANK,
   rankFromXp,
   upgradeCost,
@@ -193,17 +195,43 @@ describe('damage control', () => {
     w.player.damaged.weapons = true;
     w.player.damaged.sensors = true;
 
+    // Welds are rate limited to one per 0.25s, so let the clock move between them.
+    const weld = () => {
+      applyCommand(w, { c: 'weld' });
+      run(w, WELD_MIN_INTERVAL + 0.05);
+    };
+
     // Engine is undamaged, so weapons is first in order.
     for (let i = 0; i < WELDS_PER_SYSTEM_REPAIR - 1; i++) {
-      applyCommand(w, { c: 'weld' });
+      weld();
       expect(w.player.damaged.weapons).toBe(true);
     }
-    applyCommand(w, { c: 'weld' });
+    weld();
     expect(w.player.damaged.weapons).toBe(false);
     expect(w.player.damaged.sensors).toBe(true);
 
-    for (let i = 0; i < WELDS_PER_SYSTEM_REPAIR; i++) applyCommand(w, { c: 'weld' });
+    for (let i = 0; i < WELDS_PER_SYSTEM_REPAIR; i++) weld();
     expect(w.player.damaged.sensors).toBe(false);
+  });
+
+  it('rate limits repairs, so the weld cannot be spammed to full hull', () => {
+    const w = createWorld();
+    w.player.hull = 10;
+
+    // Ten welds in the same instant: only the first may count.
+    for (let i = 0; i < 10; i++) applyCommand(w, { c: 'weld' });
+    expect(w.player.hull).toBe(10 + WELD_HULL_REPAIR);
+  });
+
+  it('rejects a weld released outside the green band', () => {
+    const w = createWorld();
+    w.player.hull = 10;
+
+    applyCommand(w, { c: 'weld', phase: 0.05 });
+    expect(w.player.hull).toBe(10);
+
+    applyCommand(w, { c: 'weld', phase: 0.5 });
+    expect(w.player.hull).toBe(10 + WELD_HULL_REPAIR);
   });
 
   it('spends welds on hull only once everything works', () => {
@@ -212,6 +240,7 @@ describe('damage control', () => {
 
     applyCommand(w, { c: 'weld' });
     expect(w.player.hull).toBeGreaterThan(20);
+    run(w, WELD_MIN_INTERVAL + 0.05);
 
     // With something broken, the same weld goes to the system instead.
     w.player.damaged.engine = true;

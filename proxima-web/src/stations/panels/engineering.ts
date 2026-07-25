@@ -1,8 +1,17 @@
 // Engineering: reactor, damage control, the drydock, and the contract board.
 
-import { MAX_PER_SYSTEM, SHIPS, UPGRADES, upgradeCost, upgradeRankReq } from '../../sim/data';
+import {
+  MAX_PER_SYSTEM,
+  SHIPS,
+  UPGRADES,
+  WELD_GREEN_MAX,
+  WELD_GREEN_MIN,
+  WELD_SWEEP_PERIOD,
+  upgradeCost,
+  upgradeRankReq,
+} from '../../sim/data';
 import { el, setDisabled, setFlag, setHidden, setText, syncList } from '../ui/dom';
-import { slider, tapButton } from '../ui/controls';
+import { slider, sweepGauge, tapButton } from '../ui/controls';
 import { type Panel, type Send } from './panel';
 import type { ShipSystem, Snapshot } from '../../sim/types';
 
@@ -53,7 +62,11 @@ export const createEngineeringPanel = (send: Send): Panel => {
 
   // ── Damage control ────────────────────────────────────────────────────────────
   const chips = DAMAGE_SYSTEMS.map((d) => el('span', { class: 'chip', text: d.toUpperCase() }));
-  const weld = tapButton('PATCH HULL', () => send({ c: 'weld' }));
+  const weldLabel = el('p', { class: 'muted' });
+  const sweep = sweepGauge(
+    { period: WELD_SWEEP_PERIOD, greenMin: WELD_GREEN_MIN, greenMax: WELD_GREEN_MAX },
+    (phase) => send({ c: 'weld', phase }),
+  );
 
   // ── Contract board ────────────────────────────────────────────────────────────
   const boardText = el('p', { class: 'muted' });
@@ -77,7 +90,8 @@ export const createEngineeringPanel = (send: Send): Panel => {
       presets,
       el('h3', { text: 'DAMAGE CONTROL' }),
       el('div', { class: 'chips', children: chips }),
-      weld,
+      sweep.root,
+      weldLabel,
       el('h3', { text: 'CONTRACT BOARD' }),
       board,
       drydockHead,
@@ -121,11 +135,14 @@ export const createEngineeringPanel = (send: Send): Panel => {
         setFlag(chip, 'bad', p.damaged[d]);
         setFlag(chip, 'ok', !p.damaged[d]);
       });
+      // The sweep runs off the sim clock so every console's marker agrees.
+      sweep.tick(s.time);
       setText(
-        weld,
-        p.repairTarget ? `WELD ${p.repairTarget.toUpperCase()} (${p.repairWelds}/3)` : 'PATCH HULL',
+        weldLabel,
+        p.repairTarget
+          ? `Repairing ${p.repairTarget.toUpperCase()} — ${p.repairWelds}/3 welds. Release in the green.`
+          : 'Release in the green to patch hull.',
       );
-      setFlag(weld, 'alert', !!p.repairTarget);
 
       // Contracts: the offer only exists while docked, and only one runs at a time.
       if (s.contract) {

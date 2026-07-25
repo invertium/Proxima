@@ -86,6 +86,15 @@
       .bar { height: 8px; background: #10203a; border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
       .bar i { display: block; height: 100%; background: #38bdf8; transition: width .1s linear; }
 
+      .sweep { position: relative; height: 26px; background: #10203a; border: 1px solid #1e3a5f; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
+      .sweep .green { position: absolute; top: 0; bottom: 0; background: rgba(74, 222, 128, .22); border-left: 1px solid #4ade80; border-right: 1px solid #4ade80; }
+      .sweep .marker { position: absolute; top: 0; bottom: 0; width: 3px; background: #fde68a; }
+      .sweep.hit { animation: weldHit .3s ease-out; }
+      .sweep.miss { animation: weldMiss .3s ease-out; }
+      @keyframes weldHit { from { background: #14532d; } to { background: #10203a; } }
+      @keyframes weldMiss { from { background: #7f1d1d; } to { background: #10203a; } }
+      button.weld { width: 100%; }
+
       .comms p { margin: 0 0 6px; padding: 6px 9px; background: #0a1524; border-left: 2px solid #38bdf8; border-radius: 0 5px 5px 0; }
       .comms b { color: #38bdf8; }
 

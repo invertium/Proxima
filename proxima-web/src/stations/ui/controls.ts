@@ -145,6 +145,77 @@ export const slider = (
   };
 };
 
+export interface Sweep {
+  root: HTMLElement;
+  /** Advances the marker. `now` is the shared sim clock, so every console agrees. */
+  tick(simTime: number): void;
+  setEnabled(enabled: boolean): void;
+  flash(credited: boolean): void;
+}
+
+/**
+ * The repair sweep: a marker runs a triangle wave and the operator releases inside the
+ * green band. Run locally so it feels instant, and driven off the SIM clock rather than
+ * a local one, so every console's marker sits in the same place — a crew can call
+ * "now" and mean it.
+ */
+export const sweepGauge = (
+  opts: { period: number; greenMin: number; greenMax: number },
+  onRelease: (phase: number) => void,
+): Sweep => {
+  const marker = el('i', { class: 'marker' });
+  const green = el('i', { class: 'green' });
+  green.style.left = `${opts.greenMin * 100}%`;
+  green.style.width = `${(opts.greenMax - opts.greenMin) * 100}%`;
+
+  const track = el('div', { class: 'sweep', children: [green, marker] });
+  const button = el('button', { text: 'WELD', class: 'hold weld' });
+  const root = el('div', { children: [track, button] });
+
+  let phase = 0;
+  let enabled = true;
+
+  // Triangle rather than sawtooth: the marker sweeps back, so the green band is
+  // approached from both sides and the timing reads naturally.
+  const phaseAt = (t: number): number => {
+    const x = (t % opts.period) / opts.period;
+    return x < 0.5 ? x * 2 : 2 - x * 2;
+  };
+
+  button.addEventListener('pointerdown', (e) => {
+    if (button.disabled) return;
+    e.preventDefault();
+    button.setPointerCapture(e.pointerId);
+    button.classList.add('pressed');
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
+    button.addEventListener(type, () => {
+      if (!button.classList.contains('pressed')) return;
+      button.classList.remove('pressed');
+      onRelease(phase);
+    });
+  }
+
+  return {
+    root,
+    tick(simTime) {
+      if (!enabled) return;
+      phase = phaseAt(simTime);
+      marker.style.left = `${phase * 100}%`;
+    },
+    setEnabled(value) {
+      enabled = value;
+      button.disabled = !value;
+    },
+    flash(credited) {
+      track.classList.remove('hit', 'miss');
+      // Force a reflow so a repeat of the same class still animates.
+      void track.offsetWidth;
+      track.classList.add(credited ? 'hit' : 'miss');
+    },
+  };
+};
+
 export interface Toast {
   root: HTMLElement;
   show(text: string, kind?: 'info' | 'error'): void;

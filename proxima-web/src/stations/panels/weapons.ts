@@ -51,7 +51,7 @@ export const createWeaponsPanel = (send: Send): Panel => {
     setFlag(row, 'sel', c.id === s.player.targetId);
 
     const [name, detail, solution] = row.children as unknown as HTMLElement[];
-    setText(name!, c.name);
+    setText(name!, `${c.name} · ${c.className}`);
     setText(
       detail!,
       c.scanned

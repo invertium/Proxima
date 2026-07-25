@@ -7,6 +7,8 @@ import { applyDamage, fireBeam, inArc, inRange } from './combat';
 import {
   ALARM_HULL_FRACTION,
   BEAM_RANGE,
+  BODY_CLEARANCE,
+  CALLSIGN_POOL,
   CAMPAIGN,
   COLLISION_RADIUS,
   DAMAGE_CHANCE,
@@ -41,7 +43,10 @@ import {
   WARP_CHARGE_RATE,
   WARP_DISTANCE,
   WELDS_PER_SYSTEM_REPAIR,
+  WELD_GREEN_MAX,
+  WELD_GREEN_MIN,
   WELD_HULL_REPAIR,
+  WELD_MIN_INTERVAL,
   rankFromXp,
   shipDef,
   upgradeCost,
@@ -115,7 +120,8 @@ export const createWorld = (
     kind: 'player',
     id: 0,
     shipType: def.type,
-    pos: vec(home.x + 3000, 0, home.z),
+    // Clear of Haven's surface: the home planet's radius plus room to turn.
+    pos: vec(home.x + 12000, 0, home.z),
     heading: 0,
     speed: 0,
     strafeSpeed: 0,
@@ -138,6 +144,7 @@ export const createWorld = (
     ownedShips: [def.type],
     damaged: { engine: false, weapons: false, sensors: false },
     repairWelds: 0,
+    lastWeldAt: -999,
     turretCooldown: 0,
     scanTargetId: null,
     scanProgress: 0,
@@ -153,6 +160,7 @@ export const createWorld = (
     mode: opts.mode ?? 'campaign',
     alert: 'green',
     touching: [],
+    typeOrdinals: {},
     skirmishWave: 0,
     waveTimer: 0,
     seed,
@@ -233,7 +241,7 @@ export const applyCommand = (world: World, cmd: Command): void => {
       tryBuyUpgrade(world, cmd.id);
       break;
     case 'weld':
-      weld(world);
+      weld(world, cmd.phase);
       break;
     case 'scan':
       // Retargeting restarts the scan; the crew can't bank progress across contacts.
@@ -344,6 +352,9 @@ const tryDock = (world: World): void => {
   p.hull = p.maxHull;
   p.shield = p.maxShield;
   p.torpedoAmmo = shipDef(p.shipType).torpedoAmmo;
+  // A dockyard fixes what the welds didn't.
+  p.damaged = { engine: false, weapons: false, sensors: false };
+  p.repairWelds = 0;
   world.events.push({ t: 'dock', station: base.name });
   pushComms(world, 'STARBASE', 'Docking clamps engaged. Hull repaired, tubes reloaded. Drydock is open, Captain.');
 };
@@ -436,6 +447,13 @@ const tryBuyUpgrade = (world: World, id: string): void => {
   pushComms(world, 'DRYDOCK', `${def.name} installed — tier ${tier + 1}.`);
 };
 
+/** Next callsign for an archetype: WASP-1, WASP-2, VIPER-1... numbered within class. */
+const nextCallsign = (world: World, type: string): string => {
+  const n = (world.typeOrdinals[type] ?? 0) + 1;
+  world.typeOrdinals[type] = n;
+  return `${CALLSIGN_POOL[type] ?? 'CONTACT'}-${n}`;
+};
+
 /** The first damaged system in a fixed order, so repairs are predictable for the crew. */
 const repairTarget = (p: PlayerShip): DamageSystem | null =>
   (['engine', 'weapons', 'sensors'] as DamageSystem[]).find((s) => p.damaged[s]) ?? null;
@@ -444,10 +462,28 @@ const repairTarget = (p: PlayerShip): DamageSystem | null =>
  * Engineering's repair sweep. Welds go into fixing broken systems first — three per
  * system — and only once everything works do further welds patch hull.
  */
-const weld = (world: World): void => {
+const weld = (world: World, phase?: number): void => {
   const p = world.player;
-  const target = repairTarget(p);
 
+  // Rate limit first. This, not the phase, is what stops a held key or a scripted
+  // client from welding the hull to full instantly — and it's what the C++ relied on.
+  if (world.time - p.lastWeldAt < WELD_MIN_INTERVAL) {
+    world.events.push({ t: 'weld', credited: false });
+    return;
+  }
+
+  // The sweep runs on the console, which is the only place it can feel responsive;
+  // the sim judges the phase the operator reports. Deriving the phase here instead
+  // would rotate the green band under the player by exactly the network latency.
+  if (phase !== undefined && (phase < WELD_GREEN_MIN || phase > WELD_GREEN_MAX)) {
+    world.events.push({ t: 'weld', credited: false });
+    return;
+  }
+
+  p.lastWeldAt = world.time;
+  world.events.push({ t: 'weld', credited: true });
+
+  const target = repairTarget(p);
   if (!target) {
     p.hull = Math.min(p.maxHull, p.hull + WELD_HULL_REPAIR);
     return;
@@ -560,6 +596,26 @@ const stepPlayer = (world: World, dt: number): void => {
 
     // Celestial gravity: a gentle drift toward nearby bodies, always escapable.
     addScaled(p.pos, gravityPullAt(world, p.pos), dt);
+
+    // ...and the bodies are solid. Flying through a planet is the kind of thing that
+    // tells a crew the sector isn't real.
+    for (const body of world.landmarks) {
+      if (body.kind === 'station') continue;
+      const dx = p.pos.x - body.pos.x;
+      const dz = p.pos.z - body.pos.z;
+      const range = Math.hypot(dx, dz);
+      const floor = body.radius + BODY_CLEARANCE;
+      if (range >= floor || range < 1) continue;
+
+      p.pos.x = body.pos.x + (dx / range) * floor;
+      p.pos.z = body.pos.z + (dz / range) * floor;
+
+      // Kill way only if the bow is still pointed into the body. Zeroing unconditionally
+      // pins the ship against the surface and it can never fly off again.
+      const heading = forward(p.heading);
+      const intoBody = heading.x * -dx + heading.z * -dz;
+      if (intoBody > 0) p.speed = 0;
+    }
 
     // Lateral thrust only exists once Manoeuvring Thrusters are bought.
     const targetStrafe = world.intent.strafe * stats.strafeSpeed * powerScale(p.power.engines);
@@ -712,6 +768,7 @@ const spawnFleet = (world: World, around: { x: number; y: number; z: number }): 
       fireCooldown: def.fireInterval,
       graceTimer: SPAWN_GRACE,
       rewarded: false,
+      callsign: nextCallsign(world, type),
       aiState: 'approach',
       // Alternate the opening side across the fleet so strafers don't all cross the
       // same way on the first pass.
@@ -830,6 +887,7 @@ const stepSkirmish = (world: World, dt: number): void => {
       fireCooldown: def.fireInterval,
       graceTimer: SPAWN_GRACE * 0.3,
       rewarded: false,
+      callsign: nextCallsign(world, type),
       aiState: 'approach',
       strafeSide: i % 2 === 0 ? 1 : -1,
       volleyRemaining: 0,
@@ -948,7 +1006,8 @@ export const snapshot = (world: World): Snapshot => {
       .filter((e) => e.alive)
       .map((e) => ({
         id: e.id,
-        name: ENEMIES[e.enemyType].name,
+        name: e.callsign,
+        className: ENEMIES[e.enemyType].name,
         pos: { ...e.pos },
         heading: e.heading,
         hull: e.hull,

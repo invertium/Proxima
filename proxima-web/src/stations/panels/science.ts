@@ -81,7 +81,7 @@ export const createSciencePanel = (send: Send, onToggleMap: () => void): Panel =
           node.dataset['id'] = String(c.id);
           setFlag(node, 'sel', c.id === p.scanTargetId);
           const [name, detail, state] = node.children as unknown as HTMLElement[];
-          setText(name!, c.name);
+          setText(name!, `${c.name} · ${c.className}`);
           setText(
             detail!,
             `${km(c.range)} · ${c.range <= p.stats.scanRange ? 'in sensor range' : 'out of range'}`,

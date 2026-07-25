@@ -205,6 +205,8 @@ export interface PlayerShip extends Combatant {
   damaged: Record<DamageSystem, boolean>;
   /** Welds credited toward the current repair target; 3 completes one. */
   repairWelds: number;
+  /** Sim time of the last credited weld, for the repair rate limit. */
+  lastWeldAt: number;
   /** Auto-turret cooldown, only meaningful once the module is bought. */
   turretCooldown: number;
   scanTargetId: number | null;
@@ -222,6 +224,8 @@ export interface EnemyShip extends Combatant {
   graceTimer: number;
   /** Set once its bounty has been paid, so the payout can't double-fire or be missed. */
   rewarded: boolean;
+  /** e.g. "VIPER-2" — what the crew actually calls this ship over voice. */
+  callsign: string;
   aiState: EnemyAIState;
   /** Which side a strafer leads its pass on; flipped each run so passes cross. */
   strafeSide: number;
@@ -251,6 +255,7 @@ export type SimEvent =
   | { t: 'systemRepaired'; system: DamageSystem }
   | { t: 'scanComplete'; id: number }
   | { t: 'alert'; red: boolean }
+  | { t: 'weld'; credited: boolean }
   | { t: 'eventStart'; kind: SectorEvent; pos: Vec3 }
   | { t: 'eventEnd'; kind: SectorEvent; success: boolean }
   | { t: 'salvage'; pos: Vec3; credits: number }
@@ -270,7 +275,8 @@ export type Command =
   | { c: 'buyShip'; type: PlayerShipType }
   | { c: 'buyUpgrade'; id: string }
   /** Engineering's repair sweep: fixes the current damaged system, else restores hull. */
-  | { c: 'weld' }
+  /** `phase` is where the console's sweep marker was when the crew released it. */
+  | { c: 'weld'; phase?: number }
   | { c: 'scan'; id: number | null }
   /** Arriving at a system hails first; the crew commits to the fight with this. */
   | { c: 'acceptObjective' }
@@ -288,6 +294,8 @@ export interface World {
   alert: AlertState;
   /** Ids currently in contact with the player, so a ram lands once per collision. */
   touching: number[];
+  /** Running count per archetype, so callsigns number within their class. */
+  typeOrdinals: Record<string, number>;
   /** Skirmish only: waves cleared so far. */
   skirmishWave: number;
   /** Skirmish only: seconds until the next wave arrives. */
@@ -398,6 +406,8 @@ export interface Snapshot {
     hull: number;
     maxHull: number;
     shield: number;
+    /** Archetype name, e.g. "Pact Gunship". `name` is the callsign. */
+    className: string;
     hostile: boolean;
     inBeamArc: boolean;
     inTorpedoArc: boolean;

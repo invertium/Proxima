@@ -5,6 +5,7 @@
 // and World/GravityField.cpp.
 
 import {
+  CALLSIGN_POOL,
   CAMPAIGN,
   CONTRACT_VISIT_RANGE,
   DISTRESS_DURATION,
@@ -53,6 +54,13 @@ export const gravityPullAt = (world: World, at: Vec3): Vec3 => {
   return pull;
 };
 
+/** Mirrors world.ts nextCallsign; kept here so sector spawns don't reach into it. */
+const callsign = (world: World, type: string): string => {
+  const n = (world.typeOrdinals[type] ?? 0) + 1;
+  world.typeOrdinals[type] = n;
+  return `${CALLSIGN_POOL[type] ?? 'CONTACT'}-${n}`;
+};
+
 // ── Events ──────────────────────────────────────────────────────────────────────
 
 const spawnEventShips = (world: World, at: Vec3, types: EnemyType[]): void => {
@@ -73,6 +81,7 @@ const spawnEventShips = (world: World, at: Vec3, types: EnemyType[]): void => {
       fireCooldown: def.fireInterval,
       graceTimer: SPAWN_GRACE * 0.25,
       rewarded: false,
+      callsign: callsign(world, type),
       aiState: 'approach',
       strafeSide: i % 2 === 0 ? 1 : -1,
       volleyRemaining: 0,
@@ -241,6 +250,8 @@ const spawnBountyShip = (world: World, c: Contract): void => {
     alive: true,
     fireCooldown: def.fireInterval,
     graceTimer: SPAWN_GRACE * 0.25,
+    // A bounty target flies under the name on the contract, not a fleet callsign.
+    callsign: c.ship || callsign(world, 'gunship'),
     rewarded: false,
     aiState: 'approach',
     strafeSide: 1,
