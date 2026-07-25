@@ -20,7 +20,17 @@ export const TORPEDO_ARC_DEG = 110;
 export const TORPEDO_DAMAGE = 60;
 export const TORPEDO_SPEED = 5000;
 export const TORPEDO_RELOAD = 4;
-export const TORPEDO_LIFE = 8;
+export const TORPEDO_LIFE = 12;
+/**
+ * Torpedoes steer, but only this fast. That limit is the whole counterplay: a volley
+ * is dodgeable if the helm turns hard enough, which is why the C++ gunship's slow
+ * salvo was a threat you outfly rather than a hit you absorb.
+ */
+export const TORPEDO_TURN_RATE_DEG = 75;
+/** Proximity fuse. Inside this, the warhead goes off. */
+export const TORPEDO_HIT_RADIUS = 350;
+/** Anything inside this when it detonates takes the payload. Outside it, the shot missed. */
+export const TORPEDO_BLAST_RADIUS = 700;
 
 export const MAX_SHIELD = 50;
 export const SHIELD_MITIGATION_SCALE = 0.35;

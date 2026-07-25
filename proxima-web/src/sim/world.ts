@@ -32,10 +32,13 @@ import {
   SHIPS,
   STRAFE_ACCELERATION,
   TORPEDO_ARC_DEG,
+  TORPEDO_BLAST_RADIUS,
   TORPEDO_DAMAGE,
+  TORPEDO_HIT_RADIUS,
   TORPEDO_LIFE,
   TORPEDO_RELOAD,
   TORPEDO_SPEED,
+  TORPEDO_TURN_RATE_DEG,
   TRIGGER_RADIUS,
   TURRET_INTERVAL,
   TURRET_RANGE,
@@ -55,7 +58,7 @@ import {
 } from './data';
 import { effectiveStats } from './stats';
 import { acceptContract, describeContract, gravityPullAt, stepContracts, stepEvents } from './sector';
-import { DEG, addScaled, clamp, dist, forward, interpConstantTo, makeRng, vec } from './math';
+import { DEG, addScaled, bearingTo, clamp, dist, forward, interpConstantTo, makeRng, vec } from './math';
 import type {
   Command,
   DamageSystem,
@@ -68,6 +71,7 @@ import type {
   PlayerShipType,
   ShipSystem,
   Snapshot,
+  Torpedo,
   World,
 } from './types';
 
@@ -329,6 +333,7 @@ const tryFireTorpedo = (world: World): void => {
     damage: TORPEDO_DAMAGE,
     life: TORPEDO_LIFE,
     friendly: true,
+    targetId: t.id,
   });
 };
 
@@ -779,21 +784,58 @@ const spawnFleet = (world: World, around: { x: number; y: number; z: number }): 
   });
 };
 
+/**
+ * Torpedoes home, but at a limited turn rate, and they detonate on a proximity fuse
+ * rather than on contact. Both matter: a torpedo that tracks perfectly is an unavoidable
+ * hit, and one that flies straight is a coin flip. The turn-rate limit is what makes a
+ * volley something the helm can out-manoeuvre.
+ */
 const stepTorpedoes = (world: World, dt: number): void => {
-  for (const t of world.torpedoes) {
-    t.life -= dt;
-    addScaled(t.pos, forward(t.heading), t.speed * dt);
+  const detonate = (t: Torpedo): void => {
+    // Everything inside the blast takes the payload; outside it, the shot simply missed.
+    const nearby: (EnemyShip | PlayerShip)[] = t.friendly ? world.enemies : [world.player];
+    let hit = false;
 
-    const targets: (EnemyShip | PlayerShip)[] = t.friendly ? world.enemies : [world.player];
-    for (const c of targets) {
-      if (!c.alive || dist(t.pos, c.pos) > COLLISION_RADIUS) continue;
+    for (const c of nearby) {
+      if (!c.alive || dist(t.pos, c.pos) > TORPEDO_BLAST_RADIUS) continue;
       // Torpedoes bypass shields entirely — the full payload lands on hull (M17).
       applyDamage(c, t.damage, true, 0, world.events);
-      t.life = 0;
-      break;
+      hit = true;
     }
+
+    world.events.push({ t: 'detonate', pos: { ...t.pos }, hit });
+    t.life = 0;
+  };
+
+  for (const t of world.torpedoes) {
+    t.life -= dt;
+
+    const target = t.targetId === null ? null : findCombatant(world, t.targetId);
+
+    if (target?.alive) {
+      // Steer toward the target, rate limited. If it out-turns the torpedo, the
+      // torpedo overshoots and fizzles when its life runs out.
+      const bearing = bearingTo(t.pos, t.heading, target.pos);
+      const maxTurn = TORPEDO_TURN_RATE_DEG * DEG * dt;
+      t.heading += clamp(bearing, -maxTurn, maxTurn);
+    }
+
+    addScaled(t.pos, forward(t.heading), t.speed * dt);
+
+    if (target?.alive && dist(t.pos, target.pos) <= TORPEDO_HIT_RADIUS) {
+      detonate(t);
+      continue;
+    }
+    // Ran out of fuel still flying: detonate where it is, which usually hits nothing.
+    if (t.life <= 0) detonate(t);
   }
+
   world.torpedoes = world.torpedoes.filter((t) => t.life > 0);
+};
+
+const findCombatant = (world: World, id: number): EnemyShip | PlayerShip | null => {
+  if (id === world.player.id) return world.player;
+  return world.enemies.find((e) => e.id === id) ?? null;
 };
 
 /**

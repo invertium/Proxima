@@ -22,7 +22,12 @@ export type ServerMessage =
 export type ClientMessage =
   | { m: 'cmd'; cmd: Command }
   | { m: 'join'; station: string; version: number }
-  | { m: 'start'; seed: number; difficulty: string };
+  /**
+   * Session control from a crew console. Deliberately NOT a Command: the sim cannot
+   * cleanly reboot itself, so restarting is the host's job. Keeping Command for
+   * in-world actions only is a boundary worth defending.
+   */
+  | { m: 'game'; action: 'restart' | 'new' };
 
 /** Sim worker control messages. */
 export interface BootOptions {

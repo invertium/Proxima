@@ -241,6 +241,8 @@ export interface Torpedo {
   damage: number;
   life: number;
   friendly: boolean;
+  /** What it is chasing. A torpedo with no lock flies straight and usually misses. */
+  targetId: number | null;
 }
 
 /** Transient one-frame events the renderer and stations consume (beams, hits, kills). */
@@ -256,6 +258,8 @@ export type SimEvent =
   | { t: 'scanComplete'; id: number }
   | { t: 'alert'; red: boolean }
   | { t: 'weld'; credited: boolean }
+  /** A torpedo detonated. `hit` is false when it fizzled outside the blast radius. */
+  | { t: 'detonate'; pos: Vec3; hit: boolean }
   | { t: 'eventStart'; kind: SectorEvent; pos: Vec3 }
   | { t: 'eventEnd'; kind: SectorEvent; success: boolean }
   | { t: 'salvage'; pos: Vec3; credits: number }

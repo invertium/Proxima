@@ -10,6 +10,7 @@ import { createHelmPanel } from './panels/helm';
 import { createWeaponsPanel } from './panels/weapons';
 import { createEngineeringPanel } from './panels/engineering';
 import { createSciencePanel } from './panels/science';
+import { createFooter } from './panels/common';
 import type { Panel } from './panels/panel';
 import type { Command, Snapshot, Station } from '../sim/types';
 
@@ -23,6 +24,8 @@ const alertEl = document.getElementById('alert') as HTMLButtonElement;
 const link = new RelayStation();
 const send = (cmd: Command): void => link.send({ m: 'cmd', cmd });
 const scope = new Scope(canvas);
+const footer = createFooter((action) => link.send({ m: 'game', action }));
+document.querySelector('.wrap')!.appendChild(footer.root);
 
 let snap: Snapshot | null = null;
 let lastSnapAt = 0;
@@ -140,6 +143,7 @@ const frame = (): void => {
   document.body.classList.toggle('red', red);
 
   panelFor(station).update(snap);
+  footer.update(snap);
   scope.draw(snap, showMap && (station === 'helm' || station === 'science') ? 'map' : 'tactical');
 };
 

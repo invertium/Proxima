@@ -77,7 +77,22 @@ const startGame = (choice: NewGameChoice): void => {
 // Crew stations are untrusted: they may only submit commands, which the sim validates
 // (range, arc, charge, reactor headroom) exactly as it does the pilot's.
 crew.onMessage((msg) => {
-  if (msg.m === 'cmd') cmd(msg.cmd);
+  if (msg.m === 'cmd') {
+    cmd(msg.cmd);
+    return;
+  }
+  if (msg.m === 'game') {
+    // A crew console asked for a restart. When the ship dies, four phones would
+    // otherwise just go quiet with only the pilot able to act.
+    menu.close();
+    startGame({
+      difficulty: latestSave?.difficulty ?? 'captain',
+      shipType: latestSave?.shipType ?? 'interceptor',
+      mode: 'campaign',
+      save: msg.action === 'restart' ? latestSave : null,
+    });
+    if (msg.action === 'new') void clearCampaign();
+  }
 });
 
 /** Stations currently connected. Drives whether backgrounding this tab may pause. */

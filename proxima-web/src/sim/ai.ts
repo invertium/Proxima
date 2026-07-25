@@ -139,5 +139,6 @@ const launchTorpedo = (world: World, e: EnemyShip): void => {
     damage: ENEMY_TORPEDO_DAMAGE * scale,
     life: TORPEDO_LIFE,
     friendly: false,
+    targetId: world.player.id,
   });
 };
