@@ -29,6 +29,7 @@ import { CombatFx } from './fx';
 import { makeShip, preloadShipModels } from './ships';
 import { ENEMIES, shipDef } from '../sim/data';
 import { makeRng } from '../sim/math';
+import type { Vec3 } from '../sim/math';
 import type { SimEvent, Snapshot } from '../sim/types';
 
 const STARFIELD_COUNT = 4000;
@@ -43,6 +44,18 @@ const MAX_SHAKE_YAW = 1.6;
 const MAX_SHAKE_ROLL = 2.4;
 
 const TORPEDO_POOL = 24;
+
+/**
+ * How far behind the newest snapshot the render clock runs, in seconds.
+ *
+ * The sim ticks at a fixed 60Hz in a worker; the renderer draws on rAF. The two are
+ * not phase-locked, so some frames reuse a snapshot and others skip one — which at
+ * 2100 units/second is a very visible stutter, worst while accelerating or turning
+ * because the per-tick delta is changing. Rendering slightly in the past means there
+ * is always a later sample to interpolate toward, which removes the judder entirely
+ * at the cost of ~33ms of latency nobody can perceive.
+ */
+const INTERP_DELAY = 2 / 60;
 
 export class SectorView {
   readonly scene = new Scene();
@@ -63,6 +76,11 @@ export class SectorView {
   private trauma = 0;
   private readonly shakeRng = makeRng(31);
   private readonly torpedoes: Mesh[] = [];
+
+  /** Recent snapshots, oldest first, used to interpolate between fixed sim ticks. */
+  private readonly buffer: Snapshot[] = [];
+  private renderTime = 0;
+  private clockPrimed = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new WebGLRenderer({
@@ -104,6 +122,13 @@ export class SectorView {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, cap));
   }
 
+  /** Buffers a snapshot for interpolation. Call once per state message. */
+  pushSnapshot(snap: Snapshot): void {
+    this.buffer.push(snap);
+    // A little over the interpolation window; anything older can never be needed.
+    while (this.buffer.length > 12) this.buffer.shift();
+  }
+
   /** One tick's sim events, handed straight to the effect pools. */
   ingest(events: SimEvent[]): void {
     this.fx.ingest(events);
@@ -121,6 +146,8 @@ export class SectorView {
    * the old sector's hostiles and bodies floating in the new one.
    */
   reset(): void {
+    this.buffer.length = 0;
+    this.clockPrimed = false;
     for (const obj of this.contacts.values()) this.scene.remove(obj);
     this.contacts.clear();
 
@@ -186,12 +213,50 @@ export class SectorView {
       this.primed = true;
     }
 
-    this.syncPlayer(snap);
-    this.syncContacts(snap);
-    this.syncTorpedoes(snap);
-    this.updateCamera(snap, dt);
+    const view = this.interpolated(dt) ?? snap;
+
+    this.syncPlayer(view);
+    this.syncContacts(view);
+    this.syncTorpedoes(view);
+    this.updateCamera(view, dt);
     this.fx.update(dt);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * A view of the world at `renderTime`, blended between the two snapshots that
+   * bracket it. Returns null until there is enough history to interpolate.
+   */
+  private interpolated(dt: number): Snapshot | null {
+    const newest = this.buffer[this.buffer.length - 1];
+    if (!newest || this.buffer.length < 2) return null;
+
+    const target = newest.time - INTERP_DELAY;
+    if (!this.clockPrimed) {
+      this.renderTime = target;
+      this.clockPrimed = true;
+    } else {
+      this.renderTime += dt;
+      // Resync rather than drift: running ahead means extrapolating, and falling far
+      // behind means the ship visibly lags the controls.
+      if (this.renderTime > target + 0.05 || this.renderTime < target - 0.5) {
+        this.renderTime = target;
+      }
+    }
+
+    let older = this.buffer[0]!;
+    let newer = newest;
+    for (let i = 1; i < this.buffer.length; i++) {
+      if (this.buffer[i]!.time >= this.renderTime) {
+        older = this.buffer[i - 1]!;
+        newer = this.buffer[i]!;
+        break;
+      }
+    }
+
+    const span = newer.time - older.time;
+    const alpha = span > 0 ? Math.min(1, Math.max(0, (this.renderTime - older.time) / span)) : 1;
+    return blend(older, newer, alpha);
   }
 
   private syncPlayer(snap: Snapshot): void {
@@ -281,6 +346,51 @@ export class SectorView {
 }
 
 const DEG_TO_RAD = Math.PI / 180;
+
+export const mix = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+const mixVec = (a: Vec3, b: Vec3, t: number): Vec3 => ({
+  x: mix(a.x, b.x, t),
+  y: mix(a.y, b.y, t),
+  z: mix(a.z, b.z, t),
+});
+
+/** Angles must take the short way round, or a ship crossing 0 spins the long way. */
+export const mixAngle = (a: number, b: number, t: number): number => {
+  let delta = (b - a) % (Math.PI * 2);
+  if (delta > Math.PI) delta -= Math.PI * 2;
+  if (delta < -Math.PI) delta += Math.PI * 2;
+  return a + delta * t;
+};
+
+/**
+ * Blends the *positional* parts of two snapshots. Everything else (hull numbers, the
+ * comms log, arcs) comes from the newer sample — those are read, not watched moving,
+ * and interpolating them would only make readouts lag.
+ */
+export const blend = (a: Snapshot, b: Snapshot, t: number): Snapshot => ({
+  ...b,
+  player: {
+    ...b.player,
+    pos: mixVec(a.player.pos, b.player.pos, t),
+    heading: mixAngle(a.player.heading, b.player.heading, t),
+  },
+  contacts: b.contacts.map((contact) => {
+    const before = a.contacts.find((c) => c.id === contact.id);
+    // A contact that only exists in the newer sample just appeared; show it there.
+    if (!before) return contact;
+    return {
+      ...contact,
+      pos: mixVec(before.pos, contact.pos, t),
+      heading: mixAngle(before.heading, contact.heading, t),
+    };
+  }),
+  torpedoes: b.torpedoes.map((torp) => {
+    const before = a.torpedoes.find((x) => x.id === torp.id);
+    if (!before) return torp;
+    return { ...torp, pos: mixVec(before.pos, torp.pos, t) };
+  }),
+});
 
 const makeStarfield = (): Points => {
   const rng = makeRng(7);

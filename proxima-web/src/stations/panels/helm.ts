@@ -109,11 +109,17 @@ export const createHelmPanel = (send: Send, onToggleMap: () => void): Panel => {
       setHidden(accept, !s.objective?.offered);
       setText(accept, s.objective ? `ACCEPT ORDERS — ${s.objective.name}` : 'ACCEPT ORDERS');
 
-      throttle.reflect(Math.round((p.speed / Math.max(1, p.maxSpeed)) * 100));
-      setText(throttleLabel, `${Math.round((p.speed / Math.max(1, p.maxSpeed)) * 100)}%`);
+      // The lever shows the ORDER, not the measured speed. Reflecting speed made it
+      // crawl and jump around under the operator's finger as the ship accelerated.
+      throttle.reflect(Math.round(p.throttle * 100));
+      setText(throttleLabel, `${Math.round(p.throttle * 100)}%`);
 
-      setHidden(strafeRow, p.stats.strafeSpeed <= 0);
-      setHidden(strafeNote, p.stats.strafeSpeed > 0);
+      // Strafe is a bought module in the C++ too, so it genuinely isn't available yet —
+      // but hiding the controls made the whole capability look absent. Show them
+      // disabled with the reason instead.
+      const hasStrafe = p.stats.strafeSpeed > 0;
+      for (const b of strafeRow.children) setDisabled(b as HTMLButtonElement, !hasStrafe);
+      setHidden(strafeNote, hasStrafe);
 
       setText(dock, p.docked ? 'UNDOCK' : 'DOCK');
       setText(warp, `WARP ${Math.round(p.warpCharge * 100)}%`);

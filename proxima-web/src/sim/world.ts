@@ -1104,6 +1104,7 @@ export const snapshot = (world: World): Snapshot => {
       maxShield: p.maxShield,
       speed: p.speed,
       maxSpeed: stats.maxSpeed,
+      throttle: world.intent.throttle,
       power: { ...p.power },
       beamCharge: p.beamCharge,
       torpedoAmmo: p.torpedoAmmo,

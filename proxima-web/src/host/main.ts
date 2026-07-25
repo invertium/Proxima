@@ -69,6 +69,7 @@ worker.onmessage = (ev: MessageEvent<ServerMessage>) => {
 
   snap = msg.snapshot;
   recorder.observe(msg.snapshot, msg.events);
+  view.pushSnapshot(msg.snapshot);
   view.ingest(msg.events);
   audio.ingest(msg.events, msg.snapshot.player.hullCritical, 1 / 60);
   crew.broadcast(msg);

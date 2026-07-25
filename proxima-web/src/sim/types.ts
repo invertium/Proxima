@@ -383,6 +383,11 @@ export interface Snapshot {
     maxShield: number;
     speed: number;
     maxSpeed: number;
+    /**
+     * Commanded throttle, -0.35..1. Distinct from `speed`: the lever is an input and
+     * must hold where the operator put it, rather than chasing measured speed.
+     */
+    throttle: number;
     power: Record<ShipSystem, number>;
     beamCharge: number;
     torpedoAmmo: number;
