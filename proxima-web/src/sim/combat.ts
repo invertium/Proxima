@@ -26,7 +26,9 @@ export const applyDamage = (
   shieldPower: number,
   events: SimEvent[],
 ): number => {
-  if (amount <= 0 || !target.alive) return 0;
+  // Docked ships are combat-safe: the starbase is meant to be a refuge, and in the
+  // C++ build docking set invulnerability explicitly.
+  if (amount <= 0 || !target.alive || target.invulnerable) return 0;
 
   const preHull = target.hull;
 

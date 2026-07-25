@@ -18,6 +18,7 @@ const panelHost = document.getElementById('panel') as HTMLDivElement;
 const tabs = document.getElementById('tabs') as HTMLDivElement;
 const statusEl = document.getElementById('status') as HTMLDivElement;
 const noticeEl = document.getElementById('notice') as HTMLDivElement;
+const alertEl = document.getElementById('alert') as HTMLButtonElement;
 
 const link = new RelayStation();
 const send = (cmd: Command): void => link.send({ m: 'cmd', cmd });
@@ -105,6 +106,8 @@ const updateLinkState = (): void => {
   canvas.hidden = !fresh;
 };
 
+alertEl.addEventListener('click', () => send({ c: 'alert', state: 'toggle' }));
+
 tabs.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest('[data-station]') as HTMLElement | null;
   if (!btn) return;
@@ -127,6 +130,14 @@ const frame = (): void => {
 
   if (!snap || !dirty) return;
   dirty = false;
+
+  // Alert doctrine is ship-wide: show it on every console and tint the whole page,
+  // so the state is readable from across a room.
+  const red = snap.alert === 'red';
+  alertEl.hidden = false;
+  alertEl.textContent = red ? 'RED ALERT — STAND DOWN' : 'SOUND RED ALERT';
+  alertEl.classList.toggle('red', red);
+  document.body.classList.toggle('red', red);
 
   panelFor(station).update(snap);
   scope.draw(snap, showMap && (station === 'helm' || station === 'science') ? 'map' : 'tactical');

@@ -26,6 +26,11 @@ export const MAX_SHIELD = 50;
 export const SHIELD_MITIGATION_SCALE = 0.35;
 export const MAX_MITIGATION = 0.8;
 export const SHIELD_CHARGE_RATE = 4;
+/**
+ * At green alert the emitters idle down and the pool drains. This is the whole point
+ * of the alert doctrine: shields are a posture you call for, not a passive buffer.
+ */
+export const SHIELD_BLEED_RATE = 1.5;
 
 export const REACTOR_BUDGET = 3.0;
 export const MAX_PER_SYSTEM = 2.0;
@@ -40,6 +45,11 @@ export const DOCK_RANGE = 3500;
 
 export const COLLISION_RADIUS = 650;
 export const RAM_DAMAGE = 48;
+/** Shields push the contact boundary out, so a shielded ship collides sooner. */
+export const SHIELD_RADIUS_BONUS = 320;
+/** A graze at rest hurts half as much as a full-speed impact; a full ram, 1.5x. */
+export const RAM_SPEED_MIN = 0.5;
+export const RAM_SPEED_MAX = 1.5;
 
 /** World size the normalised mission mapX/mapY are projected onto. */
 export const SECTOR_SPAN = 220000;

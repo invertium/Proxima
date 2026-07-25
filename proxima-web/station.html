@@ -21,6 +21,15 @@
       #status.ok { color: #4ade80; }
       #status.warn { color: #fbbf24; }
 
+      #alert { width: 100%; margin-bottom: 12px; letter-spacing: .1em; }
+      #alert.red { background: #4a1216; border-color: #ff3b30; color: #fecaca; }
+
+      /* Red alert tints the whole console, so a glance across the room reads it. */
+      body.red { background: #14060a; }
+      body.red header h1 { color: #fca5a5; }
+      body.red .wrap { --tint: #ff3b30; }
+      body.red #radar { border-color: #7f1d1d; }
+
       #notice { padding: 10px 12px; margin-bottom: 12px; background: #131a2b; border: 1px solid #33415c; border-left-width: 3px; border-radius: 6px; color: #a8bdd8; font-size: 12px; }
 
       #tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
@@ -90,6 +99,9 @@
         <h1>PROXIMA</h1>
         <div id="status">WAITING FOR HOST…</div>
       </header>
+      <!-- Alert is a whole-bridge doctrine, so it sits above the tabs and is
+           reachable from every station rather than living on one console. -->
+      <button id="alert" hidden>SOUND RED ALERT</button>
       <div id="notice" hidden></div>
       <div id="tabs">
         <button data-station="helm">HELM</button>

@@ -45,6 +45,13 @@ export type GamePhase = 'playing' | 'victory' | 'defeat';
 /** Campaign runs the story; skirmish is endless waves for practice. */
 export type GameMode = 'campaign' | 'skirmish';
 
+/**
+ * Alert doctrine (M29). Shield emitters only build a charge at red alert; at green
+ * they idle down and the pool bleeds away. It is a whole-bridge decision, so any
+ * console may call it.
+ */
+export type AlertState = 'green' | 'red';
+
 export type Difficulty = 'ensign' | 'captain' | 'admiral';
 
 export type PlayerShipType = 'interceptor' | 'cruiser' | 'corvette' | 'gunboat';
@@ -169,6 +176,8 @@ export interface Combatant {
   shield: number;
   maxShield: number;
   alive: boolean;
+  /** Docked ships are combat-safe; the starbase is meant to be a refuge. */
+  invulnerable?: boolean;
 }
 
 export interface PlayerShip extends Combatant {
@@ -241,6 +250,7 @@ export type SimEvent =
   | { t: 'systemDamaged'; system: DamageSystem }
   | { t: 'systemRepaired'; system: DamageSystem }
   | { t: 'scanComplete'; id: number }
+  | { t: 'alert'; red: boolean }
   | { t: 'eventStart'; kind: SectorEvent; pos: Vec3 }
   | { t: 'eventEnd'; kind: SectorEvent; success: boolean }
   | { t: 'salvage'; pos: Vec3; credits: number }
@@ -265,6 +275,7 @@ export type Command =
   /** Arriving at a system hails first; the crew commits to the fight with this. */
   | { c: 'acceptObjective' }
   | { c: 'acceptContract' }
+  | { c: 'alert'; state: AlertState | 'toggle' }
   /** Turns the bow at the active objective and warps toward it. */
   | { c: 'layInCourse' };
 
@@ -274,6 +285,9 @@ export interface World {
   phase: GamePhase;
   difficulty: Difficulty;
   mode: GameMode;
+  alert: AlertState;
+  /** Ids currently in contact with the player, so a ram lands once per collision. */
+  touching: number[];
   /** Skirmish only: waves cleared so far. */
   skirmishWave: number;
   /** Skirmish only: seconds until the next wave arrives. */
@@ -331,6 +345,7 @@ export interface Snapshot {
   time: number;
   phase: GamePhase;
   mode: GameMode;
+  alert: AlertState;
   skirmishWave: number;
   player: {
     pos: Vec3;

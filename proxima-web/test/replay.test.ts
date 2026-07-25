@@ -34,6 +34,12 @@ const autopilot = (w: World): Command[] => {
 
   const hostiles = w.enemies.filter((e) => e.alive);
 
+  // Alert doctrine: shields only charge at red alert and bleed away at green, so a
+  // crew that forgets to call it fights with a dead shield pool. Sound it whenever
+  // there is anything to fight or a fight is being offered.
+  const wantAlert = hostiles.length > 0 || snap.objective?.offered ? 'red' : 'green';
+  if (snap.alert !== wantAlert) cmds.push({ c: 'alert', state: wantAlert });
+
   if (hostiles.length > 0) {
     const target = hostiles.reduce((a, b) => (dist(p.pos, a.pos) < dist(p.pos, b.pos) ? a : b));
     if (p.targetId !== target.id) cmds.push({ c: 'target', id: target.id });

@@ -134,14 +134,16 @@ describe('strafe runs', () => {
     step(w, TICK_DT);
     expect(e.aiState).toBe('overshoot');
 
-    const shield = w.player.shield;
-    // Pin it in overshoot and let plenty of fire intervals elapse.
+    // Count shots, not shield level: shields bleed at green alert now, so a steady
+    // pool is no longer evidence that nobody fired.
+    let shots = 0;
     for (let i = 0; i < 60 * 5; i++) {
       e.pos = { x: STRAFE_PASS_DISTANCE - 200, y: 0, z: 0 };
       e.aiState = 'overshoot';
       step(w, TICK_DT);
+      shots += w.events.filter((ev) => ev.t === 'beam' && !ev.friendly).length;
     }
-    expect(w.player.shield).toBe(shield);
+    expect(shots).toBe(0);
   });
 });
 
@@ -218,12 +220,11 @@ describe('derelicts', () => {
   it('never move and never shoot', () => {
     const { w, e } = duel('derelict', 4000);
     const pos = { ...e.pos };
-    const shield = w.player.shield;
 
-    run(w, 30);
+    const shots = countEnemyBeams(w, 30);
 
     expect(e.pos).toEqual(pos);
-    expect(w.player.shield).toBe(shield);
+    expect(shots).toBe(0);
     expect(e.aiState).toBe('idle');
   });
 });

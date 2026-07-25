@@ -115,6 +115,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyJ') cmd({ c: 'warp' });
   if (e.code === 'KeyE') cmd({ c: 'acceptObjective' });
   if (e.code === 'KeyR') cmd({ c: 'weld' });
+  if (e.code === 'KeyV') cmd({ c: 'alert', state: 'toggle' });
   if (e.code === 'Tab') {
     e.preventDefault();
     cycleTarget();
@@ -181,6 +182,9 @@ const drawHud = (s: Snapshot): void => {
     bar('BEAM', p.beamCharge, 1, '#f59e0b'),
     bar('WARP', p.warpCharge, 1, '#a78bfa'),
     `<div class="row"><span>SPD</span><b>${Math.round(p.speed)}</b><span>HDG</span><b>${Math.round(((p.heading * 180) / Math.PI + 360) % 360)}</b><span>TORP</span><b>${p.torpedoAmmo}</b><span>CR</span><b>${p.credits}</b></div>`,
+    s.alert === 'red'
+      ? '<div class="alertbar">RED ALERT — shields charging</div>'
+      : '<div class="tgt">GREEN ALERT — shields bleeding down · V to sound red alert</div>',
     s.mode === 'skirmish' ? `<div class="obj">SKIRMISH — WAVE ${s.skirmishWave}</div>` : '',
     s.objective && s.mode === 'campaign'
       ? `<div class="obj">OBJECTIVE: ${s.objective.name} — ${(s.objective.range / 1000).toFixed(1)} km${s.objective.offered ? ' — press E to ACCEPT' : ''}</div>`

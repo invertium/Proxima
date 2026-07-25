@@ -18,11 +18,15 @@ import {
   MAX_PER_SYSTEM,
   MAX_SHIELD,
   RAM_DAMAGE,
+  RAM_SPEED_MAX,
+  RAM_SPEED_MIN,
   REVERSE_THROTTLE_MIN,
   SCAN_DURATION,
   SECTOR_SPAN,
   SPAWN_GRACE,
+  SHIELD_BLEED_RATE,
   SHIELD_CHARGE_RATE,
+  SHIELD_RADIUS_BONUS,
   SHIPS,
   STRAFE_ACCELERATION,
   TORPEDO_ARC_DEG,
@@ -63,10 +67,12 @@ import type {
 } from './types';
 
 /**
- * Reactor allocation scales what a system can actually deliver. Nominal power (1.0)
- * is the ship's rated figure; starving a system halves it, overfeeding it adds ~40%.
+ * Reactor allocation scales what a system delivers, linearly and honestly: nominal
+ * power (1.0) is the rated figure, 2.0 is double, and **0 is a dead system**. The port
+ * previously floored this at 60%, which meant a starved system still worked and the
+ * whole reactor decision carried no weight.
  */
-const powerScale = (p: number): number => 0.6 + 0.4 * clamp(p, 0, MAX_PER_SYSTEM);
+const powerScale = (p: number): number => clamp(p, 0, MAX_PER_SYSTEM);
 
 const sectorPos = (mapX: number, mapY: number) =>
   vec((mapX - 0.5) * SECTOR_SPAN, 0, (mapY - 0.5) * SECTOR_SPAN);
@@ -145,6 +151,8 @@ export const createWorld = (
     phase: 'playing',
     difficulty: opts.difficulty ?? 'captain',
     mode: opts.mode ?? 'campaign',
+    alert: 'green',
+    touching: [],
     skirmishWave: 0,
     waveTimer: 0,
     seed,
@@ -254,6 +262,21 @@ export const applyCommand = (world: World, cmd: Command): void => {
     case 'layInCourse':
       layInCourse(world);
       break;
+    case 'alert': {
+      const next = cmd.state === 'toggle' ? (world.alert === 'red' ? 'green' : 'red') : cmd.state;
+      if (next !== world.alert) {
+        world.alert = next;
+        world.events.push({ t: 'alert', red: next === 'red' });
+        pushComms(
+          world,
+          'BRIDGE',
+          next === 'red'
+            ? 'RED ALERT — shield emitters charging, all hands to stations.'
+            : 'Stand down to green alert. Shields idling down.',
+        );
+      }
+      break;
+    }
   }
 };
 
@@ -263,10 +286,14 @@ const target = (world: World): EnemyShip | null =>
 const tryFireBeam = (world: World): void => {
   const p = world.player;
   const t = target(world);
-  if (!t || p.beamCharge < 1) return;
+  // Docking is a combat-safe refuge in both directions: you can't be shot, and you
+  // can't snipe from inside the station's arms.
+  if (!t || p.beamCharge < 1 || p.docked) return;
 
+  // Weapons power drives the RECHARGE rate, never the damage. Scaling both was a
+  // double-dip that made the reactor allocation worth about twice what it should be.
   const stats = effectiveStats(p);
-  const damage = stats.beamDamage * powerScale(p.power.weapons);
+  const damage = stats.beamDamage;
 
   // Armour holds until Science has scanned the weakpoint — that scan is the whole
   // reason a cruiser fight wants a Science officer.
@@ -279,7 +306,7 @@ const tryFireBeam = (world: World): void => {
 
 const tryFireTorpedo = (world: World): void => {
   const p = world.player;
-  if (p.torpedoAmmo <= 0 || p.torpedoReload > 0) return;
+  if (p.torpedoAmmo <= 0 || p.torpedoReload > 0 || p.docked) return;
 
   const t = target(world);
   if (!t || !inArc(p, t, TORPEDO_ARC_DEG)) return;
@@ -302,6 +329,7 @@ const tryDock = (world: World): void => {
   if (p.docked) {
     p.docked = false;
     p.dockedAt = null;
+    p.invulnerable = false;
     return;
   }
   if (Math.abs(p.speed) > DOCK_MAX_SPEED) return;
@@ -311,6 +339,7 @@ const tryDock = (world: World): void => {
 
   p.docked = true;
   p.dockedAt = base.id;
+  p.invulnerable = true;
   p.speed = 0;
   p.hull = p.maxHull;
   p.shield = p.maxShield;
@@ -544,18 +573,32 @@ const stepPlayer = (world: World, dt: number): void => {
   p.beamCharge = Math.min(1, p.beamCharge + stats.beamRecharge * powerScale(p.power.weapons) * dt);
   if (p.torpedoReload > 0) p.torpedoReload = Math.max(0, p.torpedoReload - dt);
   p.warpCharge = Math.min(1, p.warpCharge + WARP_CHARGE_RATE * dt);
-  if (p.shield < p.maxShield) {
-    p.shield = Math.min(p.maxShield, p.shield + SHIELD_CHARGE_RATE * powerScale(p.power.shields) * dt);
-  }
+  tickShield(world, dt);
 
   stepTurret(world, stats.turretDamage, dt);
   stepScan(world, stats.scanRange, dt);
 };
 
+/**
+ * Alert doctrine: emitters build a charge only at red alert, and at green the pool
+ * bleeds away as they idle down. Docking holds the pool steady — the station's grid
+ * carries it. Zero shields power at red alert charges nothing at all.
+ */
+const tickShield = (world: World, dt: number): void => {
+  const p = world.player;
+  if (p.hull <= 0 || p.docked) return;
+
+  if (world.alert === 'red') {
+    p.shield = Math.min(p.maxShield, p.shield + SHIELD_CHARGE_RATE * powerScale(p.power.shields) * dt);
+  } else {
+    p.shield = Math.max(0, p.shield - SHIELD_BLEED_RATE * dt);
+  }
+};
+
 /** The bought auto-turret: fires on its own interval at anything in range, no arc. */
 const stepTurret = (world: World, damage: number, dt: number): void => {
   const p = world.player;
-  if (damage <= 0) return;
+  if (damage <= 0 || p.docked) return;
 
   p.turretCooldown -= dt;
   if (p.turretCooldown > 0) return;
@@ -567,7 +610,7 @@ const stepTurret = (world: World, damage: number, dt: number): void => {
 
   p.turretCooldown = TURRET_INTERVAL;
   world.events.push({ t: 'beam', from: { ...p.pos }, to: { ...victim.pos }, friendly: true });
-  applyDamage(victim, damage, false, 0, world.events);
+  applyDamage(victim, damage * powerScale(p.power.weapons), false, 0, world.events);
 };
 
 /** Science: hold a lock inside scan range for SCAN_DURATION to reveal a contact. */
@@ -696,16 +739,54 @@ const stepTorpedoes = (world: World, dt: number): void => {
   world.torpedoes = world.torpedoes.filter((t) => t.life > 0);
 };
 
-/** Ramming (M22): both hulls take it, so collisions are a mistake, not a tactic. */
+/**
+ * Ramming (M22): both hulls take it, so collisions are a mistake and not a tactic.
+ *
+ * Damage lands once per contact, on entry. Applying it every tick while overlapping —
+ * which is what this did — meant 48 damage at 60Hz, about 2900/s, so brushing anything
+ * was instant death and the whole close-range game was unplayable.
+ */
 const stepCollisions = (world: World): void => {
   const p = world.player;
-  if (!p.alive || p.docked) return;
+  if (!p.alive || p.docked) {
+    world.touching.length = 0;
+    return;
+  }
+
+  const stats = effectiveStats(p);
+  const stillTouching: number[] = [];
 
   for (const e of world.enemies) {
-    if (!e.alive || dist(p.pos, e.pos) > COLLISION_RADIUS * 2) continue;
-    applyDamage(p, RAM_DAMAGE, false, p.power.shields, world.events);
-    applyDamage(e, RAM_DAMAGE, false, 0, world.events);
+    if (!e.alive) continue;
+
+    // Shields stand off the hull, so a shielded ship makes contact sooner.
+    const reach =
+      COLLISION_RADIUS * 2 +
+      (p.shield > 0 ? SHIELD_RADIUS_BONUS : 0) +
+      (e.shield > 0 ? SHIELD_RADIUS_BONUS : 0);
+    const range = dist(p.pos, e.pos);
+    if (range > reach) continue;
+
+    stillTouching.push(e.id);
+    if (world.touching.includes(e.id)) continue; // already resolved this collision
+
+    // A drifting nudge should not cost the same as a full-speed impact.
+    const speedFactor =
+      RAM_SPEED_MIN +
+      (RAM_SPEED_MAX - RAM_SPEED_MIN) * clamp(Math.abs(p.speed) / Math.max(1, stats.maxSpeed), 0, 1);
+
+    applyDamage(p, RAM_DAMAGE * speedFactor, false, p.power.shields, world.events);
+    applyDamage(e, RAM_DAMAGE * speedFactor, false, 0, world.events);
+
+    // Knock the two apart so they don't sit inside each other re-triggering forever.
+    if (range > 1) {
+      const push = (reach - range) * 0.5 + 50;
+      e.pos.x += ((e.pos.x - p.pos.x) / range) * push;
+      e.pos.z += ((e.pos.z - p.pos.z) / range) * push;
+    }
   }
+
+  world.touching = stillTouching;
 };
 
 /**
@@ -821,6 +902,7 @@ export const snapshot = (world: World): Snapshot => {
     time: world.time,
     phase: world.phase,
     mode: world.mode,
+    alert: world.alert,
     skirmishWave: world.skirmishWave,
     player: {
       pos: { ...p.pos },
