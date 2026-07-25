@@ -264,7 +264,9 @@ export type Command =
   | { c: 'scan'; id: number | null }
   /** Arriving at a system hails first; the crew commits to the fight with this. */
   | { c: 'acceptObjective' }
-  | { c: 'acceptContract' };
+  | { c: 'acceptContract' }
+  /** Turns the bow at the active objective and warps toward it. */
+  | { c: 'layInCourse' };
 
 export interface World {
   tick: number;

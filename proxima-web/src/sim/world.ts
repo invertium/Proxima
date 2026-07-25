@@ -250,6 +250,9 @@ export const applyCommand = (world: World, cmd: Command): void => {
     case 'acceptContract':
       acceptContract(world, (s, t) => pushComms(world, s, t));
       break;
+    case 'layInCourse':
+      layInCourse(world);
+      break;
   }
 };
 
@@ -321,6 +324,29 @@ const tryWarp = (world: World): void => {
 
   const from = { ...p.pos };
   addScaled(p.pos, forward(p.heading), WARP_DISTANCE);
+  p.warpCharge = 0;
+  world.events.push({ t: 'warp', from, to: { ...p.pos } });
+};
+
+/**
+ * Warp toward the active objective rather than along the current bow. Turning the ship
+ * first is what makes this 'lay in a course' rather than a teleport — a jump still only
+ * covers WARP_DISTANCE, so crossing the sector takes several.
+ */
+const layInCourse = (world: World): void => {
+  const p = world.player;
+  const target = world.landmarks[world.missionIndex];
+  if (!target || p.warpCharge < 1 || p.docked) return;
+
+  p.heading = Math.atan2(target.pos.z - p.pos.z, target.pos.x - p.pos.x);
+
+  // Don't overshoot the objective: a jump that would fly past it stops short so the
+  // arrival still triggers the hail.
+  const range = dist(p.pos, target.pos);
+  const jump = Math.min(WARP_DISTANCE, Math.max(0, range - target.radius - 2000));
+
+  const from = { ...p.pos };
+  addScaled(p.pos, forward(p.heading), jump);
   p.warpCharge = 0;
   world.events.push({ t: 'warp', from, to: { ...p.pos } });
 };
