@@ -48,6 +48,9 @@ export type PlayerShipType = 'interceptor' | 'cruiser' | 'corvette' | 'gunboat';
 
 export type EnemyType = 'scout' | 'gunship' | 'cruiser' | 'derelict';
 
+/** Hostile AI states. Overshoot is the strafer's loop-out after a firing pass. */
+export type EnemyAIState = 'idle' | 'approach' | 'engage' | 'overshoot';
+
 export type LandmarkKind = 'planet' | 'sun' | 'station';
 
 /** A player hull: visuals + base stats + drydock price. Cost 0 = owned from the start. */
@@ -86,10 +89,17 @@ export interface EnemyDef {
   beamDamage: number;
   rewardCredits: number;
   rewardXp: number;
-  /** Cruisers halve incoming beam damage until their shield pool is stripped. */
+  /**
+   * Armoured hulls (the cruiser) take only this fraction of beam damage until Science
+   * scans the weakpoint — which is what makes the Science station matter in a fight.
+   */
   armoredBeamMultiplier: number;
   /** Derelicts never fight — the tutorial target. */
   passive: boolean;
+  /** Interceptors dive past the player and loop out instead of holding a standoff ring. */
+  strafeRuns: boolean;
+  /** Frigates open a slow torpedo volley the helm can outrun, rather than an instant beam. */
+  torpedoVolleys: boolean;
 }
 
 export interface Landmark {
@@ -181,6 +191,11 @@ export interface EnemyShip extends Combatant {
   graceTimer: number;
   /** Set once its bounty has been paid, so the payout can't double-fire or be missed. */
   rewarded: boolean;
+  aiState: EnemyAIState;
+  /** Which side a strafer leads its pass on; flipped each run so passes cross. */
+  strafeSide: number;
+  volleyRemaining: number;
+  volleyTimer: number;
 }
 
 export interface Torpedo {

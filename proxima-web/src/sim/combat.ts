@@ -56,7 +56,11 @@ export const inArc = (from: Combatant, to: Combatant, arcDeg: number): boolean =
 export const inRange = (from: Combatant, to: Combatant, range: number): boolean =>
   dist(from.pos, to.pos) <= range;
 
-/** Resolves a beam shot: arc + range gated, cruisers halve it until their shields drop. */
+/**
+ * Resolves a beam shot: arc and range gated. `armorMultiplier` below 1 means the target
+ * is armoured — the caller decides whether that armour still applies (for cruisers it
+ * lifts once Science has scanned the weakpoint).
+ */
 export const fireBeam = (
   world: World,
   shooter: Combatant,
@@ -71,8 +75,7 @@ export const fireBeam = (
     return false;
   }
 
-  const armored = armorMultiplier < 1 && target.shield > 0;
-  const dealt = damage * (armored ? armorMultiplier : 1);
+  const dealt = damage * armorMultiplier;
 
   world.events.push({ t: 'beam', from: { ...shooter.pos }, to: { ...target.pos }, friendly });
 

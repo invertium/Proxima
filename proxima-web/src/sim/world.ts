@@ -19,6 +19,7 @@ import {
   RAM_DAMAGE,
   SCAN_DURATION,
   SECTOR_SPAN,
+  SPAWN_GRACE,
   SHIELD_CHARGE_RATE,
   SHIPS,
   STRAFE_ACCELERATION,
@@ -228,7 +229,12 @@ const tryFireBeam = (world: World): void => {
 
   const stats = effectiveStats(p);
   const damage = stats.beamDamage * powerScale(p.power.weapons);
-  if (fireBeam(world, p, t, damage, stats.beamArcDeg, BEAM_RANGE, true, ENEMIES[t.enemyType].armoredBeamMultiplier)) {
+
+  // Armour holds until Science has scanned the weakpoint — that scan is the whole
+  // reason a cruiser fight wants a Science officer.
+  const armor = p.scanned.includes(t.id) ? 1 : ENEMIES[t.enemyType].armoredBeamMultiplier;
+
+  if (fireBeam(world, p, t, damage, stats.beamArcDeg, BEAM_RANGE, true, armor)) {
     p.beamCharge = 0;
   }
 };
@@ -575,8 +581,14 @@ const spawnFleet = (world: World, around: { x: number; y: number; z: number }): 
       maxShield: def.maxShield,
       alive: true,
       fireCooldown: def.fireInterval,
-      graceTimer: 12,
+      graceTimer: SPAWN_GRACE,
       rewarded: false,
+      aiState: 'approach',
+      // Alternate the opening side across the fleet so strafers don't all cross the
+      // same way on the first pass.
+      strafeSide: i % 2 === 0 ? 1 : -1,
+      volleyRemaining: 0,
+      volleyTimer: 0,
     });
   });
 };

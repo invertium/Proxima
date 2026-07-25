@@ -157,59 +157,68 @@ export const shipDef = (type: ShipDef['type']): ShipDef => SHIPS.find((s) => s.t
 // ── Hostiles (Ships/EnemyShip.h) ────────────────────────────────────────────────
 
 export const ENEMIES: Record<EnemyType, EnemyDef> = {
+  // Interceptor: fast, fragile, never stops — dives past and loops back for another run.
   scout: {
     type: 'scout',
     name: 'Pact Scout',
     model: 'corvette',
     scale: 420,
-    maxHull: 45,
-    maxShield: 0,
-    moveSpeed: 1400,
-    turnRateDeg: 65,
+    maxHull: 50,
+    maxShield: 20,
+    moveSpeed: 1900,
+    turnRateDeg: 80,
     standoffDistance: 4500,
-    engageRange: 12000,
-    fireInterval: 2.5,
-    beamDamage: 8,
-    rewardCredits: 80,
-    rewardXp: 30,
+    engageRange: 10000,
+    fireInterval: 1.6,
+    beamDamage: 5,
+    rewardCredits: 40,
+    rewardXp: 15,
     armoredBeamMultiplier: 1,
     passive: false,
+    strafeRuns: true,
+    torpedoVolleys: false,
   },
+  // Frigate: holds a standoff ring and lobs slow torpedo volleys the helm can outrun.
   gunship: {
     type: 'gunship',
     name: 'Pact Gunship',
     model: 'gunboat',
     scale: 620,
-    maxHull: 110,
-    maxShield: 30,
+    maxHull: 100,
+    maxShield: 50,
     moveSpeed: 1100,
     turnRateDeg: 50,
     standoffDistance: 6000,
     engageRange: 12000,
-    fireInterval: 2.5,
-    beamDamage: 12,
-    rewardCredits: 140,
-    rewardXp: 55,
+    fireInterval: 9,
+    beamDamage: 8,
+    rewardCredits: 80,
+    rewardXp: 30,
     armoredBeamMultiplier: 1,
     passive: false,
+    strafeRuns: false,
+    torpedoVolleys: true,
   },
+  // Capital: slow, heavily shielded, and armoured until Science finds the weakpoint.
   cruiser: {
     type: 'cruiser',
     name: 'Pact Cruiser',
     model: 'cruiser',
     scale: 1100,
-    maxHull: 260,
-    maxShield: 90,
-    moveSpeed: 850,
+    maxHull: 220,
+    maxShield: 110,
+    moveSpeed: 700,
     turnRateDeg: 32,
     standoffDistance: 7500,
     engageRange: 14000,
     fireInterval: 3.2,
-    beamDamage: 18,
-    rewardCredits: 300,
-    rewardXp: 120,
+    beamDamage: 14,
+    rewardCredits: 200,
+    rewardXp: 80,
     armoredBeamMultiplier: 0.5,
     passive: false,
+    strafeRuns: false,
+    torpedoVolleys: false,
   },
   derelict: {
     type: 'derelict',
@@ -228,8 +237,27 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     rewardXp: 20,
     armoredBeamMultiplier: 1,
     passive: true,
+    strafeRuns: false,
+    torpedoVolleys: false,
   },
 };
+
+// ── Hostile AI (Ships/EnemyShip.h) ──────────────────────────────────────────────
+
+/** Closer than this and a strafer commits to its pass. */
+export const STRAFE_PASS_DISTANCE = 2800;
+/** Further than this after a pass and it turns around for another run. */
+export const STRAFE_BREAKOFF_DISTANCE = 9000;
+/** How far a strafer leads its aim laterally, so a run is a fly-by rather than a ram. */
+export const STRAFE_LEAD = 1400;
+/** Hostiles slide back out rather than boring through the player's hull. */
+export const MIN_SEPARATION = 1300;
+export const VOLLEY_SIZE = 3;
+export const VOLLEY_GAP = 0.6;
+export const ENEMY_TORPEDO_SPEED = 1900;
+export const ENEMY_TORPEDO_DAMAGE = 7;
+/** Seconds of held fire after spawning, so an encounter never opens with a volley. */
+export const SPAWN_GRACE = 12;
 
 // ── Drydock upgrades (Core/UpgradeCatalogue.h) ──────────────────────────────────
 //
