@@ -5,7 +5,7 @@
 // EnemyShip.h, WeaponComponent.h, HealthComponent.h, MissionSubsystem.cpp) so the
 // browser build plays at the tuning the C++ version shipped with.
 
-import type { Difficulty, EnemyDef, EnemyType, MissionDef, ShipDef } from './types';
+import type { Difficulty, EnemyDef, EnemyType, MissionDef, ShipDef, UpgradeDef } from './types';
 
 // ── Global constants (Components/*.h) ───────────────────────────────────────────
 
@@ -44,6 +44,34 @@ export const SECTOR_SPAN = 220000;
 
 /** Proximity that spawns the active mission's fleet (M23 open-sector director). */
 export const TRIGGER_RADIUS = 14000;
+
+// ── Damage control (Components/DamageControlComponent.h) ────────────────────────
+
+/** Chance a hull-reaching hit knocks out one still-working system. */
+export const DAMAGE_CHANCE = 0.35;
+/** What a knocked-out system runs at until it's welded back. */
+export const DAMAGED_MULTIPLIER = 0.5;
+export const WELDS_PER_SYSTEM_REPAIR = 3;
+/** Hull fraction below which the bridge alarm sounds. */
+export const ALARM_HULL_FRACTION = 0.3;
+/** Hull restored by a weld once nothing is broken. */
+export const WELD_HULL_REPAIR = 4;
+
+// ── Science (Components/ScienceComponent.h) ─────────────────────────────────────
+
+export const SCAN_DURATION = 2.5;
+export const SCAN_RANGE = 40000;
+
+// ── Progression (Core/SpaceGameInstance.h) ──────────────────────────────────────
+
+export const XP_PER_RANK = 400;
+export const rankFromXp = (xp: number): number => 1 + Math.floor(xp / XP_PER_RANK);
+
+// ── Auto-turret + strafe (Components/WeaponComponent.h, ShipMovementComponent.h) ─
+
+export const TURRET_RANGE = 12000;
+export const TURRET_INTERVAL = 1.6;
+export const STRAFE_ACCELERATION = 2600;
 
 export const DIFFICULTY_SCALE: Record<Difficulty, { damage: number; hull: number }> = {
   ensign: { damage: 0.7, hull: 0.8 },
@@ -202,6 +230,31 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     passive: true,
   },
 };
+
+// ── Drydock upgrades (Core/UpgradeCatalogue.h) ──────────────────────────────────
+//
+// Tier t+1 costs baseCost*(t+1) and requires crew rank t+1, so progression is gated
+// by both credits and XP. The last two are one-time modules the starter hull lacks.
+
+export const UPGRADES: UpgradeDef[] = [
+  { id: 'beam_damage', name: 'Beam Damage', unit: 'dmg', stat: 'beamDamage', magnitudePerTier: 8, maxTier: 3, baseCost: 150 },
+  { id: 'beam_recharge', name: 'Beam Recharge', unit: '/s', stat: 'beamRecharge', magnitudePerTier: 0.15, maxTier: 3, baseCost: 150 },
+  { id: 'fire_arc', name: 'Targeting Arc', unit: '°', stat: 'fireArc', magnitudePerTier: 15, maxTier: 3, baseCost: 120 },
+  { id: 'hull', name: 'Hull Plating', unit: 'hull', stat: 'maxHull', magnitudePerTier: 40, maxTier: 3, baseCost: 200 },
+  { id: 'shields', name: 'Shield Capacity', unit: 'shld', stat: 'maxShield', magnitudePerTier: 30, maxTier: 3, baseCost: 200 },
+  { id: 'torpedo', name: 'Torpedo Tubes', unit: 'rds', stat: 'torpedoAmmo', magnitudePerTier: 2, maxTier: 3, baseCost: 180 },
+  { id: 'reactor', name: 'Reactor Output', unit: 'pwr', stat: 'reactorBudget', magnitudePerTier: 0.5, maxTier: 3, baseCost: 250 },
+  { id: 'strafe', name: 'Manoeuvring Thrusters', unit: 'uu/s', stat: 'strafeSpeed', magnitudePerTier: 950, maxTier: 1, baseCost: 160 },
+  { id: 'turret', name: 'Auto-Turret', unit: 'dmg', stat: 'turret', magnitudePerTier: 12, maxTier: 1, baseCost: 240 },
+];
+
+export const upgradeDef = (id: string): UpgradeDef | undefined => UPGRADES.find((u) => u.id === id);
+
+/** Credit cost to buy the next tier up from `currentTier` (0-based). */
+export const upgradeCost = (u: UpgradeDef, currentTier: number): number => u.baseCost * (currentTier + 1);
+
+/** Crew rank needed for the next tier: tier 1 needs rank 1, tier 2 rank 2, and so on. */
+export const upgradeRankReq = (currentTier: number): number => currentTier + 1;
 
 // ── Campaign (Core/MissionSubsystem.cpp BuildCampaign) ──────────────────────────
 

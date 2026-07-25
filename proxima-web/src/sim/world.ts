@@ -5,10 +5,11 @@
 import { stepEnemy } from './ai';
 import { applyDamage, fireBeam, inArc, inRange } from './combat';
 import {
-  BEAM_ARC_DEG,
+  ALARM_HULL_FRACTION,
   BEAM_RANGE,
   CAMPAIGN,
   COLLISION_RADIUS,
+  DAMAGE_CHANCE,
   DIFFICULTY_SCALE,
   DOCK_MAX_SPEED,
   DOCK_RANGE,
@@ -16,23 +17,34 @@ import {
   MAX_PER_SYSTEM,
   MAX_SHIELD,
   RAM_DAMAGE,
-  REACTOR_BUDGET,
+  SCAN_DURATION,
   SECTOR_SPAN,
   SHIELD_CHARGE_RATE,
   SHIPS,
+  STRAFE_ACCELERATION,
   TORPEDO_ARC_DEG,
   TORPEDO_DAMAGE,
   TORPEDO_LIFE,
   TORPEDO_RELOAD,
   TORPEDO_SPEED,
   TRIGGER_RADIUS,
+  TURRET_INTERVAL,
+  TURRET_RANGE,
   WARP_CHARGE_RATE,
   WARP_DISTANCE,
+  WELDS_PER_SYSTEM_REPAIR,
+  WELD_HULL_REPAIR,
+  rankFromXp,
   shipDef,
+  upgradeCost,
+  upgradeDef,
+  upgradeRankReq,
 } from './data';
+import { effectiveStats } from './stats';
 import { DEG, addScaled, clamp, dist, forward, interpConstantTo, makeRng, vec } from './math';
 import type {
   Command,
+  DamageSystem,
   Difficulty,
   EnemyShip,
   Landmark,
@@ -103,6 +115,15 @@ export const createWorld = (
     targetId: null,
     credits: 0,
     xp: 0,
+    upgrades: {},
+    ownedShips: [def.type],
+    damaged: { engine: false, weapons: false, sensors: false },
+    repairWelds: 0,
+    turretCooldown: 0,
+    scanTargetId: null,
+    scanProgress: 0,
+    scanning: false,
+    scanned: [],
   };
 
   return {
@@ -111,6 +132,7 @@ export const createWorld = (
     phase: 'playing',
     difficulty: opts.difficulty ?? 'captain',
     seed,
+    rng: makeRng(seed),
     intent: { throttle: 0, turn: 0, strafe: 0 },
     pending: [],
     player,
@@ -164,14 +186,26 @@ export const applyCommand = (world: World, cmd: Command): void => {
       break;
     case 'power': {
       // The reactor is a hard cap on the total (D11): a system can only take what the
-      // other two leave unclaimed.
+      // other two leave unclaimed. The budget itself grows with Reactor Output.
       const others = (Object.keys(p.power) as ShipSystem[])
         .filter((s) => s !== cmd.system)
         .reduce((sum, s) => sum + p.power[s], 0);
-      const headroom = Math.max(0, REACTOR_BUDGET - others);
+      const headroom = Math.max(0, effectiveStats(p).reactorBudget - others);
       p.power[cmd.system] = Math.min(clamp(cmd.v, 0, MAX_PER_SYSTEM), headroom);
       break;
     }
+    case 'buyUpgrade':
+      tryBuyUpgrade(world, cmd.id);
+      break;
+    case 'weld':
+      weld(world);
+      break;
+    case 'scan':
+      // Retargeting restarts the scan; the crew can't bank progress across contacts.
+      p.scanTargetId = cmd.id;
+      p.scanProgress = 0;
+      p.scanning = cmd.id !== null;
+      break;
     case 'dock':
       tryDock(world);
       break;
@@ -192,9 +226,9 @@ const tryFireBeam = (world: World): void => {
   const t = target(world);
   if (!t || p.beamCharge < 1) return;
 
-  const def = shipDef(p.shipType);
-  const damage = def.beamDamage * powerScale(p.power.weapons);
-  if (fireBeam(world, p, t, damage, BEAM_ARC_DEG, BEAM_RANGE, true, ENEMIES[t.enemyType].armoredBeamMultiplier)) {
+  const stats = effectiveStats(p);
+  const damage = stats.beamDamage * powerScale(p.power.weapons);
+  if (fireBeam(world, p, t, damage, stats.beamArcDeg, BEAM_RANGE, true, ENEMIES[t.enemyType].armoredBeamMultiplier)) {
     p.beamCharge = 0;
   }
 };
@@ -256,14 +290,99 @@ const tryBuyShip = (world: World, type: PlayerShipType): void => {
   if (!p.docked) return;
 
   const def = SHIPS.find((s) => s.type === type);
-  if (!def || def.type === p.shipType || p.credits < def.cost) return;
+  if (!def || def.type === p.shipType) return;
 
-  p.credits -= def.cost;
+  // Already-owned hulls are a free switch; a new one costs credits and crew rank.
+  const owned = p.ownedShips.includes(def.type);
+  if (!owned) {
+    if (p.credits < def.cost || rankFromXp(p.xp) < def.rankReq) return;
+    p.credits -= def.cost;
+    p.ownedShips.push(def.type);
+  }
+
   p.shipType = def.type;
-  p.maxHull = def.maxHull;
-  p.hull = def.maxHull;
-  p.torpedoAmmo = def.torpedoAmmo;
+  const stats = effectiveStats(p);
+  p.maxHull = stats.maxHull;
+  p.hull = stats.maxHull;
+  p.maxShield = stats.maxShield;
+  p.torpedoAmmo = stats.torpedoAmmo;
   pushComms(world, 'DRYDOCK', `${def.name} is yours, Captain. She's fuelled and ready.`);
+};
+
+const tryBuyUpgrade = (world: World, id: string): void => {
+  const p = world.player;
+  if (!p.docked) return;
+
+  const def = upgradeDef(id);
+  if (!def) return;
+
+  const tier = p.upgrades[id] ?? 0;
+  if (tier >= def.maxTier) return;
+  if (p.credits < upgradeCost(def, tier)) return;
+  if (rankFromXp(p.xp) < upgradeRankReq(tier)) return;
+
+  p.credits -= upgradeCost(def, tier);
+  p.upgrades[id] = tier + 1;
+
+  // Capacity upgrades should be immediately useful, so top the pools up to the new
+  // maximum rather than leaving the crew to go and find a repair.
+  const stats = effectiveStats(p);
+  if (def.stat === 'maxHull') {
+    p.hull += def.magnitudePerTier;
+    p.maxHull = stats.maxHull;
+  }
+  if (def.stat === 'maxShield') {
+    p.shield += def.magnitudePerTier;
+    p.maxShield = stats.maxShield;
+  }
+  if (def.stat === 'torpedoAmmo') p.torpedoAmmo += def.magnitudePerTier;
+
+  pushComms(world, 'DRYDOCK', `${def.name} installed — tier ${tier + 1}.`);
+};
+
+/** The first damaged system in a fixed order, so repairs are predictable for the crew. */
+const repairTarget = (p: PlayerShip): DamageSystem | null =>
+  (['engine', 'weapons', 'sensors'] as DamageSystem[]).find((s) => p.damaged[s]) ?? null;
+
+/**
+ * Engineering's repair sweep. Welds go into fixing broken systems first — three per
+ * system — and only once everything works do further welds patch hull.
+ */
+const weld = (world: World): void => {
+  const p = world.player;
+  const target = repairTarget(p);
+
+  if (!target) {
+    p.hull = Math.min(p.maxHull, p.hull + WELD_HULL_REPAIR);
+    return;
+  }
+
+  p.repairWelds += 1;
+  if (p.repairWelds >= WELDS_PER_SYSTEM_REPAIR) {
+    p.repairWelds = 0;
+    p.damaged[target] = false;
+    world.events.push({ t: 'systemRepaired', system: target });
+    pushComms(world, 'ENGINEERING', `${target.toUpperCase()} back online, Captain.`);
+  }
+};
+
+/**
+ * Every hit that actually reaches hull threatens a system. Using hull damage rather
+ * than "were shields down?" means an exactly-shield-depleting hit can't break anything,
+ * while a shield-bypassing torpedo correctly can.
+ */
+export const rollSystemDamage = (world: World, hullDamage: number): void => {
+  const p = world.player;
+  if (hullDamage <= 0 || p.hull <= 0) return;
+  if (world.rng() >= DAMAGE_CHANCE) return;
+
+  const working = (['engine', 'weapons', 'sensors'] as DamageSystem[]).filter((s) => !p.damaged[s]);
+  if (working.length === 0) return;
+
+  const hit = working[Math.floor(world.rng() * working.length)]!;
+  p.damaged[hit] = true;
+  world.events.push({ t: 'systemDamaged', system: hit });
+  pushComms(world, 'ENGINEERING', `${hit.toUpperCase()} is offline — routing to repair.`);
 };
 
 const pushComms = (world: World, sender: string, text: string): void => {
@@ -292,12 +411,17 @@ export const step = (world: World, dt: number): void => {
   stepPlayer(world, dt);
   stepDirector(world, dt);
 
+  // Any hull the player loses this tick — from any source — can knock out a system.
+  // Measuring the delta here catches beams, torpedoes and rams with one hook.
+  const hullBefore = world.player.hull;
+
   for (const e of world.enemies) {
     if (e.alive) stepEnemy(world, e, dt);
   }
 
   stepTorpedoes(world, dt);
   stepCollisions(world);
+  rollSystemDamage(world, hullBefore - world.player.hull);
   resolveEncounter(world);
 
   if (world.player.hull <= 0) {
@@ -308,8 +432,16 @@ export const step = (world: World, dt: number): void => {
 
 const stepPlayer = (world: World, dt: number): void => {
   const p = world.player;
-  const def = shipDef(p.shipType);
   if (!p.alive) return;
+
+  const stats = effectiveStats(p);
+
+  // Capacity upgrades and system damage both move the ceilings, so keep the pools
+  // inside them rather than letting a stale max linger after a hull swap or a repair.
+  p.maxHull = stats.maxHull;
+  p.maxShield = stats.maxShield;
+  p.hull = Math.min(p.hull, p.maxHull);
+  p.shield = Math.min(p.shield, p.maxShield);
 
   if (p.docked) {
     world.intent.throttle = 0;
@@ -317,24 +449,69 @@ const stepPlayer = (world: World, dt: number): void => {
   } else {
     // Impulse feel: throttle sets a target speed the ship eases toward at a constant
     // rate, scaled by whatever the reactor is giving Engines.
-    const maxSpeed = def.maxSpeed * powerScale(p.power.engines);
-    p.speed = interpConstantTo(p.speed, world.intent.throttle * maxSpeed, dt, def.acceleration);
-    p.heading += world.intent.turn * def.turnRate * DEG * dt;
+    const maxSpeed = stats.maxSpeed * powerScale(p.power.engines);
+    p.speed = interpConstantTo(p.speed, world.intent.throttle * maxSpeed, dt, stats.acceleration);
+    p.heading += world.intent.turn * stats.turnRate * DEG * dt;
     addScaled(p.pos, forward(p.heading), p.speed * dt);
 
-    if (world.intent.strafe !== 0) {
-      const right = forward(p.heading + Math.PI / 2);
-      addScaled(p.pos, right, world.intent.strafe * def.maxSpeed * 0.35 * dt);
+    // Lateral thrust only exists once Manoeuvring Thrusters are bought.
+    const targetStrafe = world.intent.strafe * stats.strafeSpeed * powerScale(p.power.engines);
+    p.strafeSpeed = interpConstantTo(p.strafeSpeed, targetStrafe, dt, STRAFE_ACCELERATION);
+    if (p.strafeSpeed !== 0) {
+      addScaled(p.pos, forward(p.heading + Math.PI / 2), p.strafeSpeed * dt);
     }
   }
 
   // Beam recharge, torpedo reload, warp spool, shield regen.
-  p.beamCharge = Math.min(1, p.beamCharge + def.beamRecharge * powerScale(p.power.weapons) * dt);
+  p.beamCharge = Math.min(1, p.beamCharge + stats.beamRecharge * powerScale(p.power.weapons) * dt);
   if (p.torpedoReload > 0) p.torpedoReload = Math.max(0, p.torpedoReload - dt);
   p.warpCharge = Math.min(1, p.warpCharge + WARP_CHARGE_RATE * dt);
   if (p.shield < p.maxShield) {
     p.shield = Math.min(p.maxShield, p.shield + SHIELD_CHARGE_RATE * powerScale(p.power.shields) * dt);
   }
+
+  stepTurret(world, stats.turretDamage, dt);
+  stepScan(world, stats.scanRange, dt);
+};
+
+/** The bought auto-turret: fires on its own interval at anything in range, no arc. */
+const stepTurret = (world: World, damage: number, dt: number): void => {
+  const p = world.player;
+  if (damage <= 0) return;
+
+  p.turretCooldown -= dt;
+  if (p.turretCooldown > 0) return;
+
+  const victim = world.enemies
+    .filter((e) => e.alive && dist(p.pos, e.pos) <= TURRET_RANGE)
+    .sort((a, b) => dist(p.pos, a.pos) - dist(p.pos, b.pos))[0];
+  if (!victim) return;
+
+  p.turretCooldown = TURRET_INTERVAL;
+  world.events.push({ t: 'beam', from: { ...p.pos }, to: { ...victim.pos }, friendly: true });
+  applyDamage(victim, damage, false, 0, world.events);
+};
+
+/** Science: hold a lock inside scan range for SCAN_DURATION to reveal a contact. */
+const stepScan = (world: World, range: number, dt: number): void => {
+  const p = world.player;
+  if (!p.scanning || p.scanTargetId === null) return;
+
+  const target = world.enemies.find((e) => e.id === p.scanTargetId && e.alive);
+  if (!target || dist(p.pos, target.pos) > range) {
+    // Losing the contact loses the progress — the scan has to be held.
+    p.scanProgress = 0;
+    return;
+  }
+
+  p.scanProgress += dt / SCAN_DURATION;
+  if (p.scanProgress < 1) return;
+
+  p.scanProgress = 1;
+  p.scanning = false;
+  if (!p.scanned.includes(target.id)) p.scanned.push(target.id);
+  world.events.push({ t: 'scanComplete', id: target.id });
+  pushComms(world, 'SCIENCE', `Scan complete: ${ENEMIES[target.enemyType].name}.`);
 };
 
 /**
@@ -474,7 +651,7 @@ const resolveEncounter = (world: World): void => {
  */
 export const snapshot = (world: World): Snapshot => {
   const p = world.player;
-  const def = shipDef(p.shipType);
+  const stats = effectiveStats(p);
   const objectiveLandmark = world.landmarks[world.missionIndex] ?? null;
 
   return {
@@ -489,7 +666,7 @@ export const snapshot = (world: World): Snapshot => {
       shield: p.shield,
       maxShield: p.maxShield,
       speed: p.speed,
-      maxSpeed: def.maxSpeed,
+      maxSpeed: stats.maxSpeed,
       power: { ...p.power },
       beamCharge: p.beamCharge,
       torpedoAmmo: p.torpedoAmmo,
@@ -498,7 +675,26 @@ export const snapshot = (world: World): Snapshot => {
       targetId: p.targetId,
       credits: p.credits,
       xp: p.xp,
+      rank: rankFromXp(p.xp),
       shipType: p.shipType,
+      ownedShips: [...p.ownedShips],
+      upgrades: { ...p.upgrades },
+      damaged: { ...p.damaged },
+      repairWelds: p.repairWelds,
+      repairTarget: repairTarget(p),
+      hullCritical: p.hull / p.maxHull < ALARM_HULL_FRACTION,
+      scanTargetId: p.scanTargetId,
+      scanProgress: p.scanProgress,
+      scanning: p.scanning,
+      stats: {
+        maxSpeed: stats.maxSpeed,
+        beamArcDeg: stats.beamArcDeg,
+        beamDamage: stats.beamDamage,
+        reactorBudget: stats.reactorBudget,
+        strafeSpeed: stats.strafeSpeed,
+        turretDamage: stats.turretDamage,
+        scanRange: stats.scanRange,
+      },
     },
     contacts: world.enemies
       .filter((e) => e.alive)
@@ -511,9 +707,10 @@ export const snapshot = (world: World): Snapshot => {
         maxHull: e.maxHull,
         shield: e.shield,
         hostile: !ENEMIES[e.enemyType].passive,
-        inBeamArc: inArc(p, e, BEAM_ARC_DEG) && inRange(p, e, BEAM_RANGE),
+        inBeamArc: inArc(p, e, stats.beamArcDeg) && inRange(p, e, BEAM_RANGE),
         inTorpedoArc: inArc(p, e, TORPEDO_ARC_DEG),
         range: dist(p.pos, e.pos),
+        scanned: p.scanned.includes(e.id),
       })),
     landmarks: world.landmarks.map((l) => ({
       id: l.id,

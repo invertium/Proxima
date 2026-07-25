@@ -5,11 +5,40 @@
 // every ported constant transfers without rescaling (a ship hull is ~1000 units long,
 // beam range 15000, the sector spans ~200000). One sim unit = one Three.js unit.
 
-import type { Vec3 } from './math';
+import type { Rng, Vec3 } from './math';
 
 export type Station = 'helm' | 'weapons' | 'engineering' | 'science';
 
 export type ShipSystem = 'engines' | 'weapons' | 'shields';
+
+/**
+ * Systems that take *combat* damage — distinct from ShipSystem, which is the reactor's
+ * power rows. A damaged system runs at DAMAGED_MULTIPLIER until Engineering welds it.
+ */
+export type DamageSystem = 'engine' | 'weapons' | 'sensors';
+
+/** The stat an upgrade path moves. Mirrors EUpgradeStat. */
+export type UpgradeStat =
+  | 'beamDamage'
+  | 'beamRecharge'
+  | 'fireArc'
+  | 'maxHull'
+  | 'maxShield'
+  | 'torpedoAmmo'
+  | 'reactorBudget'
+  | 'strafeSpeed'
+  | 'turret';
+
+export interface UpgradeDef {
+  id: string;
+  name: string;
+  unit: string;
+  stat: UpgradeStat;
+  magnitudePerTier: number;
+  maxTier: number;
+  /** Tier t+1 costs baseCost*(t+1) and requires rank t+1. */
+  baseCost: number;
+}
 
 export type GamePhase = 'playing' | 'victory' | 'defeat';
 
@@ -127,6 +156,21 @@ export interface PlayerShip extends Combatant {
   targetId: number | null;
   credits: number;
   xp: number;
+  /** Purchased tier per upgrade id; absent means tier 0. */
+  upgrades: Record<string, number>;
+  /** Hulls bought at the drydock and therefore switchable to. */
+  ownedShips: PlayerShipType[];
+  /** Which combat systems are currently knocked out. */
+  damaged: Record<DamageSystem, boolean>;
+  /** Welds credited toward the current repair target; 3 completes one. */
+  repairWelds: number;
+  /** Auto-turret cooldown, only meaningful once the module is bought. */
+  turretCooldown: number;
+  scanTargetId: number | null;
+  scanProgress: number;
+  scanning: boolean;
+  /** Contacts whose hull/shield numbers have been revealed by a completed scan. */
+  scanned: number[];
 }
 
 export interface EnemyShip extends Combatant {
@@ -156,7 +200,10 @@ export type SimEvent =
   | { t: 'kill'; pos: Vec3; id: number }
   | { t: 'comms'; sender: string; text: string }
   | { t: 'dock'; station: string }
-  | { t: 'warp'; from: Vec3; to: Vec3 };
+  | { t: 'warp'; from: Vec3; to: Vec3 }
+  | { t: 'systemDamaged'; system: DamageSystem }
+  | { t: 'systemRepaired'; system: DamageSystem }
+  | { t: 'scanComplete'; id: number };
 
 /** Commands are the only way anything mutates the world — stations send these. */
 export type Command =
@@ -169,7 +216,11 @@ export type Command =
   | { c: 'power'; system: ShipSystem; v: number }
   | { c: 'dock' }
   | { c: 'warp' }
-  | { c: 'buyShip'; type: PlayerShipType };
+  | { c: 'buyShip'; type: PlayerShipType }
+  | { c: 'buyUpgrade'; id: string }
+  /** Engineering's repair sweep: fixes the current damaged system, else restores hull. */
+  | { c: 'weld' }
+  | { c: 'scan'; id: number | null };
 
 export interface World {
   tick: number;
@@ -177,6 +228,8 @@ export interface World {
   phase: GamePhase;
   difficulty: Difficulty;
   seed: number;
+  /** The world's only randomness. Seeded, so damage rolls and fleet layouts replay. */
+  rng: Rng;
   /** Helm intent, held per-world so several sims can run in one process (tests, replays). */
   intent: { throttle: number; turn: number; strafe: number };
   /** Commands land here and are drained at a fixed point in the tick, keeping order deterministic. */
@@ -218,7 +271,28 @@ export interface Snapshot {
     targetId: number | null;
     credits: number;
     xp: number;
+    rank: number;
     shipType: PlayerShipType;
+    ownedShips: PlayerShipType[];
+    upgrades: Record<string, number>;
+    damaged: Record<DamageSystem, boolean>;
+    repairWelds: number;
+    /** Which system the next welds will fix, or null when everything works. */
+    repairTarget: DamageSystem | null;
+    hullCritical: boolean;
+    scanTargetId: number | null;
+    scanProgress: number;
+    scanning: boolean;
+    /** Effective numbers after upgrades and damage — what the stations should display. */
+    stats: {
+      maxSpeed: number;
+      beamArcDeg: number;
+      beamDamage: number;
+      reactorBudget: number;
+      strafeSpeed: number;
+      turretDamage: number;
+      scanRange: number;
+    };
   };
   contacts: {
     id: number;
@@ -232,6 +306,8 @@ export interface Snapshot {
     inBeamArc: boolean;
     inTorpedoArc: boolean;
     range: number;
+    /** Hull/shield numbers are only trustworthy once Science has scanned the contact. */
+    scanned: boolean;
   }[];
   landmarks: { id: string; name: string; kind: LandmarkKind; pos: Vec3; radius: number; color: number }[];
   objective: { name: string; pos: Vec3; range: number } | null;
