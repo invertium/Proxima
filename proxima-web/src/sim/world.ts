@@ -849,6 +849,12 @@ export const snapshot = (world: World): Snapshot => {
         range: dist(p.pos, e.pos),
         scanned: p.scanned.includes(e.id),
       })),
+    torpedoes: world.torpedoes.map((t) => ({
+      id: t.id,
+      pos: { ...t.pos },
+      heading: t.heading,
+      friendly: t.friendly,
+    })),
     landmarks: world.landmarks.map((l) => ({
       id: l.id,
       name: l.name,

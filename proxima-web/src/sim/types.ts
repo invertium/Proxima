@@ -386,6 +386,8 @@ export interface Snapshot {
     scanned: boolean;
   }[];
   landmarks: { id: string; name: string; kind: LandmarkKind; pos: Vec3; radius: number; color: number }[];
+  /** In-flight torpedoes, so the renderer can draw them and the crew can see them coming. */
+  torpedoes: { id: number; pos: Vec3; heading: number; friendly: boolean }[];
   objective: { name: string; pos: Vec3; range: number; offered: boolean; live: boolean } | null;
   /** The live sector event, for the radar marker and the countdown. */
   event: { kind: SectorEvent; pos: Vec3; timeLeft: number } | null;

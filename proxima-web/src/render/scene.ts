@@ -34,6 +34,16 @@ import type { SimEvent, Snapshot } from '../sim/types';
 const STARFIELD_COUNT = 4000;
 const STARFIELD_RADIUS = 400000;
 
+// Camera shake (Ships/Spaceship.h): hits add trauma, which decays and drives a
+// per-axis wobble. Trauma rather than a fixed shake means a big hit reads bigger.
+const TRAUMA_DECAY_PER_SEC = 1.6;
+const HIT_TRAUMA_PER_DAMAGE = 0.04;
+const MAX_SHAKE_PITCH = 1.6;
+const MAX_SHAKE_YAW = 1.6;
+const MAX_SHAKE_ROLL = 2.4;
+
+const TORPEDO_POOL = 24;
+
 export class SectorView {
   readonly scene = new Scene();
   readonly camera: PerspectiveCamera;
@@ -49,6 +59,10 @@ export class SectorView {
   private readonly camPos = new Vector3();
   private readonly camLook = new Vector3();
   private primed = false;
+
+  private trauma = 0;
+  private readonly shakeRng = makeRng(31);
+  private readonly torpedoes: Mesh[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new WebGLRenderer({
@@ -71,6 +85,16 @@ export class SectorView {
 
     this.scene.add(makeStarfield());
     this.fx = new CombatFx(this.scene);
+
+    // Torpedoes are pooled: a volley spawns three at once and they're all identical.
+    const torpGeo = new SphereGeometry(90, 10, 8);
+    for (let i = 0; i < TORPEDO_POOL; i++) {
+      const mesh = new Mesh(torpGeo, new MeshBasicMaterial({ color: 0xffdd88 }));
+      mesh.visible = false;
+      this.scene.add(mesh);
+      this.torpedoes.push(mesh);
+    }
+
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -78,6 +102,13 @@ export class SectorView {
   /** One tick's sim events, handed straight to the effect pools. */
   ingest(events: SimEvent[]): void {
     this.fx.ingest(events);
+
+    // Hull hits shake the bridge. Scaled by damage and clamped, so a torpedo rattles
+    // the camera and a glancing beam barely registers.
+    for (const ev of events) {
+      if (ev.t === 'hit') this.trauma = Math.min(1, this.trauma + ev.damage * HIT_TRAUMA_PER_DAMAGE);
+      else if (ev.t === 'kill') this.trauma = Math.min(1, this.trauma + 0.25);
+    }
   }
 
   /**
@@ -152,6 +183,7 @@ export class SectorView {
 
     this.syncPlayer(snap);
     this.syncContacts(snap);
+    this.syncTorpedoes(snap);
     this.updateCamera(snap, dt);
     this.fx.update(dt);
     this.renderer.render(this.scene, this.camera);
@@ -198,6 +230,19 @@ export class SectorView {
     }
   }
 
+  private syncTorpedoes(snap: Snapshot): void {
+    snap.torpedoes.forEach((t, i) => {
+      const mesh = this.torpedoes[i];
+      if (!mesh) return;
+      mesh.visible = true;
+      mesh.position.set(t.pos.x, t.pos.y, t.pos.z);
+      (mesh.material as MeshBasicMaterial).color.setHex(t.friendly ? 0xffdd88 : 0xff7755);
+    });
+    for (let i = snap.torpedoes.length; i < this.torpedoes.length; i++) {
+      this.torpedoes[i]!.visible = false;
+    }
+  }
+
   private updateCamera(snap: Snapshot, dt: number): void {
     const p = snap.player;
     const back = 3200;
@@ -216,8 +261,21 @@ export class SectorView {
 
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
+
+    // Apply the shake after aiming, so it rattles the view rather than the target.
+    if (this.trauma > 0) {
+      this.trauma = Math.max(0, this.trauma - TRAUMA_DECAY_PER_SEC * dt);
+      // Squared falls off faster than linear, which reads as a jolt settling.
+      const t = this.trauma * this.trauma;
+      const jitter = () => (this.shakeRng() * 2 - 1) * t * DEG_TO_RAD;
+      this.camera.rotation.x += jitter() * MAX_SHAKE_PITCH;
+      this.camera.rotation.y += jitter() * MAX_SHAKE_YAW;
+      this.camera.rotation.z += jitter() * MAX_SHAKE_ROLL;
+    }
   }
 }
+
+const DEG_TO_RAD = Math.PI / 180;
 
 const makeStarfield = (): Points => {
   const rng = makeRng(7);

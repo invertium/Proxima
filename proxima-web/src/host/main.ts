@@ -1,6 +1,7 @@
 // Host / pilot application. Owns the renderer, the pilot's input, and the worker that
 // runs the authoritative simulation.
 
+import { BridgeAudio } from '../render/audio';
 import { SectorView } from '../render/scene';
 import { RelayHost } from '../net/transport';
 import { Menu, type NewGameChoice } from './menu';
@@ -16,6 +17,7 @@ const bootEl = document.getElementById('boot') as HTMLDivElement;
 const menuEl = document.getElementById('menu') as HTMLDivElement;
 
 const view = new SectorView(canvas);
+const audio = new BridgeAudio();
 const worker = new Worker(new URL('./sim.worker.ts', import.meta.url), { type: 'module' });
 const crew = new RelayHost();
 
@@ -44,6 +46,7 @@ worker.onmessage = (ev: MessageEvent<ServerMessage>) => {
 
   snap = msg.snapshot;
   view.ingest(msg.events);
+  audio.ingest(msg.events, msg.snapshot.player.hullCritical, 1 / 60);
   crew.broadcast(msg);
 
   // The sim owns the outcome; the menu just reflects it.
@@ -85,6 +88,8 @@ crew.onMessage((msg) => {
 const held = new Set<string>();
 
 window.addEventListener('keydown', (e) => {
+  // Browsers won't start an AudioContext without a gesture.
+  audio.unlock();
   if (e.repeat) return;
   held.add(e.code);
 
@@ -189,6 +194,7 @@ const frame = (): void => {
   if (!menu.isOpen) pumpInput();
   if (snap) {
     view.update(snap, dt);
+    audio.setThrottle(Math.abs(snap.player.speed) / Math.max(1, snap.player.maxSpeed));
     drawHud(snap);
   }
 };
