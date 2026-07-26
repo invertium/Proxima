@@ -13,7 +13,6 @@ both point at Three.js. The reasoning, including where Babylon genuinely wins, i
 
 ```bash
 npm install
-npm run assets     # art_src/generated_ships/*.glb -> public/assets/ships/
 npm run dev        # http://localhost:5173  (crew: /station.html)
 ```
 
