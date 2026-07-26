@@ -246,7 +246,7 @@ const drawHud = (s: Snapshot): void => {
       : '<div class="tgt">GREEN ALERT — shields bleeding down · V to sound red alert</div>',
     s.mode === 'skirmish' ? `<div class="obj">SKIRMISH — WAVE ${s.skirmishWave}</div>` : '',
     s.objective && s.mode === 'campaign'
-      ? `<div class="obj">OBJECTIVE: ${s.objective.name} — ${(s.objective.range / 1000).toFixed(1)} km${s.objective.offered ? ' — press E to ACCEPT' : ''}</div>`
+      ? `<div class="obj">OBJECTIVE: ${s.objective.name} — ${(s.objective.range / 1000).toFixed(1)} km${s.objective.offered ? ' — press ENTER to ACCEPT' : ''}</div>`
       : '',
     s.event ? `<div class="obj">EVENT: ${s.event.kind.toUpperCase()} — ${Math.ceil(s.event.timeLeft)}s</div>` : '',
     s.contract ? `<div class="tgt">${s.contract.text}</div>` : '',

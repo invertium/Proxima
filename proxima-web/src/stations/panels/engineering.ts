@@ -1,4 +1,9 @@
-// Engineering: reactor, damage control, the drydock, and the contract board.
+// Engineering: reactor, damage control, and the drydock.
+//
+// The contract board used to sit here (as it did in the C++ console, next to the
+// drydock wallet). It moved to Science: signing a posting is answering the starbase,
+// and having one console own every hail is worth more than keeping the money in one
+// place. Engineering still spends the credits a contract earns.
 
 import {
   MAX_PER_SYSTEM,
@@ -68,13 +73,6 @@ export const createEngineeringPanel = (send: Send): Panel => {
     (phase) => send({ c: 'weld', phase }),
   );
 
-  // ── Contract board ────────────────────────────────────────────────────────────
-  const boardText = el('p', { class: 'muted' });
-  const acceptContract = tapButton('ACCEPT CONTRACT', () => send({ c: 'acceptContract' }), {
-    class: 'alert',
-  });
-  const board = el('div', { children: [boardText, acceptContract] });
-
   // ── Drydock ───────────────────────────────────────────────────────────────────
   const dockedNote = el('p', { class: 'muted', text: 'Dock at a starbase to open the drydock.' });
   const upgradeList = el('div', { class: 'contacts' });
@@ -92,8 +90,6 @@ export const createEngineeringPanel = (send: Send): Panel => {
       el('div', { class: 'chips', children: chips }),
       sweep.root,
       weldLabel,
-      el('h3', { text: 'CONTRACT BOARD' }),
-      board,
       drydockHead,
       dockedNote,
       upgradeList,
@@ -143,18 +139,6 @@ export const createEngineeringPanel = (send: Send): Panel => {
           ? `Repairing ${p.repairTarget.toUpperCase()} — ${p.repairWelds}/3 welds. Release in the green.`
           : 'Release in the green to patch hull.',
       );
-
-      // Contracts: the offer only exists while docked, and only one runs at a time.
-      if (s.contract) {
-        setText(boardText, s.contract.text);
-        setHidden(acceptContract, true);
-      } else if (s.offer) {
-        setText(boardText, s.offer.text);
-        setHidden(acceptContract, false);
-      } else {
-        setText(boardText, p.docked ? 'No postings.' : 'Dock at a starbase to see the board.');
-        setHidden(acceptContract, true);
-      }
 
       setText(drydockHead, `DRYDOCK · ${p.credits} cr · rank ${p.rank}`);
       setHidden(dockedNote, p.docked);

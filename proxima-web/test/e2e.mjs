@@ -130,7 +130,7 @@ await journey('new game -> objective hail -> accept -> fleet engages', async (ct
   await startNewGame(pilot);
 
   // The player starts inside the home system's trigger radius, so the hail is prompt.
-  await pilot.waitForFunction(() => /press E to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
+  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
     timeout: 20000,
   });
 
@@ -146,6 +146,49 @@ await journey('new game -> objective hail -> accept -> fleet engages', async (ct
     timeout: 15000,
   });
   await pilot.screenshot({ path: `${OUT}/e2e-engaged.png` });
+});
+
+// ── Journey 1b: Science answers the hail ────────────────────────────────────────
+//
+// The same acceptance as journey 1, but from the console that owns it. The pilot's
+// ENTER key working proves the command path; it does not prove a crew can reach it.
+
+await journey('science console accepts the fleet orders', async (ctx) => {
+  const pilot = await openPilot(ctx);
+  await startNewGame(pilot);
+  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
+    timeout: 20000,
+  });
+
+  const sci = await openStation(ctx, 'science');
+  const accept = sci.locator('button:has-text("ACCEPT ORDERS")');
+  await sci.waitForFunction(
+    () => [...document.querySelectorAll('button')].some(
+      (b) => b.textContent?.startsWith('ACCEPT ORDERS') && !b.hidden,
+    ),
+    null,
+    { timeout: 15000 },
+  );
+
+  // Pressed with a real dwell, so the press spans a live snapshot update.
+  await press(sci, 'button:has-text("ACCEPT ORDERS")');
+
+  // Accepting engages the fleet and retires the button.
+  await sci.waitForFunction(
+    () => /ENGAGED/.test(document.querySelector('#panel')?.textContent ?? ''),
+    null,
+    { timeout: 15000 },
+  );
+  if (await accept.isVisible()) throw new Error('ACCEPT ORDERS still offered after accepting');
+
+  // Neither Helm nor Engineering may also carry the verb — one console owns each hail.
+  for (const which of ['helm', 'engineering']) {
+    const other = await openStation(ctx, which);
+    const text = await other.textContent('#panel');
+    if (/ACCEPT/.test(text)) throw new Error(`${which} still offers an ACCEPT control`);
+  }
+
+  await sci.screenshot({ path: `${OUT}/e2e-science-orders.png`, fullPage: true });
 });
 
 // ── Journey 2: the crew flies the ship ──────────────────────────────────────────
@@ -271,7 +314,7 @@ await journey('engineering reactor preset changes the ship top speed', async (ct
 await journey('science scan resolves a contact for weapons', async (ctx) => {
   const pilot = await openPilot(ctx);
   await startNewGame(pilot);
-  await pilot.waitForFunction(() => /press E to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
+  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
     timeout: 20000,
   });
   await pilot.keyboard.press('Enter');

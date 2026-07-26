@@ -56,6 +56,8 @@ staged repair; §Not done lists what genuinely remains.
 | Engineering weld minigame — 1.2s sweep, green band, rate limit | ported, tested |
 | Enemy callsigns (WASP-1, VIPER-2) | ported, tested |
 | Solid planets and sun | ported, tested |
+| Starbase, planets and star as procedural models (img2threejs) | working — 8 draw calls |
+| Science owns comms: fleet orders *and* the contract board | working, tested |
 | Docked invulnerability; ram debounce and speed scaling | ported, tested |
 | Reactor power is linear — 0 power is a dead system | ported, tested |
 | Audio | bus is real, **cues are synthesised stand-ins** (the Unreal `.uasset` samples aren't readable from the browser) |
@@ -117,12 +119,22 @@ resolving a contact that Weapons then reads; four stations linked at once; pause
 skirmish; and progress surviving a reload. Uses system Chromium (`CHROME=` to override),
 so nothing is downloaded.
 
-**Budgets.** Host 173 KB gzipped, station 22 KB, median frame time under a full skirmish
-fight ~38 ms on software rendering. All three fail the build if they regress.
+**Budgets.** Host 180 KB gzipped, station 22 KB, median frame time under a full skirmish
+fight ~57 ms on software rendering (SwiftShader — a real GPU is an order of magnitude
+under this). All three fail the build if they regress.
 
 **Tunable drift.** `CPP_REFERENCE` in `src/sim/data.ts` records the Unreal value of every
 ported constant, and a test asserts each one matches unless it appears in `DIVERGENCES`
 with a justification. There is currently one declared divergence (`DOCK_RANGE`).
+
+**Console layout divergence.** The tunable table covers numbers, not which console owns
+which verb. One deliberate departure from the C++: **Science owns both acceptances.**
+ACCEPT ORDERS was on the C++ Science page and had drifted onto Helm in this port — that
+is a parity fix. The contract board was on the C++ Engineering page and moved to Science
+— that is a change, made because both verbs are the same act (answering a hail), and a
+crew that has to remember which console answers which hail has been given a filing
+system rather than a bridge. `test/panels.test.ts` asserts the ownership so it cannot
+drift back.
 
 Deep paths needing a long flight — docking, repair, the drydock purchase loop — are
 covered in the headless replay rather than E2E, because clicking a ship across 200 000
@@ -152,6 +164,26 @@ Two things are handled automatically so new assets don't need hand-fixing:
   the bounding box and rotates length→X, width→Z, height→Y. Bow-vs-stern is the one
   thing a bounding box can't resolve; if a hull flies backwards, that is the one manual
   fix.
+
+### Procedural models (the img2threejs half)
+
+Landmarks don't go through that pipeline at all — they are built in code from a generated
+reference image, which is what `src/render/models/{starbase,planet}.ts` are. No mesh file,
+no texture file; the starbase is 8 draw calls because every static part is baked into one
+merged geometry per material at build time.
+
+The check that matters is visual, and it has caught every defect these models have had
+(black planets, an opaque corona ring, a ring built in the wrong plane) while the test
+suite stayed green throughout. So there is a bench for it:
+
+```bash
+npm run dev
+node tools/model-shot.mjs starbase front /tmp/sb.png   # or three-quarter | top
+```
+
+`/model.html?model=…&view=…` renders one model with the game's exact lighting, to be held
+up against `art_src/refs/`. It is dev-server only — not a build entry, so it costs the
+shipped bundle nothing.
 
 Compare with the Unreal path this replaces: per-format Interchange feature flags, a
 crash class when importing from the Python worker thread, 0-size bounds on reimport,
@@ -210,9 +242,11 @@ cost-free renderer swap.
 
 Honest list, beyond the status table:
 
-- **Art and audio are placeholders.** Hulls are the TRELLIS GLBs; audio cues are
-  synthesised. Real art comes from **img2threejs** (procedural Three.js models built in
-  code) in a later pass — no other content engine. `makeShip()` is the seam it lands on.
+- **Ship hulls and audio are still placeholders.** Hulls are the TRELLIS GLBs; audio cues
+  are synthesised. The starbase, planets and star are done — built in code by
+  **img2threejs** reconstruction from generated references in `art_src/refs/` — but every
+  ship, player and enemy alike, is still a GLB. `makeShip()` is the seam that pass lands
+  on, and `art_src/refs/enemy-cruiser.png` is already waiting for it.
 - **No WebRTC.** The relay is a plain WebSocket pipe, so play is LAN-only: no TURN, no
   NAT traversal, no peer-to-peer. The session PIN is a courtesy lock on a trusted LAN,
   not authentication — it is sent in the URL and the relay is unencrypted over `ws:`.

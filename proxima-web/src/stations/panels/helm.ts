@@ -6,11 +6,10 @@ import { holdButton, slider, tapButton } from '../ui/controls';
 import { km, pct, type Panel, type Send } from './panel';
 import type { Snapshot } from '../../sim/types';
 
-export const createHelmPanel = (send: Send, onToggleMap: () => void): Panel => {
-  // ── Orders ────────────────────────────────────────────────────────────────────
-  const accept = tapButton('ACCEPT ORDERS', () => send({ c: 'acceptObjective' }), { class: 'alert wide' });
-  accept.hidden = true;
+// Orders and the contract board are NOT here: answering a hail is Science's job, and
+// Helm keeps only the bearing it has to steer to. See panels/science.ts.
 
+export const createHelmPanel = (send: Send, onToggleMap: () => void): Panel => {
   // ── Throttle ──────────────────────────────────────────────────────────────────
   // A continuous lever for trimming, plus discrete taps for a panic stop. Both are
   // wanted: you cannot reliably drag to zero in a fight, and you cannot ease onto a
@@ -69,8 +68,6 @@ export const createHelmPanel = (send: Send, onToggleMap: () => void): Panel => {
   const hullOut = el('dd');
   const objectiveOut = el('dd');
   const baseOut = el('dd');
-  const contractRow = el('div', { class: 'dl-row' });
-  const contractOut = el('dd');
 
   const readouts = el('dl', {
     children: [
@@ -84,11 +81,8 @@ export const createHelmPanel = (send: Send, onToggleMap: () => void): Panel => {
       objectiveOut,
     ],
   });
-  contractRow.append(el('dt', { text: 'CONTRACT' }), contractOut);
-
   const root = el('div', {
     children: [
-      accept,
       el('div', { class: 'lever', children: [el('label', { text: 'THROTTLE' }), throttle.root, throttleLabel] }),
       throttleTaps,
       steering,
@@ -97,7 +91,6 @@ export const createHelmPanel = (send: Send, onToggleMap: () => void): Panel => {
       el('div', { class: 'grid two', children: [dock, warp] }),
       el('div', { class: 'grid two', children: [course, mapToggle] }),
       readouts,
-      contractRow,
     ],
   });
 
@@ -105,9 +98,6 @@ export const createHelmPanel = (send: Send, onToggleMap: () => void): Panel => {
     root,
     update(s: Snapshot) {
       const p = s.player;
-
-      setHidden(accept, !s.objective?.offered);
-      setText(accept, s.objective ? `ACCEPT ORDERS — ${s.objective.name}` : 'ACCEPT ORDERS');
 
       // The lever shows the ORDER, not the measured speed. Reflecting speed made it
       // crawl and jump around under the operator's finger as the ship accelerated.
@@ -142,8 +132,6 @@ export const createHelmPanel = (send: Send, onToggleMap: () => void): Panel => {
       }
 
       setText(objectiveOut, s.objective ? `${s.objective.name} · ${km(s.objective.range)}` : '—');
-      setHidden(contractRow, !s.contract);
-      if (s.contract) setText(contractOut, s.contract.text);
     },
   };
 };
