@@ -113,10 +113,10 @@ export function WeaponsPanel({ send }: WeaponsPanelProps) {
                     </span>
                     {contact.scanned ? (
                       <span className="block text-[11px] text-[#9ab6da]">
-                        HULL {Math.round(contact.hull)}/{Math.round(contact.maxHull)} · SHIELD {Math.round(contact.shield)}
+                        hull {Math.round(contact.hull)}/{Math.round(contact.maxHull)} · shield {Math.round(contact.shield)}
                       </span>
                     ) : (
-                      <span className="block text-[11px] text-[#9ab6da]">UNSCANNED — Science can resolve it</span>
+                      <span className="block text-[11px] text-[#9ab6da]">unscanned — Science can resolve it</span>
                     )}
                   </div>
                   <em

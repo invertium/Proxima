@@ -239,8 +239,9 @@ await journey('ten deliberate presses all land', async (ctx) => {
     const wantFast = i % 2 === 0;
     await press(helm, wantFast ? 'button:has-text("FULL")' : 'button:has-text("STOP")');
     // The interceptor accelerates at 1500/s, so braking from full speed genuinely
-    // takes ~1.2s. Allow for the physics, not just the message.
-    await pilot.waitForTimeout(1800);
+    // takes ~1.2s. Allow for the physics, not just the message. Extra headroom for
+    // software rendering which can lag the HUD update.
+    await pilot.waitForTimeout(3000);
     const speed = await speedOf(pilot);
     if (wantFast ? speed > 300 : speed < 300) landed++;
   }

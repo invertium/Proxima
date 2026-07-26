@@ -188,7 +188,7 @@ export function SciencePanel({ send }: StationPanelProps) {
                   onClick={() => send({ c: 'scan', id: contact.id })}
                   disabled={!inRange && !isResolved}
                   className={cn(
-                    'flex w-full items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition',
+                    'contact flex w-full items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition',
                     player.scanTargetId === contact.id && 'border-[#38bdf8] bg-[#102033]',
                     player.scanTargetId !== contact.id && 'border-[#1b314d] bg-[#08111d] hover:bg-[#0c1726]',
                     !inRange && !isResolved && 'cursor-not-allowed border-[#1f2937] text-[#4b5563] hover:bg-[#08111d]',
@@ -211,7 +211,7 @@ export function SciencePanel({ send }: StationPanelProps) {
                       isResolved ? 'text-[#86efac]' : 'text-[#fbbf24]',
                     )}
                   >
-                    {isResolved ? 'RESOLVED' : 'UNRESOLVED'}
+                    {isResolved ? 'RESOLVED' : 'unresolved'}
                   </em>
                 </button>
               )
