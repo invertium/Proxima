@@ -1,0 +1,19 @@
+<!doctype html>
+<!--
+  Model bench: renders one procedural model on its own, lit like the game, so it can be
+  compared side by side with art_src/refs/. Not linked from anywhere and not part of a
+  build entry — open /model.html on the dev server.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Proxima — model bench</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <script type="module" src="/src/render/models/bench.ts"></script>
+  </body>
+</html>

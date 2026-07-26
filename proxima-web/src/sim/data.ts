@@ -1,0 +1,589 @@
+// All tunable content lives here as plain data. Balancing, adding a hull, or adding a
+// mission is a table edit — no code path changes, no engine import, no editor.
+//
+// Every number is ported verbatim from the Unreal build (ShipCatalogue.h,
+// EnemyShip.h, WeaponComponent.h, HealthComponent.h, MissionSubsystem.cpp) so the
+// browser build plays at the tuning the C++ version shipped with.
+
+import type { Difficulty, EnemyDef, EnemyType, MissionDef, ShipDef, UpgradeDef } from './types';
+
+// ── Global constants (Components/*.h) ───────────────────────────────────────────
+
+export const TICK_HZ = 60;
+export const TICK_DT = 1 / TICK_HZ;
+
+export const BEAM_RANGE = 15000;
+export const BEAM_ARC_DEG = 70;
+export const BEAM_DRAW_TIME = 0.2;
+
+export const TORPEDO_ARC_DEG = 110;
+export const TORPEDO_DAMAGE = 60;
+export const TORPEDO_SPEED = 5000;
+export const TORPEDO_RELOAD = 4;
+export const TORPEDO_LIFE = 12;
+/**
+ * Torpedoes steer, but only this fast. That limit is the whole counterplay: a volley
+ * is dodgeable if the helm turns hard enough, which is why the C++ gunship's slow
+ * salvo was a threat you outfly rather than a hit you absorb.
+ */
+export const TORPEDO_TURN_RATE_DEG = 75;
+/** Proximity fuse. Inside this, the warhead goes off. */
+export const TORPEDO_HIT_RADIUS = 350;
+/** Anything inside this when it detonates takes the payload. Outside it, the shot missed. */
+export const TORPEDO_BLAST_RADIUS = 700;
+
+export const MAX_SHIELD = 50;
+export const SHIELD_MITIGATION_SCALE = 0.35;
+export const MAX_MITIGATION = 0.8;
+export const SHIELD_CHARGE_RATE = 4;
+/**
+ * At green alert the emitters idle down and the pool drains. This is the whole point
+ * of the alert doctrine: shields are a posture you call for, not a passive buffer.
+ */
+export const SHIELD_BLEED_RATE = 1.5;
+
+export const REACTOR_BUDGET = 3.0;
+export const MAX_PER_SYSTEM = 2.0;
+
+export const WARP_DISTANCE = 18000;
+export const WARP_CHARGE_RATE = 0.16;
+
+export const DOCK_MAX_SPEED = 250;
+/** Reverse is a nudge, not a second forward gear (ShipMovementComponent.h:97). */
+export const REVERSE_THROTTLE_MIN = -0.35;
+export const DOCK_RANGE = 3500; // declared divergence — see DIVERGENCES
+
+export const COLLISION_RADIUS = 650;
+export const RAM_DAMAGE = 48;
+/** Shields push the contact boundary out, so a shielded ship collides sooner. */
+export const SHIELD_RADIUS_BONUS = 320;
+/** A graze at rest hurts half as much as a full-speed impact; a full ram, 1.5x. */
+export const RAM_SPEED_MIN = 0.5;
+export const RAM_SPEED_MAX = 1.5;
+
+/** World size the normalised mission mapX/mapY are projected onto. */
+export const SECTOR_SPAN = 160000;
+
+/** Proximity that hails the crew at the active objective (M23 open-sector director). */
+export const TRIGGER_RADIUS = 18000;
+
+// ── Sector events (Core/MissionSubsystem.h) ─────────────────────────────────────
+
+export const EVENT_ROLL_INTERVAL = 25;
+export const EVENT_CHANCE = 0.4;
+export const DISTRESS_DURATION = 150;
+export const INTERDICTION_DURATION = 180;
+export const SALVAGE_DURATION = 120;
+export const SALVAGE_COLLECT_RANGE = 1500;
+/** Clearing a timed event pays a bonus on top of any kills. */
+export const DISTRESS_CREDITS = 150;
+export const INTERDICTION_CREDITS = 60;
+export const SALVAGE_CREDITS = 90;
+
+// ── Contracts (Core/MissionSubsystem.h) ─────────────────────────────────────────
+
+export const CONTRACT_VISIT_RANGE = 9000;
+
+/** Skirmish: gap between waves once the arena is clear, and the per-wave clear bonus. */
+export const WAVE_INTERVAL = 12;
+export const WAVE_BONUS_CREDITS = 25;
+export const WAVE_BONUS_XP = 10;
+/** Hard cap on a skirmish wave, so wave 20 is hard rather than a slideshow. */
+export const SKIRMISH_MAX_FLEET = 6;
+export const PIRATE_CALLSIGNS = ['KRAIT', 'DUSKRUNNER', 'RED HARROW', 'VULTURE', 'IRONJAW'];
+
+/**
+ * Hostile callsigns (EnemyShip.cpp MakeCallsign). A fleet of three identical rows
+ * reading "Pact Gunship" is unusable over voice — "VIPER-2 is on our six" is the
+ * whole point of a crew.
+ */
+export const CALLSIGN_POOL: Record<string, string> = {
+  scout: 'WASP',
+  gunship: 'VIPER',
+  cruiser: 'LEVIATHAN',
+  derelict: 'HULK',
+};
+
+/** How close a ship may get to a planet or sun before the hull stops it. */
+export const BODY_CLEARANCE = 500;
+
+// ── Damage control (Components/DamageControlComponent.h) ────────────────────────
+
+/** Chance a hull-reaching hit knocks out one still-working system. */
+export const DAMAGE_CHANCE = 0.35;
+/** What a knocked-out system runs at until it's welded back. */
+export const DAMAGED_MULTIPLIER = 0.5;
+export const WELDS_PER_SYSTEM_REPAIR = 3;
+/** Hull fraction below which the bridge alarm sounds. */
+export const ALARM_HULL_FRACTION = 0.3;
+/** Hull restored by a credited weld once nothing is broken (C++ RepairPerHit). */
+export const WELD_HULL_REPAIR = 8;
+
+// The repair sweep: a marker runs a 1.2s triangle and Engineering has to release it
+// inside the green band. This is the only skill-based act on a crew console — without
+// it, damage control is a spam button and hull damage carries no tension.
+export const WELD_SWEEP_PERIOD = 1.2;
+export const WELD_GREEN_MIN = 0.4;
+export const WELD_GREEN_MAX = 0.6;
+/** Minimum seconds between credited welds. This, not the phase, is the anti-spam. */
+export const WELD_MIN_INTERVAL = 0.25;
+
+// ── Science (Components/ScienceComponent.h) ─────────────────────────────────────
+
+export const SCAN_DURATION = 2.5;
+export const SCAN_RANGE = 40000;
+
+// ── Progression (Core/SpaceGameInstance.h) ──────────────────────────────────────
+
+export const XP_PER_RANK = 400;
+export const rankFromXp = (xp: number): number => 1 + Math.floor(xp / XP_PER_RANK);
+
+// ── Auto-turret + strafe (Components/WeaponComponent.h, ShipMovementComponent.h) ─
+
+export const TURRET_RANGE = 12000;
+export const TURRET_INTERVAL = 1.6;
+export const STRAFE_ACCELERATION = 2600;
+
+export const DIFFICULTY_SCALE: Record<Difficulty, { damage: number; hull: number }> = {
+  ensign: { damage: 0.7, hull: 0.75 },
+  captain: { damage: 1.0, hull: 1.0 },
+  admiral: { damage: 1.4, hull: 1.3 },
+};
+
+// ── Player hulls (Core/ShipCatalogue.h) ─────────────────────────────────────────
+//
+// `model` resolves to public/assets/ships/<model>.glb — the TRELLIS output goes in
+// unmodified. `scale` is the catalogue scale × 1000 (the GLBs are normalised to ~1
+// unit; the Unreal build reached the same size via import_uniform_scale).
+
+export const SHIPS: ShipDef[] = [
+  {
+    type: 'interceptor',
+    name: 'Interceptor',
+    blurb: 'Fast, agile, light hull.',
+    model: 'interceptor',
+    scale: 700,
+    maxSpeed: 2100,
+    acceleration: 1500,
+    turnRate: 75,
+    maxHull: 80,
+    beamDamage: 20,
+    beamRecharge: 0.55,
+    torpedoAmmo: 3,
+    cost: 0,
+    rankReq: 0,
+  },
+  {
+    type: 'cruiser',
+    name: 'Cruiser',
+    blurb: 'Slow, tough, hits hard.',
+    model: 'cruiser',
+    scale: 1040,
+    maxSpeed: 1300,
+    acceleration: 900,
+    turnRate: 42,
+    maxHull: 160,
+    beamDamage: 34,
+    beamRecharge: 0.3,
+    torpedoAmmo: 6,
+    cost: 0,
+    rankReq: 0,
+  },
+  {
+    type: 'corvette',
+    name: 'Corvette',
+    blurb: 'Glass cannon: blistering speed, paper hull.',
+    model: 'corvette',
+    scale: 590,
+    maxSpeed: 2500,
+    acceleration: 1800,
+    turnRate: 92,
+    maxHull: 60,
+    beamDamage: 16,
+    beamRecharge: 0.75,
+    torpedoAmmo: 2,
+    cost: 1200,
+    rankReq: 2,
+  },
+  {
+    type: 'gunboat',
+    name: 'Gunboat',
+    blurb: 'Heavy hull and big guns, ponderous turn.',
+    model: 'gunboat',
+    scale: 1470,
+    maxSpeed: 1100,
+    acceleration: 800,
+    turnRate: 36,
+    maxHull: 240,
+    beamDamage: 42,
+    beamRecharge: 0.26,
+    torpedoAmmo: 8,
+    cost: 1800,
+    rankReq: 3,
+  },
+];
+
+export const shipDef = (type: ShipDef['type']): ShipDef => SHIPS.find((s) => s.type === type) ?? SHIPS[0]!;
+
+/**
+ * Extra yaw, in radians, applied after the loader levels a hull onto the world axes.
+ *
+ * A bounding box tells you which axis is the keel but not which end is the nose, so
+ * this is the one orientation fact that cannot be derived and has to be recorded.
+ * Values come from a vertex-taper analysis of each GLB: bin vertices along the keel
+ * and compare the surface area of the two end slabs — the blunt, heavy end is the
+ * stern. Every one of these hulls except the corvette came out of the generator
+ * pointing the wrong way.
+ *
+ * Keyed by MODEL, not by ship: hostiles reuse the player GLBs (scout and derelict are
+ * both `corvette`), so a per-ship field would be duplicated and would drift.
+ */
+export const MODEL_YAW: Record<string, number> = {
+  // Narrow nose at the low end of the keel, bulky engine block at the high end, and
+  // axisAlign puts the keel on +X — so these three came out flying tail-first.
+  interceptor: Math.PI, // lateral span 0.31 at the nose vs 0.99 at the stern
+  cruiser: Math.PI, //     0.19 vs 0.57
+  gunboat: Math.PI, //     0.57 vs 0.57 — near-symmetric, the least certain of the four
+  corvette: 0, //          tapers the other way (0.34 -> 0.18), already correct
+};
+
+/** Every distinct GLB the catalogue can ask the renderer for. */
+export const allModels = (): string[] => [
+  ...new Set([...SHIPS.map((s) => s.model), ...Object.values(ENEMIES).map((e) => e.model)]),
+];
+
+// ── Hostiles (Ships/EnemyShip.h) ────────────────────────────────────────────────
+
+export const ENEMIES: Record<EnemyType, EnemyDef> = {
+  // Interceptor: fast, fragile, never stops — dives past and loops back for another run.
+  scout: {
+    type: 'scout',
+    name: 'Pact Scout',
+    model: 'corvette',
+    scale: 420,
+    maxHull: 50,
+    maxShield: 20,
+    moveSpeed: 1900,
+    turnRateDeg: 80,
+    standoffDistance: 4500,
+    engageRange: 10000,
+    fireInterval: 1.6,
+    beamDamage: 5,
+    rewardCredits: 40,
+    rewardXp: 15,
+    armoredBeamMultiplier: 1,
+    passive: false,
+    strafeRuns: true,
+    torpedoVolleys: false,
+  },
+  // Frigate: holds a standoff ring and lobs slow torpedo volleys the helm can outrun.
+  gunship: {
+    type: 'gunship',
+    name: 'Pact Gunship',
+    model: 'gunboat',
+    scale: 620,
+    maxHull: 100,
+    maxShield: 50,
+    moveSpeed: 1100,
+    turnRateDeg: 50,
+    standoffDistance: 6000,
+    engageRange: 12000,
+    fireInterval: 9,
+    beamDamage: 8,
+    rewardCredits: 80,
+    rewardXp: 30,
+    armoredBeamMultiplier: 1,
+    passive: false,
+    strafeRuns: false,
+    torpedoVolleys: true,
+  },
+  // Capital: slow, heavily shielded, and armoured until Science finds the weakpoint.
+  cruiser: {
+    type: 'cruiser',
+    name: 'Pact Cruiser',
+    model: 'cruiser',
+    scale: 1100,
+    maxHull: 220,
+    maxShield: 110,
+    moveSpeed: 700,
+    turnRateDeg: 32,
+    standoffDistance: 7500,
+    engageRange: 14000,
+    fireInterval: 3.2,
+    beamDamage: 14,
+    rewardCredits: 200,
+    rewardXp: 80,
+    armoredBeamMultiplier: 0.5,
+    passive: false,
+    strafeRuns: false,
+    torpedoVolleys: false,
+  },
+  derelict: {
+    type: 'derelict',
+    name: 'Derelict Raider',
+    model: 'corvette',
+    scale: 420,
+    maxHull: 40,
+    maxShield: 0,
+    moveSpeed: 0,
+    turnRateDeg: 0,
+    standoffDistance: 0,
+    engageRange: 0,
+    fireInterval: 999,
+    beamDamage: 0,
+    rewardCredits: 40,
+    rewardXp: 20,
+    armoredBeamMultiplier: 1,
+    passive: true,
+    strafeRuns: false,
+    torpedoVolleys: false,
+  },
+};
+
+// ── Hostile AI (Ships/EnemyShip.h) ──────────────────────────────────────────────
+
+/** Closer than this and a strafer commits to its pass. */
+export const STRAFE_PASS_DISTANCE = 2800;
+/** Further than this after a pass and it turns around for another run. */
+export const STRAFE_BREAKOFF_DISTANCE = 9000;
+/** How far a strafer leads its aim laterally, so a run is a fly-by rather than a ram. */
+export const STRAFE_LEAD = 1400;
+/** Hostiles slide back out rather than boring through the player's hull. */
+export const MIN_SEPARATION = 1300;
+export const VOLLEY_SIZE = 3;
+export const VOLLEY_GAP = 0.6;
+export const ENEMY_TORPEDO_SPEED = 1900;
+export const ENEMY_TORPEDO_DAMAGE = 7;
+/** Seconds of held fire after spawning, so an encounter never opens with a volley. */
+export const SPAWN_GRACE = 12;
+
+// ── Drydock upgrades (Core/UpgradeCatalogue.h) ──────────────────────────────────
+//
+// Tier t+1 costs baseCost*(t+1) and requires crew rank t+1, so progression is gated
+// by both credits and XP. The last two are one-time modules the starter hull lacks.
+
+export const UPGRADES: UpgradeDef[] = [
+  { id: 'beam_damage', name: 'Beam Damage', unit: 'dmg', stat: 'beamDamage', magnitudePerTier: 8, maxTier: 3, baseCost: 150 },
+  { id: 'beam_recharge', name: 'Beam Recharge', unit: '/s', stat: 'beamRecharge', magnitudePerTier: 0.15, maxTier: 3, baseCost: 150 },
+  { id: 'fire_arc', name: 'Targeting Arc', unit: '°', stat: 'fireArc', magnitudePerTier: 15, maxTier: 3, baseCost: 120 },
+  { id: 'hull', name: 'Hull Plating', unit: 'hull', stat: 'maxHull', magnitudePerTier: 40, maxTier: 3, baseCost: 200 },
+  { id: 'shields', name: 'Shield Capacity', unit: 'shld', stat: 'maxShield', magnitudePerTier: 30, maxTier: 3, baseCost: 200 },
+  { id: 'torpedo', name: 'Torpedo Tubes', unit: 'rds', stat: 'torpedoAmmo', magnitudePerTier: 2, maxTier: 3, baseCost: 180 },
+  { id: 'reactor', name: 'Reactor Output', unit: 'pwr', stat: 'reactorBudget', magnitudePerTier: 0.5, maxTier: 3, baseCost: 250 },
+  { id: 'strafe', name: 'Manoeuvring Thrusters', unit: 'uu/s', stat: 'strafeSpeed', magnitudePerTier: 950, maxTier: 1, baseCost: 160 },
+  { id: 'turret', name: 'Auto-Turret', unit: 'dmg', stat: 'turret', magnitudePerTier: 12, maxTier: 1, baseCost: 240 },
+];
+
+export const upgradeDef = (id: string): UpgradeDef | undefined => UPGRADES.find((u) => u.id === id);
+
+/** Credit cost to buy the next tier up from `currentTier` (0-based). */
+export const upgradeCost = (u: UpgradeDef, currentTier: number): number => u.baseCost * (currentTier + 1);
+
+/** Crew rank needed for the next tier: tier 1 needs rank 1, tier 2 rank 2, and so on. */
+export const upgradeRankReq = (currentTier: number): number => currentTier + 1;
+
+// ── Campaign (Core/MissionSubsystem.cpp BuildCampaign) ──────────────────────────
+
+export const CAMPAIGN: MissionDef[] = [
+  {
+    name: 'Shakedown Cruise',
+    enemies: ['derelict'],
+    briefSender: 'CMDR VOSS',
+    briefText:
+      'Welcome to the bridge, Captain. Before real orders, a shakedown — get the crew talking to each other.',
+    mapX: 0.16,
+    mapY: 0.52,
+    landmarkName: 'Haven',
+    landmarkSurface: 'haven',
+    landmarkKind: 'planet',
+    landmarkColor: 0x5999ff,
+    landmarkScale: 1.0,
+    comms: [
+      {
+        sender: 'CMDR VOSS',
+        text: 'ENGINEERING (console 3): reactor power is a balance — feed one system and the others starve.',
+        atSeconds: 6,
+      },
+      {
+        sender: 'CMDR VOSS',
+        text: 'See the STARBASE on your scope? Fly back and DOCK to repair, resupply, and visit the drydock.',
+        atSeconds: 18,
+      },
+      {
+        sender: 'TACTICAL',
+        text: 'Sensors tag a derelict raider — reactor cold, no threat. WEAPONS, lock it and take the shot.',
+        atSeconds: 30,
+      },
+      {
+        sender: 'CMDR VOSS',
+        text: "Clean kill. You're cleared for active duty, Captain — real orders inbound.",
+        onKill: 1,
+      },
+    ],
+  },
+  {
+    name: 'First Contact',
+    enemies: ['scout', 'gunship'],
+    briefSender: 'CMDR VOSS',
+    briefText:
+      'Contacts on the trade lane out of Tarsis. Crimson Pact markings. Intercept and find out what they want.',
+    mapX: 0.4,
+    mapY: 0.36,
+    landmarkName: 'Tarsis',
+    landmarkSurface: 'rocky',
+    landmarkKind: 'planet',
+    landmarkColor: 0x4df2d9,
+    landmarkScale: 0.9,
+    comms: [
+      {
+        sender: 'TACTICAL',
+        text: "Contacts confirmed — those are Crimson Pact markings. They're powering weapons.",
+        atSeconds: 2,
+      },
+      {
+        sender: 'CMDR VOSS',
+        text: "Scout's down — but it got a transmission off before it died. They know we're here.",
+        onKill: 1,
+      },
+    ],
+  },
+  {
+    name: 'Patrol Ambush',
+    enemies: ['gunship', 'gunship', 'cruiser'],
+    briefSender: 'CMDR VOSS',
+    briefText:
+      'The Korrin Belt patrol has gone silent. Sweep the belt and re-establish contact — carefully.',
+    mapX: 0.62,
+    mapY: 0.6,
+    landmarkName: 'Korrin Belt',
+    landmarkSurface: 'ice',
+    landmarkKind: 'planet',
+    landmarkColor: 0xff8c33,
+    landmarkScale: 1.1,
+    comms: [
+      {
+        sender: 'TACTICAL',
+        text: 'Ambush! Two gunships and a cruiser just powered up around us. All stations, engage.',
+        atSeconds: 1.5,
+      },
+      {
+        sender: 'CMDR VOSS',
+        text: "Escorts are scrap. That cruiser's shields are layered thick — strip them before you commit torpedoes.",
+        onKill: 2,
+      },
+    ],
+  },
+  {
+    name: "Warlord's Reach",
+    enemies: ['scout', 'scout', 'gunship', 'cruiser'],
+    briefSender: 'CMDR VOSS',
+    briefText:
+      "We back-traced the patrol to the Pact's staging point. Their warlord's flagship is here with everything she has left. Break this fleet and the Crimson Pact is finished in the Veil. This is the one that matters.",
+    mapX: 0.86,
+    mapY: 0.4,
+    landmarkName: 'Ember',
+    landmarkSurface: 'star',
+    landmarkKind: 'sun',
+    landmarkColor: 0xffb333,
+    landmarkScale: 1.0,
+    comms: [
+      {
+        sender: 'CMDR VOSS',
+        text: "All hands, battle stations. Whatever happens out there — it's been an honour flying with this crew. For the frontier.",
+        atSeconds: 1.5,
+      },
+      {
+        sender: 'TACTICAL',
+        text: "Screen's down — just the flagship left. She's wounded and she knows it. Finish it, Captain.",
+        onKill: 3,
+      },
+    ],
+  },
+];
+
+
+// ── Divergence control ──────────────────────────────────────────────────────────
+//
+// This file's header claims every number is ported verbatim from the C++. That claim
+// was false for about twenty of them, and unlabelled drift is the worst possible
+// state: you cannot tell a balance decision from a typo, and the replay tests quietly
+// bake in whichever it was.
+//
+// So the C++ values are recorded here and a test asserts the live constants match,
+// unless the key appears in DIVERGENCES with its reason. Drift can still happen — it
+// just cannot happen silently.
+
+/** The Unreal build's value for every ported tunable. Reference only; never edited to match the web build. */
+export const CPP_REFERENCE = {
+  SECTOR_SPAN: 160000,
+  DOCK_RANGE: 1600,
+  DOCK_MAX_SPEED: 250,
+  TRIGGER_RADIUS: 18000,
+  BEAM_RANGE: 15000,
+  BEAM_ARC_DEG: 70,
+  TORPEDO_ARC_DEG: 110,
+  TORPEDO_DAMAGE: 60,
+  TORPEDO_SPEED: 5000,
+  TORPEDO_RELOAD: 4,
+  TORPEDO_LIFE: 12,
+  TORPEDO_TURN_RATE_DEG: 75,
+  TORPEDO_BLAST_RADIUS: 700,
+  MAX_SHIELD: 50,
+  SHIELD_MITIGATION_SCALE: 0.35,
+  MAX_MITIGATION: 0.8,
+  SHIELD_CHARGE_RATE: 4,
+  SHIELD_BLEED_RATE: 1.5,
+  REACTOR_BUDGET: 3.0,
+  MAX_PER_SYSTEM: 2.0,
+  WARP_DISTANCE: 18000,
+  WARP_CHARGE_RATE: 0.16,
+  COLLISION_RADIUS: 650,
+  RAM_DAMAGE: 48,
+  SHIELD_RADIUS_BONUS: 320,
+  REVERSE_THROTTLE_MIN: -0.35,
+  DAMAGE_CHANCE: 0.35,
+  DAMAGED_MULTIPLIER: 0.5,
+  WELDS_PER_SYSTEM_REPAIR: 3,
+  ALARM_HULL_FRACTION: 0.3,
+  WELD_HULL_REPAIR: 8,
+  WELD_MIN_INTERVAL: 0.25,
+  SCAN_DURATION: 2.5,
+  SCAN_RANGE: 40000,
+  XP_PER_RANK: 400,
+  TURRET_RANGE: 12000,
+  TURRET_INTERVAL: 1.6,
+  STRAFE_ACCELERATION: 2600,
+  EVENT_ROLL_INTERVAL: 25,
+  EVENT_CHANCE: 0.4,
+  DISTRESS_DURATION: 150,
+  INTERDICTION_DURATION: 180,
+  SALVAGE_DURATION: 120,
+  SALVAGE_COLLECT_RANGE: 1500,
+  SALVAGE_CREDITS: 90,
+  DISTRESS_CREDITS: 150,
+  INTERDICTION_CREDITS: 60,
+  CONTRACT_VISIT_RANGE: 9000,
+  WAVE_INTERVAL: 12,
+  WAVE_BONUS_CREDITS: 25,
+  BODY_CLEARANCE: 500,
+  MIN_SEPARATION: 1300,
+  VOLLEY_SIZE: 3,
+  VOLLEY_GAP: 0.6,
+  ENEMY_TORPEDO_SPEED: 1900,
+  ENEMY_TORPEDO_DAMAGE: 7,
+  STRAFE_PASS_DISTANCE: 2800,
+  STRAFE_BREAKOFF_DISTANCE: 9000,
+} as const;
+
+/**
+ * Deliberate departures from the C++. Anything that differs and is NOT listed here is
+ * a bug, not a decision — and the test below will say so.
+ */
+export const DIVERGENCES = [
+  {
+    key: 'DOCK_RANGE',
+    cpp: 1600,
+    web: 3500,
+    why: 'Docking is a hold-still-and-tap manoeuvre, and a touch console over a relay carries latency the in-process C++ console did not. Paired with restoring the C++ helm STARBASE range readout so the approach is legible.',
+  },
+] as const;
