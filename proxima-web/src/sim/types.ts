@@ -414,6 +414,7 @@ export interface Snapshot {
     scanTargetId: number | null;
     scanProgress: number;
     scanning: boolean;
+    scanned: number[];
     /** Effective numbers after upgrades and damage — what the stations should display. */
     stats: {
       maxSpeed: number;

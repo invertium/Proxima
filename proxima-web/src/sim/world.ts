@@ -1127,6 +1127,7 @@ export const snapshot = (world: World): Snapshot => {
       scanTargetId: p.scanTargetId,
       scanProgress: p.scanProgress,
       scanning: p.scanning,
+      scanned: [...p.scanned],
       stats: {
         maxSpeed: stats.maxSpeed,
         beamArcDeg: stats.beamArcDeg,

@@ -32,6 +32,17 @@ const browser = await chromium.launch({
   args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'],
 });
 
+// Warm up Vite's module transform cache so the first real journey doesn't pay
+// the cold-compilation cost. Without this, modules are compiled on first request
+// and the initial page load can exceed startNewGame's 15 s HULL timeout.
+{
+  const warmup = await browser.newContext({ viewport: { width: 1600, height: 900 } });
+  const p = await warmup.newPage();
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.waitForSelector('#boot', { state: 'detached', timeout: 60000 });
+  await warmup.close();
+}
+
 const failures = [];
 const results = [];
 
@@ -59,7 +70,9 @@ const journey = async (name, fn) => {
 const openPilot = async (ctx) => {
   const page = await ctx.newPage();
   page.on('console', (m) => {
-    if (m.type() === 'error' && !m.text().includes('favicon')) throw new Error(`console: ${m.text()}`);
+    const loc = m.location()?.url ?? '';
+    if (m.type() === 'error' && !m.text().includes('favicon') && !loc.includes('favicon'))
+      throw new Error(`console: ${m.text()}`);
   });
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('#boot', { state: 'detached', timeout: 30000 });
@@ -68,11 +81,11 @@ const openPilot = async (ctx) => {
 };
 
 const startNewGame = async (page, difficulty = 'captain') => {
-  await page.click('button[data-action="newgame"]');
-  await page.click(`button[data-action="difficulty:${difficulty}"]`);
-  await page.click('button[data-action="launch"]');
-  await page.waitForFunction(() => document.querySelector('#hud')?.textContent?.includes('HULL'), null, {
-    timeout: 15000,
+  await page.click('[data-testid="menu-newgame"]');
+  await page.getByRole('button', { name: difficulty.toUpperCase() }).click();
+  await page.click('[data-testid="menu-launch"]');
+  await page.waitForFunction(() => document.body?.textContent?.includes('HULL'), null, {
+    timeout: 60000,
   });
 };
 
@@ -94,7 +107,7 @@ const openStation = async (ctx, which) => {
   return page;
 };
 
-const hud = (page) => page.evaluate(() => document.querySelector('#hud')?.textContent ?? '');
+const hud = (page) => page.evaluate(() => document.body?.textContent ?? '');
 
 /**
  * Presses a control the way a hand does: press, dwell, release. This is the thing the
@@ -130,7 +143,7 @@ await journey('new game -> objective hail -> accept -> fleet engages', async (ct
   await startNewGame(pilot);
 
   // The player starts inside the home system's trigger radius, so the hail is prompt.
-  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
+  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.body?.textContent ?? ''), null, {
     timeout: 20000,
   });
 
@@ -201,14 +214,14 @@ await journey('helm station drives the ship, pressed the way a hand presses', as
   // Deliberate 140ms presses, long enough to span several state updates.
   await press(helm, 'button:has-text("FULL")');
   await pilot.waitForFunction(
-    () => Number(/SPD\s*(\d+)/.exec(document.querySelector('#hud')?.textContent ?? '')?.[1] ?? 0) > 800,
+    () => Number(/SPD\s*(\d+)/.exec(document.body?.textContent ?? '')?.[1] ?? 0) > 800,
     null,
     { timeout: 10000 },
   );
 
   await press(helm, 'button:has-text("STOP")');
   await pilot.waitForFunction(
-    () => Number(/SPD\s*(\d+)/.exec(document.querySelector('#hud')?.textContent ?? '')?.[1] ?? 999) < 200,
+    () => Number(/SPD\s*(\d+)/.exec(document.body?.textContent ?? '')?.[1] ?? 999) < 200,
     null,
     { timeout: 10000 },
   );
@@ -314,7 +327,7 @@ await journey('engineering reactor preset changes the ship top speed', async (ct
 await journey('science scan resolves a contact for weapons', async (ctx) => {
   const pilot = await openPilot(ctx);
   await startNewGame(pilot);
-  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
+  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.body?.textContent ?? ''), null, {
     timeout: 20000,
   });
   await pilot.keyboard.press('Enter');
@@ -369,9 +382,9 @@ await journey('escape pauses the sim and resume continues it', async (ctx) => {
   await pilot.keyboard.up('KeyW');
 
   await pilot.keyboard.press('Escape');
-  await pilot.waitForSelector('button[data-action="resume"]', { timeout: 5000 });
+  await pilot.getByRole('button', { name: 'RESUME' }).waitFor({ timeout: 5000 });
 
-  const tickOf = () => pilot.evaluate(() => document.querySelector('#hud')?.textContent ?? '');
+  const tickOf = () => pilot.evaluate(() => document.body?.textContent ?? '');
   // Snapshots already in flight when the pause message was posted still land after it,
   // so let the stream drain before taking the baseline.
   await pilot.waitForTimeout(500);
@@ -379,7 +392,7 @@ await journey('escape pauses the sim and resume continues it', async (ctx) => {
   await pilot.waitForTimeout(1500);
   if ((await tickOf()) !== paused) throw new Error('the sim kept running while paused');
 
-  await pilot.click('button[data-action="resume"]');
+  await pilot.getByRole('button', { name: 'RESUME' }).click();
   await pilot.waitForTimeout(1200);
   await pilot.screenshot({ path: `${OUT}/e2e-resumed.png` });
 });
@@ -388,8 +401,8 @@ await journey('escape pauses the sim and resume continues it', async (ctx) => {
 
 await journey('skirmish mode spawns waves', async (ctx) => {
   const pilot = await openPilot(ctx);
-  await pilot.click('button[data-action="skirmish"]');
-  await pilot.waitForFunction(() => /WAVE 1/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
+  await pilot.click('[data-testid="menu-skirmish"]');
+  await pilot.waitForFunction(() => /WAVE 1/.test(document.body?.textContent ?? ''), null, {
     timeout: 20000,
   });
 
@@ -413,9 +426,9 @@ await journey('campaign progress survives a page reload', async (ctx) => {
   await pilot.waitForSelector('#boot', { state: 'detached', timeout: 30000 });
 
   // A CONTINUE button only appears when a save was actually read back.
-  await pilot.waitForSelector('button[data-action="continue"]', { timeout: 10000 });
-  await pilot.click('button[data-action="continue"]');
-  await pilot.waitForFunction(() => document.querySelector('#hud')?.textContent?.includes('HULL'), null, {
+  await pilot.waitForSelector('[data-testid="menu-continue"]', { timeout: 10000 });
+  await pilot.click('[data-testid="menu-continue"]');
+  await pilot.waitForFunction(() => document.body?.textContent?.includes('HULL'), null, {
     timeout: 15000,
   });
   await pilot.screenshot({ path: `${OUT}/e2e-continue.png` });

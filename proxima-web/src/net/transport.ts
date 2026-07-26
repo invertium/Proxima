@@ -13,6 +13,7 @@
 // interfaces below are the seam that lands on.
 
 import type { ClientMessage, ServerMessage } from './protocol';
+import type { Snapshot } from '../sim/types';
 
 export interface HostTransport {
   broadcast(msg: ServerMessage): void;
@@ -32,6 +33,7 @@ export interface StationTransport {
   ownsId(id: number | undefined): boolean;
   /** The relay refused our PIN. */
   onRejected(handler: () => void): void;
+  onSnapshot(handler: (snap: Snapshot) => void): void;
   onMessage(handler: (msg: ServerMessage) => void): void;
   onStatus(handler: (connected: boolean) => void): void;
   close(): void;
@@ -184,7 +186,9 @@ export class RelayHost implements HostTransport {
 
 export class RelayStation implements StationTransport {
   private handler: (msg: ServerMessage) => void = () => {};
+  private snapshot: (snap: Snapshot) => void = () => {};
   private status: (connected: boolean) => void = () => {};
+  private currentlyConnected = false;
 
   /**
    * Command ids are scoped to this page by a random nonce, so acks broadcast to every
@@ -196,8 +200,15 @@ export class RelayStation implements StationTransport {
   private rejected: () => void = () => {};
   private readonly sock = new Socket(
     relayUrl('station', storedPin()),
-    (data) => this.handler(data as ServerMessage),
-    (connected) => this.status(connected),
+    (data) => {
+      const msg = data as ServerMessage;
+      if (msg.m === 'state') this.snapshot(msg.snapshot);
+      this.handler(msg);
+    },
+    (connected) => {
+      this.currentlyConnected = connected;
+      this.status(connected);
+    },
     () => this.rejected(),
   );
 
@@ -215,12 +226,17 @@ export class RelayStation implements StationTransport {
     return id !== undefined && id >= this.nonce && id < this.nonce + 1e6;
   }
 
+  onSnapshot(handler: (snap: Snapshot) => void): void {
+    this.snapshot = handler;
+  }
+
   onMessage(handler: (msg: ServerMessage) => void): void {
     this.handler = handler;
   }
 
   onStatus(handler: (connected: boolean) => void): void {
     this.status = handler;
+    if (this.currentlyConnected) handler(true);
   }
 
   /** The relay refused our PIN. The console should ask for one. */

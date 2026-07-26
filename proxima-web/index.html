@@ -1,77 +1,12 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ctext y=%2213%22 font-size=%2213%22%3E🛸%3C/text%3E%3C/svg%3E" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Proxima — Bridge</title>
-    <style>
-      :root { color-scheme: dark; }
-      * { box-sizing: border-box; }
-      body { margin: 0; background: #05070f; color: #dbe7ff; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; }
-      #view { display: block; width: 100vw; height: 100vh; }
-
-      #hud { position: fixed; top: 16px; left: 16px; width: 340px; padding: 12px 14px; background: rgba(6, 12, 24, .72); border: 1px solid #1e3a5f; border-radius: 8px; backdrop-filter: blur(6px); }
-      #hud .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
-      #hud .row span { width: 52px; color: #7d9dc4; font-size: 11px; letter-spacing: .06em; }
-      #hud .row b { min-width: 38px; text-align: right; font-weight: 600; }
-      #hud .bar { flex: 1; height: 7px; background: #10203a; border-radius: 4px; overflow: hidden; }
-      #hud .bar i { display: block; height: 100%; transition: width .12s linear; }
-      #hud .obj { margin-top: 8px; padding-top: 8px; border-top: 1px solid #1e3a5f; color: #7dd3fc; font-size: 11px; }
-      #hud .tgt { margin-top: 6px; font-size: 11px; color: #94a3b8; }
-      #hud .tgt.ok { color: #4ade80; }
-      #hud .alertbar { margin-top: 6px; padding: 3px 6px; background: #4a1216; border: 1px solid #ff3b30; border-radius: 4px; color: #fecaca; font-size: 11px; text-align: center; letter-spacing: .1em; }
-      #hud .refusal { margin-top: 6px; padding: 3px 6px; background: #3b0d12; border: 1px solid #ff3b30; border-radius: 4px; color: #fecaca; font-size: 11px; text-align: center; }
-      #hud .end { margin-top: 10px; font-size: 18px; letter-spacing: .08em; color: #fbbf24; text-align: center; }
-
-      #comms { position: fixed; bottom: 16px; left: 16px; width: 520px; max-height: 30vh; overflow: hidden; }
-      #comms p { margin: 0 0 6px; padding: 6px 10px; background: rgba(6, 12, 24, .72); border-left: 2px solid #38bdf8; border-radius: 0 6px 6px 0; }
-      #comms b { color: #38bdf8; margin-right: 6px; }
-
-      #keys { position: fixed; bottom: 16px; right: 16px; text-align: right; color: #56708f; font-size: 11px; }
-      #spectator { position: fixed; inset: auto 0 0 0; padding: 14px; background: #3b0d12; color: #fecaca; text-align: center; border-top: 1px solid #ff3b30; z-index: 30; }
-      #boot { position: fixed; inset: 0; display: grid; place-content: center; gap: 8px; text-align: center; background: #05070f; z-index: 10; }
-      #boot h1 { margin: 0; font-size: 28px; letter-spacing: .3em; font-weight: 500; color: #7dd3fc; }
-
-      #menu { position: fixed; inset: 0; display: grid; place-content: center; background: rgba(3, 6, 14, .93); z-index: 20; }
-      #menu[hidden] { display: none; }
-      #menu .panel { display: grid; gap: 10px; min-width: 340px; max-width: 92vw; padding: 28px 32px; background: #070e1c; border: 1px solid #1e3a5f; border-radius: 12px; text-align: center; }
-      #menu .panel.wide { min-width: 520px; }
-      #menu h1 { margin: 0; font-size: 30px; letter-spacing: .32em; font-weight: 500; color: #7dd3fc; }
-      #menu h1.win { color: #4ade80; }
-      #menu h1.lose { color: #f87171; }
-      #menu h2 { margin: 0 0 4px; font-size: 15px; letter-spacing: .22em; font-weight: 500; color: #7dd3fc; }
-      #menu h3 { margin: 10px 0 2px; font-size: 10px; letter-spacing: .16em; color: #7d9dc4; font-weight: 500; text-align: left; }
-      #menu .sub { margin: 0 0 8px; color: #7d9dc4; font-size: 12px; }
-      #menu .hint { margin: 6px 0 0; color: #56708f; font-size: 11px; }
-      #menu code { color: #7dd3fc; }
-      #menu button { display: grid; gap: 2px; padding: 11px 14px; background: #0d1c2f; color: #cfe3ff; border: 1px solid #1e3a5f; border-radius: 7px; font: inherit; font-size: 12px; cursor: pointer; text-align: center; }
-      #menu button:hover { background: #142942; }
-      #menu button.primary { background: #14425f; border-color: #38bdf8; color: #e0f2fe; }
-      #menu button.sel { border-color: #38bdf8; background: #123252; }
-      #menu .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-      #menu .choices button { text-align: left; }
-      #menu .choices b { color: #bae6fd; font-weight: 600; }
-      #menu .choices span { color: #7d9dc4; font-size: 10px; line-height: 1.35; }
-      #menu button b { color: #bae6fd; font-weight: 600; }
-      #menu button span { color: #7d9dc4; font-size: 11px; }
-      #menu .keys { display: grid; grid-template-columns: 90px 1fr; gap: 3px 14px; margin: 4px 0 10px; text-align: left; }
-      #menu .keys dt { color: #7dd3fc; font-size: 11px; }
-      #menu .keys dd { margin: 0; color: #a8bdd8; font-size: 11px; }
-    </style>
   </head>
   <body>
-    <canvas id="view"></canvas>
-    <div id="hud"></div>
-    <div id="comms"></div>
-    <div id="keys">
-      W/S throttle · A/D steer · TAB target · SPACE beam · F torpedo · G dock · J warp · Q/E strafe · ENTER accept · R weld · V alert · ESC menu
-    </div>
-    <div id="menu" hidden></div>
-    <div id="boot">
-      <h1>PROXIMA</h1>
-      <p>spinning up the sector…</p>
-    </div>
-    <script type="module" src="/src/host/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/host/main.tsx"></script>
   </body>
 </html>
