@@ -11,8 +11,8 @@ import {
   LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
-  Object3D,
-  Scene,
+  type Object3D,
+  type Scene,
   SphereGeometry,
 } from 'three';
 import { BEAM_DRAW_TIME } from '../sim/data';
@@ -32,7 +32,11 @@ export class CombatFx {
   private readonly blasts: Pooled<Mesh>[] = [];
 
   constructor(scene: Scene) {
-    const friendly = new LineBasicMaterial({ color: 0x66ddff, transparent: true, blending: AdditiveBlending });
+    const friendly = new LineBasicMaterial({
+      color: 0x66ddff,
+      transparent: true,
+      blending: AdditiveBlending,
+    });
 
     for (let i = 0; i < BEAM_POOL; i++) {
       const geo = new BufferGeometry();
@@ -68,7 +72,9 @@ export class CombatFx {
         pos.setXYZ(1, ev.to.x, ev.to.y, ev.to.z);
         pos.needsUpdate = true;
 
-        (slot.obj.material as LineBasicMaterial).color = new Color(ev.friendly ? 0x66ddff : 0xff5544);
+        (slot.obj.material as LineBasicMaterial).color = new Color(
+          ev.friendly ? 0x66ddff : 0xff5544,
+        );
         slot.obj.visible = true;
         slot.life = BEAM_DRAW_TIME;
       } else if (ev.t === 'kill' || ev.t === 'hit') {

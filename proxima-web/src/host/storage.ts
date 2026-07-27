@@ -18,7 +18,10 @@ const open = (): Promise<IDBDatabase> =>
     req.onerror = () => reject(req.error);
   });
 
-const tx = async <T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> => {
+const tx = async <T>(
+  mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> => {
   const db = await open();
   return new Promise<T>((resolve, reject) => {
     const request = run(db.transaction(STORE, mode).objectStore(STORE));

@@ -4,6 +4,7 @@
 // frigates that hold a standoff ring and lob torpedo volleys, and capitals that close
 // and slug. Yaw-only — combat stays on a plane, as in the C++ build.
 
+import { fireBeam } from './combat';
 import {
   DIFFICULTY_SCALE,
   ENEMIES,
@@ -17,8 +18,7 @@ import {
   VOLLEY_GAP,
   VOLLEY_SIZE,
 } from './data';
-import { DEG, addScaled, bearingTo, clamp, dist, forward, vec } from './math';
-import { fireBeam } from './combat';
+import { addScaled, bearingTo, clamp, DEG, dist, forward, vec } from './math';
 import type { EnemyShip, World } from './types';
 
 const BEAM_ARC = 90;

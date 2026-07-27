@@ -16,11 +16,16 @@ import { join } from 'node:path';
 const stripComments = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
+/**
+ * Reads `.ts` AND `.tsx`. The extension mattered: when the consoles moved to React the
+ * panels all became `.tsx`, and a `.ts`-only glob silently stopped covering every file
+ * the markup rule exists to protect — the guard kept passing over an empty set.
+ */
 const read = (dir: string): { path: string; source: string }[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return read(path);
-    return entry.name.endsWith('.ts')
+    return entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')
       ? [{ path, source: stripComments(readFileSync(path, 'utf8')) }]
       : [];
   });
@@ -64,14 +69,30 @@ describe('ship models', () => {
   });
 });
 
-describe('console controls are built once', () => {
-  it('no station panel assigns innerHTML', () => {
-    // Rebuilding markup is what destroys a button mid-press. Panels may only write
-    // text, attributes and classes — see src/stations/ui/dom.ts.
-    for (const { path, source } of read('src/stations')) {
+describe('markup is never rebuilt from a string', () => {
+  // Two separate bugs, one rule. Rebuilding a panel's markup destroys the button under
+  // the finger mid-press; rebuilding the HUD's markup every frame cost the pilot view
+  // ~20 ms a frame. React's reconciler handles both now, so the only way back in is a
+  // raw string assignment — which is what these check for.
+  const guard = (dir: string): void => {
+    const files = read(dir);
+
+    // Without this the guard is worthless: a glob that matches nothing passes every
+    // assertion. That is exactly how the .ts-only version kept reporting green over a
+    // directory of .tsx panels.
+    expect(files.length, `${dir} matched no source files — the guard is vacuous`).toBeGreaterThan(0);
+
+    for (const { path, source } of files) {
       expect(/\.innerHTML\s*=/.test(source), `${path} rebuilds markup instead of mutating it`).toBe(
         false,
       );
+      expect(
+        /dangerouslySetInnerHTML/.test(source),
+        `${path} rebuilds markup instead of mutating it`,
+      ).toBe(false);
     }
-  });
+  };
+
+  it('no station panel assigns innerHTML', () => guard('src/stations'));
+  it('no host view assigns innerHTML', () => guard('src/host'));
 });

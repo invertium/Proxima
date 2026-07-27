@@ -172,7 +172,10 @@ export class Scope {
         ctx.lineWidth = 1;
       }
       ctx.fillStyle = isObjective ? '#fde68a' : '#7d9dc4';
-      const label = isObjective && s.objective ? `${l.name} · ${(s.objective.range / 1000).toFixed(0)} km` : l.name;
+      const label =
+        isObjective && s.objective
+          ? `${l.name} · ${(s.objective.range / 1000).toFixed(0)} km`
+          : l.name;
       ctx.fillText(label, p.x + 11, p.y + 3);
     }
 

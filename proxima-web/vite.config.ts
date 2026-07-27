@@ -1,6 +1,9 @@
 import { defineConfig, type PluginOption } from 'vite';
 import { resolve } from 'node:path';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { attachRelay } from './server/relay';
+import type { UserConfig } from 'vitest/config';
 
 // The crew relay rides on the dev server, so `npm run dev` is the whole setup: one
 // port, one URL to hand round the room, no second process to remember.
@@ -14,7 +17,12 @@ const relayPlugin = (): PluginOption => ({
 // Two entry points: the host/pilot view (index.html) and the crew console
 // (station.html). Both ship from the same static build — see README §Distribution.
 export default defineConfig({
-  plugins: [relayPlugin()],
+  plugins: [react(), tailwindcss(), relayPlugin()],
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    },
+  },
   build: {
     target: 'es2022',
     rollupOptions: {
@@ -27,4 +35,8 @@ export default defineConfig({
   // strictPort: silently sliding to 5174 when 5173 is busy means the docs, the tests
   // and the human all end up talking to different servers.
   server: { host: true, port: 5173, strictPort: true },
-});
+  test: {
+    environment: 'node',
+    environmentMatchGlobs: [['test/panels.test.ts', 'jsdom']],
+  },
+} satisfies UserConfig);

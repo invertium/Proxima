@@ -16,8 +16,8 @@ import {
   Scene,
   WebGLRenderer,
 } from 'three';
+import { createBody, PLANET_PALETTES } from './planet';
 import { createStarbase } from './starbase';
-import { PLANET_PALETTES, createBody } from './planet';
 
 const params = new URLSearchParams(location.search);
 const which = params.get('model') ?? 'starbase';
@@ -48,7 +48,7 @@ if (which === 'starbase') {
     kind: which === 'sun' ? 'sun' : 'planet',
     radius: 1,
     color: which === 'sun' ? 0xff8a3c : 0x6fa8d8,
-    palette: PLANET_PALETTES[which] ?? PLANET_PALETTES['rocky']!,
+    palette: PLANET_PALETTES[which] ?? PLANET_PALETTES.rocky!,
     seed: 7,
   });
   scene.add(body.root);
@@ -62,7 +62,7 @@ const FRAMING: Record<string, [number, number, number]> = {
   'three-quarter': [2.0, 1.1, 2.0],
   top: [0.01, 3.0, 0],
 };
-camera.position.set(...(FRAMING[view] ?? FRAMING['front']!));
+camera.position.set(...(FRAMING[view] ?? FRAMING.front!));
 camera.lookAt(0, 0, 0);
 
 addEventListener('resize', () => {

@@ -223,7 +223,8 @@ export const SHIPS: ShipDef[] = [
   },
 ];
 
-export const shipDef = (type: ShipDef['type']): ShipDef => SHIPS.find((s) => s.type === type) ?? SHIPS[0]!;
+export const shipDef = (type: ShipDef['type']): ShipDef =>
+  SHIPS.find((s) => s.type === type) ?? SHIPS[0]!;
 
 /**
  * Extra yaw, in radians, applied after the loader levels a hull onto the world axes.
@@ -363,21 +364,94 @@ export const SPAWN_GRACE = 12;
 // by both credits and XP. The last two are one-time modules the starter hull lacks.
 
 export const UPGRADES: UpgradeDef[] = [
-  { id: 'beam_damage', name: 'Beam Damage', unit: 'dmg', stat: 'beamDamage', magnitudePerTier: 8, maxTier: 3, baseCost: 150 },
-  { id: 'beam_recharge', name: 'Beam Recharge', unit: '/s', stat: 'beamRecharge', magnitudePerTier: 0.15, maxTier: 3, baseCost: 150 },
-  { id: 'fire_arc', name: 'Targeting Arc', unit: '°', stat: 'fireArc', magnitudePerTier: 15, maxTier: 3, baseCost: 120 },
-  { id: 'hull', name: 'Hull Plating', unit: 'hull', stat: 'maxHull', magnitudePerTier: 40, maxTier: 3, baseCost: 200 },
-  { id: 'shields', name: 'Shield Capacity', unit: 'shld', stat: 'maxShield', magnitudePerTier: 30, maxTier: 3, baseCost: 200 },
-  { id: 'torpedo', name: 'Torpedo Tubes', unit: 'rds', stat: 'torpedoAmmo', magnitudePerTier: 2, maxTier: 3, baseCost: 180 },
-  { id: 'reactor', name: 'Reactor Output', unit: 'pwr', stat: 'reactorBudget', magnitudePerTier: 0.5, maxTier: 3, baseCost: 250 },
-  { id: 'strafe', name: 'Manoeuvring Thrusters', unit: 'uu/s', stat: 'strafeSpeed', magnitudePerTier: 950, maxTier: 1, baseCost: 160 },
-  { id: 'turret', name: 'Auto-Turret', unit: 'dmg', stat: 'turret', magnitudePerTier: 12, maxTier: 1, baseCost: 240 },
+  {
+    id: 'beam_damage',
+    name: 'Beam Damage',
+    unit: 'dmg',
+    stat: 'beamDamage',
+    magnitudePerTier: 8,
+    maxTier: 3,
+    baseCost: 150,
+  },
+  {
+    id: 'beam_recharge',
+    name: 'Beam Recharge',
+    unit: '/s',
+    stat: 'beamRecharge',
+    magnitudePerTier: 0.15,
+    maxTier: 3,
+    baseCost: 150,
+  },
+  {
+    id: 'fire_arc',
+    name: 'Targeting Arc',
+    unit: '°',
+    stat: 'fireArc',
+    magnitudePerTier: 15,
+    maxTier: 3,
+    baseCost: 120,
+  },
+  {
+    id: 'hull',
+    name: 'Hull Plating',
+    unit: 'hull',
+    stat: 'maxHull',
+    magnitudePerTier: 40,
+    maxTier: 3,
+    baseCost: 200,
+  },
+  {
+    id: 'shields',
+    name: 'Shield Capacity',
+    unit: 'shld',
+    stat: 'maxShield',
+    magnitudePerTier: 30,
+    maxTier: 3,
+    baseCost: 200,
+  },
+  {
+    id: 'torpedo',
+    name: 'Torpedo Tubes',
+    unit: 'rds',
+    stat: 'torpedoAmmo',
+    magnitudePerTier: 2,
+    maxTier: 3,
+    baseCost: 180,
+  },
+  {
+    id: 'reactor',
+    name: 'Reactor Output',
+    unit: 'pwr',
+    stat: 'reactorBudget',
+    magnitudePerTier: 0.5,
+    maxTier: 3,
+    baseCost: 250,
+  },
+  {
+    id: 'strafe',
+    name: 'Manoeuvring Thrusters',
+    unit: 'uu/s',
+    stat: 'strafeSpeed',
+    magnitudePerTier: 950,
+    maxTier: 1,
+    baseCost: 160,
+  },
+  {
+    id: 'turret',
+    name: 'Auto-Turret',
+    unit: 'dmg',
+    stat: 'turret',
+    magnitudePerTier: 12,
+    maxTier: 1,
+    baseCost: 240,
+  },
 ];
 
 export const upgradeDef = (id: string): UpgradeDef | undefined => UPGRADES.find((u) => u.id === id);
 
 /** Credit cost to buy the next tier up from `currentTier` (0-based). */
-export const upgradeCost = (u: UpgradeDef, currentTier: number): number => u.baseCost * (currentTier + 1);
+export const upgradeCost = (u: UpgradeDef, currentTier: number): number =>
+  u.baseCost * (currentTier + 1);
 
 /** Crew rank needed for the next tier: tier 1 needs rank 1, tier 2 rank 2, and so on. */
 export const upgradeRankReq = (currentTier: number): number => currentTier + 1;
@@ -500,7 +574,6 @@ export const CAMPAIGN: MissionDef[] = [
     ],
   },
 ];
-
 
 // ── Divergence control ──────────────────────────────────────────────────────────
 //

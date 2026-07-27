@@ -9,7 +9,10 @@ import type { SimEvent } from '../sim/types';
 
 type Cue = 'beam' | 'enemyFire' | 'hit' | 'explosion' | 'alarm' | 'dock';
 
-const MIX: Record<Cue, { freq: number; decay: number; gain: number; type: OscillatorType; sweep: number }> = {
+const MIX: Record<
+  Cue,
+  { freq: number; decay: number; gain: number; type: OscillatorType; sweep: number }
+> = {
   beam: { freq: 880, decay: 0.18, gain: 0.18, type: 'square', sweep: -420 },
   enemyFire: { freq: 320, decay: 0.2, gain: 0.14, type: 'sawtooth', sweep: -140 },
   hit: { freq: 180, decay: 0.14, gain: 0.22, type: 'triangle', sweep: -90 },

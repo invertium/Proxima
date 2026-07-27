@@ -10,10 +10,10 @@ import {
   CONTRACT_VISIT_RANGE,
   DISTRESS_CREDITS,
   DISTRESS_DURATION,
-  INTERDICTION_CREDITS,
   ENEMIES,
   EVENT_CHANCE,
   EVENT_ROLL_INTERVAL,
+  INTERDICTION_CREDITS,
   INTERDICTION_DURATION,
   PIRATE_CALLSIGNS,
   SALVAGE_COLLECT_RANGE,
@@ -21,10 +21,18 @@ import {
   SALVAGE_DURATION,
   SPAWN_GRACE,
 } from './data';
-import { addScaled, dist, forward, vec } from './math';
 import type { Vec3 } from './math';
-import type { Contract, ContractType, EnemyShip, EnemyType, SectorEvent, Verdict, World } from './types';
-import { OK, no } from './types';
+import { addScaled, dist, forward, vec } from './math';
+import type {
+  Contract,
+  ContractType,
+  EnemyShip,
+  EnemyType,
+  SectorEvent,
+  Verdict,
+  World,
+} from './types';
+import { no, OK } from './types';
 
 // ── Gravity ─────────────────────────────────────────────────────────────────────
 
@@ -95,7 +103,11 @@ const spawnEventShips = (world: World, at: Vec3, types: EnemyType[]): void => {
   });
 };
 
-const startEvent = (world: World, kind: SectorEvent, comms: (s: string, t: string) => void): void => {
+const startEvent = (
+  world: World,
+  kind: SectorEvent,
+  comms: (s: string, t: string) => void,
+): void => {
   const p = world.player;
   world.eventFleet = [];
 
@@ -116,19 +128,28 @@ const startEvent = (world: World, kind: SectorEvent, comms: (s: string, t: strin
     world.eventPos = vec(world.landmarks[best]!.pos.x, 0, world.landmarks[best]!.pos.z + 6000);
     spawnEventShips(world, world.eventPos, ['scout', 'scout']);
     world.eventDeadline = world.time + DISTRESS_DURATION;
-    comms('DISTRESS', `MAYDAY — supply convoy under raider attack near ${CAMPAIGN[best]!.landmarkName}! Anyone in range, please respond!`);
+    comms(
+      'DISTRESS',
+      `MAYDAY — supply convoy under raider attack near ${CAMPAIGN[best]!.landmarkName}! Anyone in range, please respond!`,
+    );
   } else if (kind === 'interdiction') {
     // A two-ship ambush powering up dead ahead on the ship's course.
     world.eventPos = { ...p.pos };
     addScaled(world.eventPos, forward(p.heading), 11000);
     spawnEventShips(world, world.eventPos, ['scout', 'gunship']);
     world.eventDeadline = world.time + INTERDICTION_DURATION;
-    comms('TACTICAL', 'Pirate interdiction! Two contacts powering up dead ahead on our course — they want our cargo, Captain.');
+    comms(
+      'TACTICAL',
+      'Pirate interdiction! Two contacts powering up dead ahead on our course — they want our cargo, Captain.',
+    );
   } else if (kind === 'salvage') {
     const angle = world.rng() * Math.PI * 2;
     world.eventPos = vec(p.pos.x + Math.cos(angle) * 9000, 0, p.pos.z + Math.sin(angle) * 9000);
     world.eventDeadline = world.time + SALVAGE_DURATION;
-    comms('SCIENCE', 'Sensor ghost resolved: a free-floating cargo pod adrift close by. Close to 1,500 uu and we can tractor it in.');
+    comms(
+      'SCIENCE',
+      'Sensor ghost resolved: a free-floating cargo pod adrift close by. Close to 1,500 uu and we can tractor it in.',
+    );
   } else {
     return;
   }
@@ -153,7 +174,11 @@ const endEvent = (world: World, success: boolean, comms: (s: string, t: string) 
   }
 };
 
-export const stepEvents = (world: World, dt: number, comms: (s: string, t: string) => void): void => {
+export const stepEvents = (
+  world: World,
+  dt: number,
+  comms: (s: string, t: string) => void,
+): void => {
   const p = world.player;
 
   if (world.activeEvent === 'none') {
@@ -239,7 +264,8 @@ const generateOffer = (world: World): Contract => {
     targetA,
     targetB: type === 'patrol' ? randomSystem(targetA) : -1,
     stage: 0,
-    ship: type === 'bounty' ? PIRATE_CALLSIGNS[Math.floor(world.rng() * PIRATE_CALLSIGNS.length)]! : '',
+    ship:
+      type === 'bounty' ? PIRATE_CALLSIGNS[Math.floor(world.rng() * PIRATE_CALLSIGNS.length)]! : '',
     reward: type === 'bounty' ? 220 : type === 'patrol' ? 140 : 160,
   };
 };
@@ -322,14 +348,20 @@ export const stepContracts = (world: World, comms: (s: string, t: string) => voi
   if (c.type === 'patrol') {
     if (c.stage === 0 && atSystem(c.targetA)) {
       c.stage = 1;
-      comms('STARBASE OPS', `First waypoint swept — ${CAMPAIGN[c.targetA]?.landmarkName} reads clear. One leg to go: ${CAMPAIGN[c.targetB]?.landmarkName}.`);
+      comms(
+        'STARBASE OPS',
+        `First waypoint swept — ${CAMPAIGN[c.targetA]?.landmarkName} reads clear. One leg to go: ${CAMPAIGN[c.targetB]?.landmarkName}.`,
+      );
     } else if (c.stage === 1 && atSystem(c.targetB)) {
       completeContract(world, comms);
     }
   } else if (c.type === 'delivery') {
     if (c.stage === 0 && atSystem(c.targetA)) {
       c.stage = 1;
-      comms('STARBASE OPS', `Cargo delivered to ${CAMPAIGN[c.targetA]?.landmarkName}. Return to the starbase and dock to close the contract.`);
+      comms(
+        'STARBASE OPS',
+        `Cargo delivered to ${CAMPAIGN[c.targetA]?.landmarkName}. Return to the starbase and dock to close the contract.`,
+      );
     } else if (c.stage === 1 && p.docked) {
       completeContract(world, comms);
     }

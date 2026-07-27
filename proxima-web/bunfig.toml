@@ -1,0 +1,4 @@
+[test]
+# `bun test` runs Bun's own runner over the same files vitest does. Without a DOM the
+# jsdom panel tests fail there while passing under vitest — see test/setup-bun.ts.
+preload = ["./test/setup-bun.ts"]
