@@ -12,8 +12,8 @@
 // Next (issue #16): WebRTC data channels, with this relay demoted to signaling. The
 // interfaces below are the seam that lands on.
 
-import type { ClientMessage, ServerMessage } from './protocol';
 import type { Snapshot } from '../sim/types';
+import type { ClientMessage, ServerMessage } from './protocol';
 
 export interface HostTransport {
   broadcast(msg: ServerMessage): void;

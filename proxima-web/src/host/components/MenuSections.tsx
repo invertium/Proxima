@@ -1,11 +1,14 @@
 import { Button } from '@/components/ui/button';
-import { SHIPS } from '@/sim/data';
-
-import type { SaveGame } from '@/sim/save';
 import type { Settings } from '@/settings';
+import { SHIPS } from '@/sim/data';
+import type { SaveGame } from '@/sim/save';
 import type { Difficulty, PlayerShipType } from '@/sim/types';
 
-export const DIFFICULTIES: readonly { readonly id: Difficulty; readonly name: string; readonly blurb: string }[] = [
+export const DIFFICULTIES: readonly {
+  readonly id: Difficulty;
+  readonly name: string;
+  readonly blurb: string;
+}[] = [
   { id: 'ensign', name: 'ENSIGN', blurb: 'Softer hostiles — learn the bridge.' },
   { id: 'captain', name: 'CAPTAIN', blurb: 'The tuned baseline.' },
   { id: 'admiral', name: 'ADMIRAL', blurb: 'Harder-hitting, tougher hulls.' },
@@ -55,7 +58,9 @@ export function MainMenuSection({
   return (
     <>
       <h1 className="text-3xl font-medium tracking-[0.32em] text-[#7dd3fc]">PROXIMA</h1>
-      <p className="text-sm uppercase tracking-[0.18em] text-slate-400">a co-op starship bridge simulator</p>
+      <p className="text-sm uppercase tracking-[0.18em] text-slate-400">
+        a co-op starship bridge simulator
+      </p>
       {save ? (
         <Button className={ACTION_BUTTON_CLASS} data-testid="menu-continue" onClick={onContinue}>
           CONTINUE — OBJECTIVE {save.missionIndex + 1}
@@ -73,7 +78,9 @@ export function MainMenuSection({
       <Button className={ACTION_BUTTON_CLASS} variant="outline" onClick={onControls}>
         CONTROLS
       </Button>
-      <p className="text-sm text-slate-400">Crew joins at <code>/station.html</code> on this machine&apos;s LAN address.</p>
+      <p className="text-sm text-slate-400">
+        Crew joins at <code>/station.html</code> on this machine&apos;s LAN address.
+      </p>
       {pin ? (
         <p className="text-sm text-slate-400">
           Session PIN <code>{pin}</code> — or hand out <code>/station.html?pin={pin}</code>
@@ -92,7 +99,14 @@ interface NewGameSectionProps {
   readonly onShipType: (value: PlayerShipType) => void;
 }
 
-export function NewGameSection({ difficulty, shipType, onBack, onDifficulty, onLaunch, onShipType }: NewGameSectionProps) {
+export function NewGameSection({
+  difficulty,
+  shipType,
+  onBack,
+  onDifficulty,
+  onLaunch,
+  onShipType,
+}: NewGameSectionProps) {
   return (
     <>
       <h2 className="text-3xl font-medium tracking-[0.32em] text-[#7dd3fc]">NEW GAME</h2>
@@ -122,7 +136,9 @@ export function NewGameSection({ difficulty, shipType, onBack, onDifficulty, onL
               variant="outline"
               onClick={() => onShipType(ship.type)}
             >
-              <span className="text-sm font-semibold tracking-[0.18em]">{ship.name.toUpperCase()}</span>
+              <span className="text-sm font-semibold tracking-[0.18em]">
+                {ship.name.toUpperCase()}
+              </span>
               <span className="text-xs text-slate-300">{ship.blurb}</span>
             </Button>
           ))}
@@ -145,7 +161,12 @@ interface PausedMenuSectionProps {
   readonly onSettings: () => void;
 }
 
-export function PausedMenuSection({ onControls, onMainMenu, onResume, onSettings }: PausedMenuSectionProps) {
+export function PausedMenuSection({
+  onControls,
+  onMainMenu,
+  onResume,
+  onSettings,
+}: PausedMenuSectionProps) {
   return (
     <>
       <h2 className="text-3xl font-medium tracking-[0.32em] text-[#7dd3fc]">PAUSED</h2>
@@ -158,7 +179,12 @@ export function PausedMenuSection({ onControls, onMainMenu, onResume, onSettings
       <Button className={ACTION_BUTTON_CLASS} variant="outline" onClick={onControls}>
         CONTROLS
       </Button>
-      <Button className={ACTION_BUTTON_CLASS} data-testid="menu-main" variant="outline" onClick={onMainMenu}>
+      <Button
+        className={ACTION_BUTTON_CLASS}
+        data-testid="menu-main"
+        variant="outline"
+        onClick={onMainMenu}
+      >
         MAIN MENU
       </Button>
       <p className="text-sm text-slate-400">Progress is saved automatically.</p>
@@ -175,7 +201,9 @@ interface OutcomeMenuSectionProps {
 export function OutcomeMenuSection({ outcome, onMainMenu, onRetry }: OutcomeMenuSectionProps) {
   return (
     <>
-      <h2 className={`text-3xl font-medium tracking-[0.32em] ${outcome === 'victory' ? 'text-[#4ade80]' : 'text-[#f87171]'}`}>
+      <h2
+        className={`text-3xl font-medium tracking-[0.32em] ${outcome === 'victory' ? 'text-[#4ade80]' : 'text-[#f87171]'}`}
+      >
         {outcome === 'victory' ? 'THE VEIL IS SECURE' : 'SHIP LOST'}
       </h2>
       <p className="text-sm text-slate-300">
@@ -188,7 +216,12 @@ export function OutcomeMenuSection({ outcome, onMainMenu, onRetry }: OutcomeMenu
           RETRY FROM LAST SAVE
         </Button>
       ) : null}
-      <Button className={ACTION_BUTTON_CLASS} data-testid="menu-main" variant="outline" onClick={onMainMenu}>
+      <Button
+        className={ACTION_BUTTON_CLASS}
+        data-testid="menu-main"
+        variant="outline"
+        onClick={onMainMenu}
+      >
         MAIN MENU
       </Button>
     </>
@@ -203,7 +236,13 @@ interface SettingsMenuSectionProps {
   readonly onWakeLock: () => void;
 }
 
-export function SettingsMenuSection({ settings, onBack, onQuality, onVolume, onWakeLock }: SettingsMenuSectionProps) {
+export function SettingsMenuSection({
+  settings,
+  onBack,
+  onQuality,
+  onVolume,
+  onWakeLock,
+}: SettingsMenuSectionProps) {
   return (
     <>
       <h2 className="text-3xl font-medium tracking-[0.32em] text-[#7dd3fc]">SETTINGS</h2>
@@ -222,7 +261,9 @@ export function SettingsMenuSection({ settings, onBack, onQuality, onVolume, onW
       <Button className={ACTION_BUTTON_CLASS} variant="outline" onClick={onBack}>
         BACK
       </Button>
-      <p className="text-sm text-slate-400">Crew consoles keep their own screen awake using this setting.</p>
+      <p className="text-sm text-slate-400">
+        Crew consoles keep their own screen awake using this setting.
+      </p>
     </>
   );
 }

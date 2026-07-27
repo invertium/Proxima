@@ -47,7 +47,7 @@ export function Hud() {
   const event = snapshot?.event ?? null;
   const contract = snapshot?.contract ?? null;
   const contacts = snapshot?.contacts ?? EMPTY_CONTACTS;
-  
+
   const target = useMemo(() => {
     if (!player) return null;
     return contacts.find((contact) => contact.id === player.targetId) ?? null;
@@ -85,7 +85,7 @@ export function Hud() {
 
   const heading = useMemo(() => {
     if (!player) return 0;
-    return Math.round((((player.heading * 180) / Math.PI + 360) % 360));
+    return Math.round(((player.heading * 180) / Math.PI + 360) % 360);
   }, [player]);
   const refusalVisible = refusalText.length > 0 && now < refusalUntil;
 
@@ -118,8 +118,7 @@ export function Hud() {
 
         {mode === 'skirmish' ? (
           <div className="rounded-xl border border-sky-400/20 bg-[#0c1a34]/80 px-3 py-2 text-[#c7dbff]">
-            <b className="mr-1 text-[#7dd3fc]">SKIRMISH</b>
-            — WAVE {skirmishWave}
+            <b className="mr-1 text-[#7dd3fc]">SKIRMISH</b>— WAVE {skirmishWave}
           </div>
         ) : null}
 

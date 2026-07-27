@@ -6,7 +6,14 @@
 // invited can't happen here.
 
 import type { SaveGame } from '../sim/save';
-import type { Command, Difficulty, GameMode, PlayerShipType, SimEvent, Snapshot } from '../sim/types';
+import type {
+  Command,
+  Difficulty,
+  GameMode,
+  PlayerShipType,
+  SimEvent,
+  Snapshot,
+} from '../sim/types';
 
 export const PROTOCOL_VERSION = 1;
 

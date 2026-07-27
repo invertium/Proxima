@@ -15,7 +15,9 @@ type Contact = Snapshot['contacts'][number];
 
 const EMPTY_CONTACTS: Snapshot['contacts'] = [];
 
-const getSolutionLabel = (contact: Contact): 'BEAM SOLUTION' | 'TORPEDO ARC ONLY' | 'SHIELDED' | 'NO SOLUTION' => {
+const getSolutionLabel = (
+  contact: Contact,
+): 'BEAM SOLUTION' | 'TORPEDO ARC ONLY' | 'SHIELDED' | 'NO SOLUTION' => {
   if (contact.shielded || (contact.shield > 0 && !contact.scanned)) {
     return 'SHIELDED';
   }
@@ -51,13 +53,13 @@ export function WeaponsPanel({ send }: WeaponsPanelProps) {
   const snapshot = useGameStore((state) => state.snapshot);
   const player = snapshot?.player ?? null;
   const contacts = snapshot?.contacts ?? EMPTY_CONTACTS;
-  
+
   const targetId = player?.targetId ?? null;
   const target = useMemo(() => {
     if (!player) return null;
     return contacts.find((contact) => contact.id === player.targetId) ?? null;
   }, [player, contacts]);
-  
+
   const beamCharge = player?.beamCharge ?? 0;
   const torpedoAmmo = player?.torpedoAmmo ?? 0;
   const torpedoReload = player?.torpedoReload ?? 0;
@@ -113,10 +115,13 @@ export function WeaponsPanel({ send }: WeaponsPanelProps) {
                     </span>
                     {contact.scanned ? (
                       <span className="block text-[11px] text-[#9ab6da]">
-                        hull {Math.round(contact.hull)}/{Math.round(contact.maxHull)} · shield {Math.round(contact.shield)}
+                        hull {Math.round(contact.hull)}/{Math.round(contact.maxHull)} · shield{' '}
+                        {Math.round(contact.shield)}
                       </span>
                     ) : (
-                      <span className="block text-[11px] text-[#9ab6da]">unscanned — Science can resolve it</span>
+                      <span className="block text-[11px] text-[#9ab6da]">
+                        unscanned — Science can resolve it
+                      </span>
                     )}
                   </div>
                   <em

@@ -11,7 +11,7 @@ export const gameStore = create<GameStore>()(
   subscribeWithSelector((set) => ({
     snapshot: null,
     applySnapshot: (snap) => set({ snapshot: snap }),
-  }))
+  })),
 );
 
 export const useGameStore = gameStore;

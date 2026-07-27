@@ -1,43 +1,43 @@
-import { create } from 'zustand'
+import { create } from 'zustand';
 
-import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/utils'
-import { rankFromXp, SCAN_DURATION } from '@/sim/data'
-import type { Snapshot } from '@/sim/types'
-import { useGameStore } from '@/store/game'
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
+import { rankFromXp, SCAN_DURATION } from '@/sim/data';
+import type { Snapshot } from '@/sim/types';
+import { useGameStore } from '@/store/game';
 
-import type { StationPanelProps } from '../StationPanelProps'
+import type { StationPanelProps } from '../StationPanelProps';
 
-type ScopeMode = 'tactical' | 'map'
-type Contact = Snapshot['contacts'][number]
-type CommsEntry = Snapshot['comms'][number]
+type ScopeMode = 'tactical' | 'map';
+type Contact = Snapshot['contacts'][number];
+type CommsEntry = Snapshot['comms'][number];
 
 interface ScienceScopeStore {
-  readonly mode: ScopeMode
-  readonly toggleMode: () => void
-  readonly resetMode: () => void
+  readonly mode: ScopeMode;
+  readonly toggleMode: () => void;
+  readonly resetMode: () => void;
 }
 
-const EMPTY_CONTACTS: readonly Contact[] = []
-const EMPTY_COMMS: readonly CommsEntry[] = []
+const EMPTY_CONTACTS: readonly Contact[] = [];
+const EMPTY_COMMS: readonly CommsEntry[] = [];
 
-const km = (n: number): string => `${(n / 1000).toFixed(1)} km`
+const km = (n: number): string => `${(n / 1000).toFixed(1)} km`;
 
 const useScienceScopeStore = create<ScienceScopeStore>((set) => ({
   mode: 'tactical',
   toggleMode: () => set((state) => ({ mode: state.mode === 'map' ? 'tactical' : 'map' })),
   resetMode: () => set({ mode: 'tactical' }),
-}))
+}));
 
 function Readout({
   label,
   value,
   tone,
 }: {
-  readonly label: string
-  readonly value: string
-  readonly tone?: 'normal' | 'danger' | 'accent'
+  readonly label: string;
+  readonly value: string;
+  readonly tone?: 'normal' | 'danger' | 'accent';
 }) {
   return (
     <div className="rounded-lg border border-[#1b314d] bg-[#08111d] px-3 py-2">
@@ -52,49 +52,49 @@ function Readout({
         {value}
       </div>
     </div>
-  )
+  );
 }
 
 export function SciencePanel({ send }: StationPanelProps) {
-  const snapshot = useGameStore((state) => state.snapshot)
-  const contacts = snapshot?.contacts ?? EMPTY_CONTACTS
-  const event = snapshot?.event ?? null
-  const objective = snapshot?.objective ?? null
-  const offer = snapshot?.offer ?? null
-  const contract = snapshot?.contract ?? null
-  const player = snapshot?.player ?? null
-  const comms = snapshot?.comms ?? EMPTY_COMMS
-  const scopeMode = useScienceScopeStore((state) => state.mode)
-  const toggleScopeMode = useScienceScopeStore((state) => state.toggleMode)
+  const snapshot = useGameStore((state) => state.snapshot);
+  const contacts = snapshot?.contacts ?? EMPTY_CONTACTS;
+  const event = snapshot?.event ?? null;
+  const objective = snapshot?.objective ?? null;
+  const offer = snapshot?.offer ?? null;
+  const contract = snapshot?.contract ?? null;
+  const player = snapshot?.player ?? null;
+  const comms = snapshot?.comms ?? EMPTY_COMMS;
+  const scopeMode = useScienceScopeStore((state) => state.mode);
+  const toggleScopeMode = useScienceScopeStore((state) => state.toggleMode);
 
   if (player === null) {
     return (
       <section className="rounded-lg border border-[#1e3a5f] bg-[#06101c] p-3 text-xs text-[#9ab6da]">
         AWAITING TELEMETRY
       </section>
-    )
+    );
   }
 
-  const isScanning = player.scanning && player.scanTargetId !== null
-  const scanPercent = Math.round(player.scanProgress * 100)
-  const scannedIds = player.scanned
-  const activeContact = contacts.find((contact) => contact.id === player.scanTargetId) ?? null
-  const recentComms = comms.slice(-5)
-  const rank = rankFromXp(player.xp)
+  const isScanning = player.scanning && player.scanTargetId !== null;
+  const scanPercent = Math.round(player.scanProgress * 100);
+  const scannedIds = player.scanned;
+  const activeContact = contacts.find((contact) => contact.id === player.scanTargetId) ?? null;
+  const recentComms = comms.slice(-5);
+  const rank = rankFromXp(player.xp);
   const objectiveText = objective
     ? `${objective.name} · ${km(objective.range)}${
         objective.offered ? ' — ORDERS PENDING' : objective.live ? ' — ENGAGED' : ''
       }`
-    : '—'
-  const objectiveTone = objective?.offered ? 'danger' : objective?.live ? 'accent' : 'normal'
+    : '—';
+  const objectiveTone = objective?.offered ? 'danger' : objective?.live ? 'accent' : 'normal';
   const contractText = contract
     ? `ACTIVE — ${contract.text}`
     : offer
       ? `ON OFFER — ${offer.text}`
       : player.docked
         ? 'No postings.'
-        : 'Dock to see board'
-  const showAcceptContract = offer !== null && contract === null
+        : 'Dock to see board';
+  const showAcceptContract = offer !== null && contract === null;
 
   return (
     <section className="space-y-3 rounded-lg border border-[#1e3a5f] bg-[#06101c] p-3 text-xs text-[#9ab6da]">
@@ -123,7 +123,11 @@ export function SciencePanel({ send }: StationPanelProps) {
         <p className="text-xs leading-5 text-[#9ab6da]">{contractText}</p>
         {showAcceptContract ? (
           <div className="mt-3">
-            <Button type="button" variant="destructive" onClick={() => send({ c: 'acceptContract' })}>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => send({ c: 'acceptContract' })}
+            >
               ACCEPT CONTRACT
             </Button>
           </div>
@@ -166,7 +170,9 @@ export function SciencePanel({ send }: StationPanelProps) {
             <span>{scanPercent}%</span>
           </div>
           <Progress value={scanPercent} className="mb-1" />
-          <p className="text-[11px] text-[#7d9dc4]">Scanning — hold the lock for {SCAN_DURATION}s.</p>
+          <p className="text-[11px] text-[#7d9dc4]">
+            Scanning — hold the lock for {SCAN_DURATION}s.
+          </p>
         </div>
       ) : null}
 
@@ -179,8 +185,8 @@ export function SciencePanel({ send }: StationPanelProps) {
         ) : (
           <div className="space-y-2">
             {contacts.map((contact) => {
-              const isResolved = scannedIds.includes(contact.id)
-              const inRange = contact.range <= player.stats.scanRange
+              const isResolved = scannedIds.includes(contact.id);
+              const inRange = contact.range <= player.stats.scanRange;
               return (
                 <button
                   key={contact.id}
@@ -190,8 +196,11 @@ export function SciencePanel({ send }: StationPanelProps) {
                   className={cn(
                     'contact flex w-full items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition',
                     player.scanTargetId === contact.id && 'border-[#38bdf8] bg-[#102033]',
-                    player.scanTargetId !== contact.id && 'border-[#1b314d] bg-[#08111d] hover:bg-[#0c1726]',
-                    !inRange && !isResolved && 'cursor-not-allowed border-[#1f2937] text-[#4b5563] hover:bg-[#08111d]',
+                    player.scanTargetId !== contact.id &&
+                      'border-[#1b314d] bg-[#08111d] hover:bg-[#0c1726]',
+                    !inRange &&
+                      !isResolved &&
+                      'cursor-not-allowed border-[#1f2937] text-[#4b5563] hover:bg-[#08111d]',
                   )}
                 >
                   <div className="min-w-0 flex-1">
@@ -214,7 +223,7 @@ export function SciencePanel({ send }: StationPanelProps) {
                     {isResolved ? 'RESOLVED' : 'unresolved'}
                   </em>
                 </button>
-              )
+              );
             })}
           </div>
         )}
@@ -227,7 +236,11 @@ export function SciencePanel({ send }: StationPanelProps) {
           tone={player.damaged.sensors ? 'danger' : 'normal'}
         />
         <Readout label="XP / RANK" value={`${player.xp} · rank ${rank}`} tone="accent" />
-        <Readout label="SCAN" value={isScanning ? `${scanPercent}% LOCK` : 'IDLE'} tone={isScanning ? 'accent' : 'normal'} />
+        <Readout
+          label="SCAN"
+          value={isScanning ? `${scanPercent}% LOCK` : 'IDLE'}
+          tone={isScanning ? 'accent' : 'normal'}
+        />
       </div>
 
       <div>
@@ -239,7 +252,10 @@ export function SciencePanel({ send }: StationPanelProps) {
         ) : (
           <div className="space-y-2">
             {recentComms.map((entry) => (
-              <div key={`${entry.at}-${entry.sender}-${entry.text}`} className="rounded-lg border border-[#1b314d] bg-[#08111d] px-3 py-2">
+              <div
+                key={`${entry.at}-${entry.sender}-${entry.text}`}
+                className="rounded-lg border border-[#1b314d] bg-[#08111d] px-3 py-2"
+              >
                 <div className="mb-1 flex items-center justify-between gap-2 text-[10px] tracking-[0.16em] text-[#6f88a9]">
                   <b className="font-semibold text-[#dbe7ff]">{entry.sender}</b>
                   <span>T+{entry.at.toFixed(1)}s</span>
@@ -251,7 +267,7 @@ export function SciencePanel({ send }: StationPanelProps) {
         )}
       </div>
     </section>
-  )
+  );
 }
 
-export { useScienceScopeStore }
+export { useScienceScopeStore };

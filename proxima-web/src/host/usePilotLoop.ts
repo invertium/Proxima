@@ -1,8 +1,7 @@
-import { useEffect } from 'react';
-
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { Snapshot } from '../sim/types';
+import { useEffect } from 'react';
 import type { SectorView } from '../render/scene';
+import type { Snapshot } from '../sim/types';
 
 import { audio, cmd } from './main';
 
@@ -94,7 +93,9 @@ export function usePilotLoop({ menuOpenRef, setMenuOpen, snapshotRef, viewRef }:
 
       if (!menuOpenRef.current) pumpInput();
       view.update(currentSnapshot, dt);
-      audio.setThrottle(Math.abs(currentSnapshot.player.speed) / Math.max(1, currentSnapshot.player.maxSpeed));
+      audio.setThrottle(
+        Math.abs(currentSnapshot.player.speed) / Math.max(1, currentSnapshot.player.maxSpeed),
+      );
     };
 
     window.addEventListener('keydown', onKeyDown);

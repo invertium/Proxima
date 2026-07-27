@@ -1,9 +1,9 @@
 // Damage, firing arcs, and projectiles. Ported from Components/HealthComponent.cpp,
 // WeaponComponent.cpp and TorpedoLauncherComponent.cpp.
 
-import { DEG, bearingTo, dist } from './math';
-import type { Combatant, PlayerShip, SimEvent, World } from './types';
 import { MAX_MITIGATION, SHIELD_MITIGATION_SCALE } from './data';
+import { bearingTo, DEG, dist } from './math';
+import type { Combatant, PlayerShip, SimEvent, World } from './types';
 
 /**
  * Shield power mitigates incoming damage before the shield pool absorbs anything

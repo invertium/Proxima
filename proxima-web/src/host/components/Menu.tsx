@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-
-import type { SaveGame } from '@/sim/save';
 import type { Settings } from '@/settings';
+import type { SaveGame } from '@/sim/save';
 import type { Difficulty, GameMode, PlayerShipType } from '@/sim/types';
 
 import {
@@ -76,7 +75,8 @@ export function Menu({
   }
 
   const cycleVolume = (): void => {
-    const nextValue = Math.round(((draftSettings.volume + 0.25 > 1 ? 0 : draftSettings.volume + 0.25) * 100)) / 100;
+    const nextValue =
+      Math.round((draftSettings.volume + 0.25 > 1 ? 0 : draftSettings.volume + 0.25) * 100) / 100;
     const next = { ...draftSettings, volume: nextValue };
     setDraftSettings(next);
     onSettings(next);
@@ -171,7 +171,11 @@ export function Menu({
         ) : null}
 
         {currentScreen === 'outcome' ? (
-          <OutcomeMenuSection outcome={outcome} onMainMenu={() => setCurrentScreen('main')} onRetry={retryFromSave} />
+          <OutcomeMenuSection
+            outcome={outcome}
+            onMainMenu={() => setCurrentScreen('main')}
+            onRetry={retryFromSave}
+          />
         ) : null}
 
         {currentScreen === 'settings' ? (

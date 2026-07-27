@@ -36,20 +36,33 @@ export function EngineeringDrydock({ player, send }: EngineeringDrydockProps) {
                 const canBuy = !maxed && player.credits >= cost && player.rank >= requiredRank;
 
                 return (
-                  <div key={upgrade.id} className="rounded-lg border border-[#1e293b] bg-[#08101c] p-3">
+                  <div
+                    key={upgrade.id}
+                    className="rounded-lg border border-[#1e293b] bg-[#08101c] p-3"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-semibold text-[#dbe7ff]">{upgrade.name}</div>
                         <div className="mt-1 text-xs text-[#8da6c8]">
-                          {maxed ? 'MAX' : `${cost} cr · rank ${requiredRank} · +${upgrade.magnitudePerTier}${upgrade.unit}`}
+                          {maxed
+                            ? 'MAX'
+                            : `${cost} cr · rank ${requiredRank} · +${upgrade.magnitudePerTier}${upgrade.unit}`}
                         </div>
                       </div>
-                      <Badge variant="outline" className="border-[#33537d] bg-[#102033] text-[#c9def8]">
+                      <Badge
+                        variant="outline"
+                        className="border-[#33537d] bg-[#102033] text-[#c9def8]"
+                      >
                         TIER {tier}/{upgrade.maxTier}
                       </Badge>
                     </div>
                     <div className="mt-3 flex justify-end">
-                      <Button type="button" size="sm" disabled={!canBuy} onClick={() => send({ c: 'buyUpgrade', id: upgrade.id })}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!canBuy}
+                        onClick={() => send({ c: 'buyUpgrade', id: upgrade.id })}
+                      >
                         BUY
                       </Button>
                     </div>
@@ -65,7 +78,8 @@ export function EngineeringDrydock({ player, send }: EngineeringDrydockProps) {
               {SHIPS.map((ship) => {
                 const owned = player.ownedShips.includes(ship.type);
                 const active = ship.type === player.shipType;
-                const canBuy = owned || (player.credits >= ship.cost && player.rank >= ship.rankReq);
+                const canBuy =
+                  owned || (player.credits >= ship.cost && player.rank >= ship.rankReq);
                 const statusText = active
                   ? 'Current hull'
                   : owned
@@ -73,7 +87,10 @@ export function EngineeringDrydock({ player, send }: EngineeringDrydockProps) {
                     : `${ship.cost} cr · rank ${ship.rankReq}`;
 
                 return (
-                  <div key={ship.type} className="rounded-lg border border-[#1e293b] bg-[#08101c] p-3">
+                  <div
+                    key={ship.type}
+                    className="rounded-lg border border-[#1e293b] bg-[#08101c] p-3"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-semibold text-[#dbe7ff]">{ship.name}</div>
@@ -93,9 +110,15 @@ export function EngineeringDrydock({ player, send }: EngineeringDrydockProps) {
                       </Badge>
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-[#9ab6da]">
-                      <div className="rounded-md bg-[#102033] px-2 py-1">TOP {km(ship.maxSpeed)}</div>
-                      <div className="rounded-md bg-[#102033] px-2 py-1">HULL {pct(ship.maxHull, 240)}%</div>
-                      <div className="rounded-md bg-[#102033] px-2 py-1">TORP {ship.torpedoAmmo}</div>
+                      <div className="rounded-md bg-[#102033] px-2 py-1">
+                        TOP {km(ship.maxSpeed)}
+                      </div>
+                      <div className="rounded-md bg-[#102033] px-2 py-1">
+                        HULL {pct(ship.maxHull, 240)}%
+                      </div>
+                      <div className="rounded-md bg-[#102033] px-2 py-1">
+                        TORP {ship.torpedoAmmo}
+                      </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <span className="text-xs text-[#8da6c8]">{statusText}</span>

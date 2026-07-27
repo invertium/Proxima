@@ -14,7 +14,7 @@ import {
   Fog,
   Mesh,
   MeshBasicMaterial,
-  Object3D,
+  type Object3D,
   PerspectiveCamera,
   Points,
   PointsMaterial,
@@ -23,14 +23,14 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { ENEMIES, shipDef } from '../sim/data';
+import type { Vec3 } from '../sim/math';
+import { makeRng } from '../sim/math';
+import type { SimEvent, Snapshot } from '../sim/types';
 import { CombatFx } from './fx';
-import { PLANET_PALETTES, createBody, type Body } from './models/planet';
+import { type Body, createBody, PLANET_PALETTES } from './models/planet';
 import { createStarbase, type Starbase } from './models/starbase';
 import { makeShip, preloadShipModels } from './ships';
-import { ENEMIES, shipDef } from '../sim/data';
-import { makeRng } from '../sim/math';
-import type { Vec3 } from '../sim/math';
-import type { SimEvent, Snapshot } from '../sim/types';
 
 const STARFIELD_COUNT = 4000;
 const STARFIELD_RADIUS = 400000;
@@ -138,7 +138,8 @@ export class SectorView {
     // Hull hits shake the bridge. Scaled by damage and clamped, so a torpedo rattles
     // the camera and a glancing beam barely registers.
     for (const ev of events) {
-      if (ev.t === 'hit') this.trauma = Math.min(1, this.trauma + ev.damage * HIT_TRAUMA_PER_DAMAGE);
+      if (ev.t === 'hit')
+        this.trauma = Math.min(1, this.trauma + ev.damage * HIT_TRAUMA_PER_DAMAGE);
       else if (ev.t === 'kill') this.trauma = Math.min(1, this.trauma + 0.25);
     }
   }
@@ -328,7 +329,7 @@ export class SectorView {
     const look = new Vector3(p.pos.x, p.pos.y, p.pos.z);
 
     // Exponential smoothing, frame-rate independent.
-    const k = 1 - Math.pow(0.0015, dt);
+    const k = 1 - 0.0015 ** dt;
     this.camPos.lerp(want, this.camPos.lengthSq() === 0 ? 1 : k);
     this.camLook.lerp(look, this.camLook.lengthSq() === 0 ? 1 : k);
 

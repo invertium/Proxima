@@ -2,18 +2,16 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '../index.css';
 
-import { BridgeAudio } from '../render/audio';
-import { RelayHost } from '../net/transport';
 import { gameStore } from '@/store/game';
-
-import { clearCampaign, loadCampaign, saveCampaign } from './storage';
-import { PIXEL_RATIO_CAP, keepAwake, loadSettings, saveSettings } from '../settings';
-import { SessionRecorder } from './recorder';
-import { App } from './App';
-
 import type { ServerMessage, WorkerMessage } from '../net/protocol';
+import { RelayHost } from '../net/transport';
+import { BridgeAudio } from '../render/audio';
+import { keepAwake, loadSettings, PIXEL_RATIO_CAP, saveSettings } from '../settings';
 import type { SaveGame } from '../sim/save';
 import type { Command } from '../sim/types';
+import { App } from './App';
+import { SessionRecorder } from './recorder';
+import { clearCampaign, loadCampaign, saveCampaign } from './storage';
 
 export const worker = new Worker(new URL('./sim.worker.ts', import.meta.url), { type: 'module' });
 export const audio = new BridgeAudio();

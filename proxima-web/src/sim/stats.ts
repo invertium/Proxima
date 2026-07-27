@@ -12,8 +12,8 @@ import {
   MAX_SHIELD,
   REACTOR_BUDGET,
   SCAN_RANGE,
-  UPGRADES,
   shipDef,
+  UPGRADES,
 } from './data';
 import type { DamageSystem, PlayerShip, UpgradeStat } from './types';
 

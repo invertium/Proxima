@@ -3,11 +3,11 @@
 // Rendering and UI work cannot stall the game loop, and the loop cannot stall the
 // frame — the two only ever exchange structured-cloneable snapshots.
 
+import type { ServerMessage, WorkerMessage } from '../net/protocol';
 import { TICK_DT } from '../sim/data';
 import { applySave, toSave } from '../sim/save';
-import { createWorld, queueCommand, snapshot, step } from '../sim/world';
-import type { ServerMessage, WorkerMessage } from '../net/protocol';
 import type { World } from '../sim/types';
+import { createWorld, queueCommand, snapshot, step } from '../sim/world';
 
 let world: World | null = null;
 let paused = false;

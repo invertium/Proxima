@@ -55,7 +55,12 @@ export const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo
  * Ports UE's FMath::FInterpConstantTo — moves `current` toward `target` at a fixed
  * rate rather than exponentially, which is what gives the ship its impulse feel.
  */
-export const interpConstantTo = (current: number, target: number, dt: number, rate: number): number => {
+export const interpConstantTo = (
+  current: number,
+  target: number,
+  dt: number,
+  rate: number,
+): number => {
   if (rate <= 0) return target;
   const delta = target - current;
   const step = rate * dt;

@@ -22,7 +22,8 @@ export function App() {
       </div>
       {evicted ? (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-red-500 bg-red-950 px-4 py-3 text-center text-red-100">
-          ANOTHER PILOT WINDOW TOOK OVER THIS SESSION — close this tab, or reload it to take control back.
+          ANOTHER PILOT WINDOW TOOK OVER THIS SESSION — close this tab, or reload it to take control
+          back.
         </div>
       ) : null}
     </>

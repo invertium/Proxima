@@ -1,1 +1,1 @@
-export { SciencePanel, useScienceScopeStore } from './panels/SciencePanel'
+export { SciencePanel, useScienceScopeStore } from './panels/SciencePanel';

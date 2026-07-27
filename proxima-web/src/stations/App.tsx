@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useGameStore } from '@/store/game';
 import { PROTOCOL_VERSION } from '../net/protocol';
 import type { RelayStation } from '../net/transport';
 import type { Command, Station } from '../sim/types';
-import { useGameStore } from '@/store/game';
-import { StationShell, type StationConnectionState } from './components/StationShell';
+import { type StationConnectionState, StationShell } from './components/StationShell';
 
 interface StationAppProps {
   readonly relay: RelayStation;

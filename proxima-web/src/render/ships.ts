@@ -4,16 +4,16 @@
 import {
   Box3,
   Group,
-  Mesh,
-  MeshStandardMaterial,
-  Matrix4,
-  Object3D,
-  Vector3,
   type Material,
+  Matrix4,
+  type Mesh,
+  type MeshStandardMaterial,
+  type Object3D,
+  Vector3,
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { MODEL_YAW, allModels } from '../sim/data';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { allModels, MODEL_YAW } from '../sim/data';
 
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 

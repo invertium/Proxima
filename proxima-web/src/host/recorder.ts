@@ -45,7 +45,13 @@ export class SessionRecorder {
 
     for (const e of events) {
       // Only the discrete beats worth analysing later; beams at 60Hz are noise.
-      if (e.t === 'kill' || e.t === 'dock' || e.t === 'warp' || e.t === 'detonate' || e.t === 'alert') {
+      if (
+        e.t === 'kill' ||
+        e.t === 'dock' ||
+        e.t === 'warp' ||
+        e.t === 'detonate' ||
+        e.t === 'alert'
+      ) {
         this.write({ kind: e.t, t: round(snap.time), ...stripVectors(e) });
       }
     }
@@ -53,7 +59,12 @@ export class SessionRecorder {
     // Mission and phase transitions are derived by diffing, not by a sim hook.
     if (this.previous) {
       if (this.previous.phase !== snap.phase) {
-        this.write({ kind: 'phase', t: round(snap.time), from: this.previous.phase, to: snap.phase });
+        this.write({
+          kind: 'phase',
+          t: round(snap.time),
+          from: this.previous.phase,
+          to: snap.phase,
+        });
       }
       const was = this.previous.objective?.name;
       const now = snap.objective?.name;

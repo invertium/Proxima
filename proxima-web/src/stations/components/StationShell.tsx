@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { gameStore, useGameStore } from '@/store/game';
 import type { Command, Snapshot, Station } from '@/sim/types';
+import { gameStore, useGameStore } from '@/store/game';
+import { Scope } from '../ui/scope';
 import { EngineeringPanel } from './EngineeringPanel';
 import { HelmPanel, useHelmScopeStore } from './HelmPanel';
 import { SciencePanel, useScienceScopeStore } from './SciencePanel';
 import { WeaponsPanel } from './WeaponsPanel';
-import { Scope } from '../ui/scope';
 
 export type StationConnectionState = 'connecting' | 'pin-required' | 'linked' | 'waiting';
 
@@ -22,7 +22,12 @@ const STATION_LABELS = {
   science: 'SCI',
 } as const satisfies Record<Station, string>;
 
-const STATIONS = ['helm', 'weapons', 'engineering', 'science'] as const satisfies readonly Station[];
+const STATIONS = [
+  'helm',
+  'weapons',
+  'engineering',
+  'science',
+] as const satisfies readonly Station[];
 
 const stationFromHash = (hash: string): Station => {
   const station = hash.slice(1);
@@ -38,7 +43,9 @@ const stationFromHash = (hash: string): Station => {
   }
 };
 
-const statusMeta = (connectionState: StationConnectionState): { readonly text: string; readonly className: string } => {
+const statusMeta = (
+  connectionState: StationConnectionState,
+): { readonly text: string; readonly className: string } => {
   switch (connectionState) {
     case 'pin-required':
       return {
@@ -139,7 +146,11 @@ export function StationShell({ connectionState, send }: StationShellProps) {
       if (nextSnapshot === null) return;
       scope.draw(
         nextSnapshot,
-        activeTab === 'science' ? scienceScopeMode : activeTab === 'helm' ? helmScopeMode : 'tactical',
+        activeTab === 'science'
+          ? scienceScopeMode
+          : activeTab === 'helm'
+            ? helmScopeMode
+            : 'tactical',
       );
     };
 
@@ -173,11 +184,19 @@ export function StationShell({ connectionState, send }: StationShellProps) {
   };
 
   return (
-    <div className={cn('min-h-screen bg-[#05070f] font-mono text-[#dbe7ff]', isRedAlert && 'bg-[#14060a]')}>
+    <div
+      className={cn(
+        'min-h-screen bg-[#05070f] font-mono text-[#dbe7ff]',
+        isRedAlert && 'bg-[#14060a]',
+      )}
+    >
       <div className="mx-auto max-w-[560px] px-3 py-3 pb-10">
         <header className="mb-3 flex items-center justify-between gap-3">
           <h1 className="text-sm font-medium tracking-[0.28em] text-[#7dd3fc]">PROXIMA</h1>
-          <div id="status" className={cn('rounded border px-2 py-1 text-[11px] tracking-[0.18em]', statusClass)}>
+          <div
+            id="status"
+            className={cn('rounded border px-2 py-1 text-[11px] tracking-[0.18em]', statusClass)}
+          >
             {statusText}
           </div>
         </header>
@@ -195,7 +214,10 @@ export function StationShell({ connectionState, send }: StationShellProps) {
               location.replace(`${location.pathname}${location.hash}`);
             }}
           >
-            <label className="mb-2 block text-[11px] tracking-[0.18em] text-[#fda4af]" htmlFor="station-pin">
+            <label
+              className="mb-2 block text-[11px] tracking-[0.18em] text-[#fda4af]"
+              htmlFor="station-pin"
+            >
               SESSION PIN
             </label>
             <div className="flex gap-2">
