@@ -3,12 +3,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { create } from 'zustand';
 
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { DOCK_RANGE, REVERSE_THROTTLE_MIN } from '@/sim/data';
 import type { Command } from '@/sim/types';
 import { useGameStore } from '@/store/game';
 
+import { LiveSlider } from '../LiveSlider';
 import type { StationPanelProps } from '../StationPanelProps';
 
 type ScopeMode = 'tactical' | 'map';
@@ -54,8 +54,7 @@ function ReadoutRow({
   );
 }
 
-const HOLD_BUTTON_CLASS =
-  'h-10 tracking-[0.18em] [touch-action:none]';
+const HOLD_BUTTON_CLASS = 'h-10 tracking-[0.18em] [touch-action:none]';
 
 export function HelmPanel({ send }: StationPanelProps) {
   const snapshot = useGameStore((state) => state.snapshot);
@@ -92,7 +91,27 @@ export function HelmPanel({ send }: StationPanelProps) {
     [send, stopHold],
   );
 
+  const setThrottle = useCallback((v: number): void => send({ c: 'throttle', v }), [send]);
+
   useEffect(() => stopHold, [stopHold]);
+
+  /**
+   * A held control must release when the console loses the pointer for reasons the
+   * element never sees — the tab going to the background, the phone locking, the browser
+   * taking the gesture. Without this the interval keeps firing `turn` and the rudder
+   * stays hard over while nobody is touching anything.
+   */
+  useEffect(() => {
+    const release = (): void => stopHold();
+    window.addEventListener('blur', release);
+    window.addEventListener('pagehide', release);
+    document.addEventListener('visibilitychange', release);
+    return () => {
+      window.removeEventListener('blur', release);
+      window.removeEventListener('pagehide', release);
+      document.removeEventListener('visibilitychange', release);
+    };
+  }, [stopHold]);
 
   if (player === undefined) {
     return (
@@ -110,7 +129,10 @@ export function HelmPanel({ send }: StationPanelProps) {
   const inDockRange = stationRange !== null && stationRange <= DOCK_RANGE;
   const hasStrafe = player.stats.strafeSpeed > 0;
   const hullPercent = pct(player.hull, player.maxHull);
-  const throttleValue = Math.max(0, Math.min(1, player.throttle));
+  // Clamped to the sim's own range, NOT to 0. `Math.max(0, …)` put the lever's floor at
+  // full stop, so REVERSE_THROTTLE_MIN was unreachable by drag and REV left the ship
+  // making sternway while the readout insisted 0%.
+  const throttleValue = Math.max(REVERSE_THROTTLE_MIN, Math.min(1, player.throttle));
   const dockLabel = player.docked ? 'UNDOCK' : 'DOCK';
   const warpLabel = `WARP ${Math.round(player.warpCharge * 100)}%`;
   const warpDisabled = player.warpCharge < 1 || player.docked;
@@ -128,31 +150,38 @@ export function HelmPanel({ send }: StationPanelProps) {
       <div className="rounded-lg border border-[#1e3a5f] bg-[#06101c] p-3 text-xs text-[#9ab6da]">
         <div className="flex items-center gap-2 mb-2">
           <span className="shrink-0 text-[11px] tracking-[0.18em] text-[#7dd3fc]">THROTTLE</span>
-          <Slider
-            value={[throttleValue]}
-            onValueChange={(next) => {
-              const value = Array.isArray(next) ? next[0] : next;
-              if (value === undefined) return;
-              send({ c: 'throttle', v: value });
-            }}
-            min={0}
+          <LiveSlider
+            label="THROTTLE"
+            value={throttleValue}
+            onChange={(v) => send({ c: 'throttle', v })}
+            min={REVERSE_THROTTLE_MIN}
             max={1}
             step={0.01}
           />
-          <b className="w-12 shrink-0 text-right text-sm text-[#dbe7ff]">{Math.round(player.throttle * 100)}%</b>
+          <b
+            data-testid="throttle-readout"
+            className="w-12 shrink-0 text-right text-sm text-[#dbe7ff]"
+          >
+            {Math.round(throttleValue * 100)}%
+          </b>
         </div>
 
         <div className="grid grid-cols-4 gap-1.5 mb-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => send({ c: 'throttle', v: 1 })}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setThrottle(1)}>
             FULL
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => send({ c: 'throttle', v: 0.5 })}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setThrottle(0.5)}>
             HALF
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => send({ c: 'throttle', v: 0 })}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setThrottle(0)}>
             STOP
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => send({ c: 'throttle', v: REVERSE_THROTTLE_MIN })}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setThrottle(REVERSE_THROTTLE_MIN)}
+          >
             REV
           </Button>
         </div>
@@ -220,16 +249,31 @@ export function HelmPanel({ send }: StationPanelProps) {
         ) : null}
 
         <div className="grid grid-cols-2 gap-1.5 mb-2">
-          <Button type="button" variant="outline" disabled={dockDisabled} onClick={() => send({ c: 'dock' })}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={dockDisabled}
+            onClick={() => send({ c: 'dock' })}
+          >
             {dockLabel}
           </Button>
-          <Button type="button" variant="outline" disabled={warpDisabled} onClick={() => send({ c: 'warp' })}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={warpDisabled}
+            onClick={() => send({ c: 'warp' })}
+          >
             {warpLabel}
           </Button>
         </div>
 
         <div className="grid grid-cols-2 gap-1.5">
-          <Button type="button" variant="outline" disabled={courseDisabled} onClick={() => send({ c: 'layInCourse' })}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={courseDisabled}
+            onClick={() => send({ c: 'layInCourse' })}
+          >
             LAY IN COURSE
           </Button>
           <Button
@@ -247,10 +291,26 @@ export function HelmPanel({ send }: StationPanelProps) {
       <div className="rounded-lg border border-[#1e3a5f] bg-[#06101c] p-3">
         {/* Orders are on Science — Helm keeps only the bearing to steer to. */}
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
-          <ReadoutRow label="SPEED" value={`${Math.round(player.speed)} / ${Math.round(player.maxSpeed)}`} tone="accent" />
-          <ReadoutRow label="HULL" value={`${hullPercent}%`} tone={player.hullCritical ? 'danger' : 'success'} />
-          <ReadoutRow label="STARBASE" value={stationText} tone={player.docked || inDockRange ? 'success' : 'normal'} />
-          <ReadoutRow label="OBJECTIVE" value={objectiveText} tone={objective ? 'accent' : 'normal'} />
+          <ReadoutRow
+            label="SPEED"
+            value={`${Math.round(player.speed)} / ${Math.round(player.maxSpeed)}`}
+            tone="accent"
+          />
+          <ReadoutRow
+            label="HULL"
+            value={`${hullPercent}%`}
+            tone={player.hullCritical ? 'danger' : 'success'}
+          />
+          <ReadoutRow
+            label="STARBASE"
+            value={stationText}
+            tone={player.docked || inDockRange ? 'success' : 'normal'}
+          />
+          <ReadoutRow
+            label="OBJECTIVE"
+            value={objectiveText}
+            tone={objective ? 'accent' : 'normal'}
+          />
         </dl>
       </div>
     </section>

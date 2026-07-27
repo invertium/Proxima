@@ -1,6 +1,6 @@
-import { useGameStore } from '@/store/game';
 import { cn } from '@/lib/utils';
-import { RelayStation } from '@/net/transport';
+import type { RelayStation } from '@/net/transport';
+import { useGameStore } from '@/store/game';
 
 interface FooterProps {
   relay: RelayStation;
@@ -50,7 +50,7 @@ export function Footer({ relay }: FooterProps) {
             ? 'text-[#4ade80] text-base'
             : isOver
               ? 'text-[#f87171] text-base'
-              : 'text-[#7d9dc4]'
+              : 'text-[#7d9dc4]',
         )}
       >
         {phaseText}
@@ -58,12 +58,14 @@ export function Footer({ relay }: FooterProps) {
       {isOver && (
         <div className="grid grid-cols-2 gap-1.5">
           <button
+            type="button"
             onClick={() => sendGame('restart')}
             className="px-2 py-1 text-xs font-semibold bg-[#1e3a5f] text-[#f87171] border border-[#f87171] rounded hover:bg-[#2a4a7f] transition-colors"
           >
             RETRY FROM LAST SAVE
           </button>
           <button
+            type="button"
             onClick={() => sendGame('new')}
             className="px-2 py-1 text-xs font-semibold bg-[#1e3a5f] text-[#7d9dc4] border border-[#7d9dc4] rounded hover:bg-[#2a4a7f] transition-colors"
           >

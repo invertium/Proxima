@@ -115,9 +115,22 @@ const hud = (page) => page.evaluate(() => document.body?.textContent ?? '');
  * so it never spanned a repaint, and an entire console that dropped real presses
  * reported 8/8 green.
  */
-const press = async (page, selector, ms = 140) => {
-  const box = await page.locator(selector).first().boundingBox();
+/**
+ * Raw mouse events go to viewport coordinates, so unlike `locator.click()` nothing
+ * scrolls the control into view first — a control below the fold gets pressed at
+ * whatever happens to be at those coordinates instead, and the journey fails somewhere
+ * else entirely. Scroll first, then measure.
+ */
+const boxOf = async (page, selector) => {
+  const el = page.locator(selector).first();
+  await el.scrollIntoViewIfNeeded();
+  const box = await el.boundingBox();
   if (!box) throw new Error(`no such control: ${selector}`);
+  return box;
+};
+
+const press = async (page, selector, ms = 140) => {
+  const box = await boxOf(page, selector);
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.waitForTimeout(ms);
@@ -126,8 +139,7 @@ const press = async (page, selector, ms = 140) => {
 
 /** Holds a control down for `ms`, for the steering controls. */
 const hold = async (page, selector, ms) => {
-  const box = await page.locator(selector).first().boundingBox();
-  if (!box) throw new Error(`no such control: ${selector}`);
+  const box = await boxOf(page, selector);
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.waitForTimeout(ms);
@@ -169,7 +181,7 @@ await journey('new game -> objective hail -> accept -> fleet engages', async (ct
 await journey('science console accepts the fleet orders', async (ctx) => {
   const pilot = await openPilot(ctx);
   await startNewGame(pilot);
-  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.querySelector('#hud')?.textContent ?? ''), null, {
+  await pilot.waitForFunction(() => /press ENTER to ACCEPT/.test(document.body?.textContent ?? ''), null, {
     timeout: 20000,
   });
 
@@ -225,6 +237,46 @@ await journey('helm station drives the ship, pressed the way a hand presses', as
     null,
     { timeout: 10000 },
   );
+});
+
+// ── Journey 2a: the throttle lever is a real control, and reaches astern ───────
+//
+// A lever can be present, mounted, correctly wired, pass every jsdom assertion — and
+// still be zero pixels wide, because layout is the one thing jsdom does not do. That is
+// exactly what happened: the shadcn slider is written against `data-horizontal:w-full`
+// while Base UI emits `data-orientation="horizontal"`, so the utility never matched and
+// Slider.Root collapsed to 0px. Every lever in the console was invisible and undraggable
+// with the whole suite green. Hence: measure the box, then drag it.
+
+await journey('the throttle lever has a real hit box and can be driven astern', async (ctx) => {
+  const pilot = await openPilot(ctx);
+  await startNewGame(pilot);
+  const helm = await openStation(ctx, 'helm');
+
+  const box = await helm.locator('[data-base-ui-slider-control]').first().boundingBox();
+  if (!box) throw new Error('no throttle lever on the helm console');
+  // Not "nonzero" — usable. A 4px-tall target is not a control on a phone.
+  if (box.width < 80 || box.height < 24) {
+    throw new Error(`throttle lever is ${box.width}x${box.height}px — too small to operate`);
+  }
+
+  // Drag the thumb hard over to the astern stop.
+  const y = box.y + box.height / 2;
+  await helm.mouse.move(box.x + box.width * 0.6, y);
+  await helm.mouse.down();
+  await helm.mouse.move(box.x - 60, y, { steps: 15 });
+  await helm.mouse.up();
+
+  // The whole chain has to agree: lever, console readout, and the ship the pilot sees.
+  await pilot.waitForFunction(
+    () => /SPD\s*-\d+/.test(document.body?.textContent ?? ''),
+    null,
+    { timeout: 10000 },
+  );
+  const readout = await helm.textContent('[data-testid="throttle-readout"]');
+  if (!/^-\d+%$/.test(readout ?? '')) {
+    throw new Error(`ship is making sternway but the lever reads ${readout}`);
+  }
 });
 
 // ── Journey 2b: loss rate, not just 'one press worked' ────────────────────────

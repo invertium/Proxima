@@ -12,8 +12,8 @@ both point at Three.js. The reasoning, including where Babylon genuinely wins, i
 [§Why Three.js](#why-threejs).
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173  (crew: /station.html)
+bun install
+bun run dev        # http://localhost:5173  (crew: /station.html)
 ```
 
 Crew members open `http://<your-LAN-IP>:5173/station.html` on their phones. The relay
@@ -80,28 +80,51 @@ src/sim/        authoritative simulation — no Three.js, no DOM, no timers
   stats.ts      base hull + upgrades - damage -> the numbers everything reads
 src/render/     Three.js. Reads snapshots, owns no game state
 src/net/        protocol + transport (the seam WebRTC lands on)
-src/host/       pilot app, front-end menus, IndexedDB save, the sim Web Worker
-src/stations/   crew console (one page, four stations)
+src/host/       pilot app (React), menus, IndexedDB save, the sim Web Worker
+src/stations/   crew console (React; one page, four station panels)
+src/store/      Zustand — the snapshot every panel subscribes to
+src/components/ shadcn / Base UI primitives (generated; regenerate, don't hand-edit)
 server/relay.ts dumb pipe: host <-> stations. No game state, no validation
 test/           vitest (unit + full-campaign replay), e2e.mjs, budget.mjs
 ```
 
 The dependency rule that makes the rest work: **`src/sim` imports nothing from
 `three`, the DOM, or the network.** That is what lets the same code run in a worker, in
-a test, and in CI without a GPU.
+a test, and in CI without a GPU. `test/arch.test.ts` enforces it, along with the rule
+that no view rebuilds markup from a string.
+
+### The UI stack, and what it costs
+
+The views are React 19 + Zustand + Tailwind v4 + shadcn/Base UI, run under Bun. Two
+things bought that, and both are measurable:
+
+- **Frame time.** The hand-rolled pilot HUD reassigned `hud.innerHTML` every frame,
+  which cost ~20 ms of the frame budget. Reconciling instead took the median frame under
+  a full skirmish from ~57 ms to ~37 ms on software rendering.
+- **Node identity.** The invariant the consoles depend on — a control's DOM node
+  survives a state update, so a press spanning one is not dropped — used to be
+  hand-maintained in `ui/dom.ts`. It is now the reconciler's job.
+
+It is not free: React + Base UI + the icon set cost roughly 85 KB gzipped, paid by both
+pages via a shared vendor chunk. That is why the budgets in §Verification moved rather
+than being deleted — a stack change should have to argue for its bytes.
 
 ## Verification
 
 Three layers, cheapest first.
 
 ```bash
-npm run verify    # typecheck + unit + build + browser E2E
-npm test          # 198 headless sim tests, ~2s
-npm run e2e       # 12 browser user journeys (needs `npm run dev` running)
-npm run budget    # bundle size + frame time under load (needs a built `npm run relay`)
+bun run verify    # typecheck + lint + unit + build + browser E2E + budgets
+bun run test      # 217 tests (sim + jsdom console), ~2s
+bun run e2e       # 14 browser user journeys (needs `bun run dev` running)
+bun run budget    # bundle size + frame time under load (starts its own preview server)
 ```
 
-**Unit + replay (198 tests, ~2 s).** Per-system rules, plus a full-campaign replay: a
+Note `bun run test` (vitest), not `bun test` (Bun's own runner). Both work — `bunfig.toml`
+preloads a DOM so the console tests pass under either — but vitest is the suite `verify`
+runs and the one the config in `vite.config.ts` describes.
+
+**Unit + replay (217 tests, ~2 s).** Per-system rules, plus a full-campaign replay: a
 scripted crew flies start to victory headlessly. That catches what unit tests can't — a
 mission that can't be reached, an encounter that never clears, a comms beat that never
 fires, or a balance change that makes the campaign unwinnable.
@@ -111,16 +134,37 @@ crew trades rather than kiting, so an ambush mission can legitimately kill it �
 statement about the bot, not the game. The value is the cliff: real breakage drops it to
 near zero.
 
-**Browser E2E (12 journeys).** Real pages driven through Playwright, each asserting
+**Console tests (`test/panels.test.ts`).** Each panel is rendered against a live snapshot
+stream and asserted to keep its controls mounted across 300 updates, with a press
+deliberately spanning one. This is the test that should have existed before the console
+shipped in a state no human could operate; the reconciler makes it much more likely to
+pass, not guaranteed, and a stray `key={index}` or a remount on a changed prop puts the
+bug straight back.
+
+**Browser E2E (14 journeys).** Real pages driven through Playwright, each asserting
 host-side state rather than pixels: new game → hail → accept → engage; a station flying
 the ship the pilot renders; an Engineering preset changing top speed; a Science scan
 resolving a contact that Weapons then reads; four stations linked at once; pause;
 skirmish; and progress surviving a reload. Uses system Chromium (`CHROME=` to override),
 so nothing is downloaded.
 
-**Budgets.** Host 180 KB gzipped, station 22 KB, median frame time under a full skirmish
-fight ~57 ms on software rendering (SwiftShader — a real GPU is an order of magnitude
-under this). All three fail the build if they regress.
+One of them measures a control's hit box before driving it, which is not the same kind of
+assertion as the rest and is there for a reason: jsdom does not do layout. A lever can be
+mounted, wired, and pass every console test while being **zero pixels wide** — which is
+what happened when the generated slider's `data-horizontal:` utilities never matched Base
+UI's `data-orientation="horizontal"`. Every lever in the console was invisible and
+undraggable with the whole suite green. Anything whose failure mode is geometric has to be
+measured in a real browser.
+
+**Budgets.** Measured per page, from what the built HTML actually references — JS *and*
+CSS, including the shared vendor chunk both pages pull. Today: pilot **253 KB gzipped**,
+crew station **106 KB**, median frame time under a full skirmish fight **~37 ms** on
+software rendering (SwiftShader — a real GPU is an order of magnitude under this). All
+three fail the build if they regress.
+
+The size ceilings are not the pre-React ones (180 / 22 KB); see §The UI stack for what
+was bought and what it cost. The frame ceiling went the other way — tightened from 60 ms
+to 50, below the old build's actual, so the win can't quietly regress away.
 
 **Tunable drift.** `CPP_REFERENCE` in `src/sim/data.ts` records the Unreal value of every
 ported constant, and a test asserts each one matches unless it appears in `DIVERGENCES`
@@ -146,11 +190,11 @@ This is the part that motivated the renderer choice.
 ```bash
 # 1. generate (content-engine MCP / TRELLIS) -> art_src/generated_ships/foo.glb
 # 2.
-npm run assets
+bun run assets
 # 3. add a row to src/sim/data.ts:  { type: 'foo', model: 'foo', scale: 700, ... }
 ```
 
-That is the entire import step. `npm run assets` runs `gltf-transform optimize`
+That is the entire import step. `bun run assets` runs `gltf-transform optimize`
 (weld, join, simplify, meshopt, WebP@1K) — the four current hulls go **27 MB → 2.6 MB**
 in a few seconds.
 
@@ -176,7 +220,7 @@ The check that matters is visual, and it has caught every defect these models ha
 suite stayed green throughout. So there is a bench for it:
 
 ```bash
-npm run dev
+bun run dev
 node tools/model-shot.mjs starbase front /tmp/sb.png   # or three-quarter | top
 ```
 
@@ -196,8 +240,8 @@ material graphs rebuilt over MCP, and 79 MB of `.uasset` for the same four ships
 - One `Points` cloud for 4000 stars; ships clone shared prototypes so materials batch.
 - Pooled beams and blasts; nothing allocates per shot.
 - Logarithmic depth buffer, because the sector spans ~220 000 units and a ship is ~1000.
-- Bundle: **168 KB gzipped** for the pilot (mostly Three.js), **16 KB** for a crew
-  station. Build is ~1 s. Both are budget-checked (`npm run budget`).
+- Bundle: **253 KB gzipped** for the pilot (mostly Three.js and React), **106 KB** for a
+  crew station. Build is ~2 s. Both are budget-checked (`bun run budget`).
 - Still on WebGL. Materials are deliberately kept node-compatible (no raw GLSL), so
   moving to `WebGPURenderer` is a renderer swap rather than a shader rewrite.
 

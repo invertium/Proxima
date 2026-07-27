@@ -28,12 +28,12 @@
 
 import {
   BoxGeometry,
-  BufferGeometry,
+  type BufferGeometry,
   Color,
   CylinderGeometry,
   Group,
   InstancedMesh,
-  Matrix4,
+  type Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -160,7 +160,11 @@ class Assembly {
   }
 
   /** Bakes everything collected so far. Returns the group and the animated beacon meshes. */
-  bake(): { root: Group; lamps: { mesh: InstancedMesh; phase: 0 | 1 }[]; chase: InstancedMesh | null } {
+  bake(): {
+    root: Group;
+    lamps: { mesh: InstancedMesh; phase: 0 | 1 }[];
+    chase: InstancedMesh | null;
+  } {
     const root = new Group();
 
     for (const key of Object.keys(this.buffers) as MatKey[]) {
@@ -196,7 +200,9 @@ class Assembly {
         new MeshBasicMaterial({ color: BEACON }),
         set.length,
       );
-      set.forEach((m, i) => mesh.setMatrixAt(i, m));
+      set.forEach((m, i) => {
+        mesh.setMatrixAt(i, m);
+      });
       mesh.instanceMatrix.needsUpdate = true;
       root.add(mesh);
       lamps.push({ mesh, phase });
@@ -260,8 +266,7 @@ const windowStrip = (
   const sign = Math.sign(offset);
   const depth = Math.abs(offset);
 
-  const recess: Vec3 =
-    face === 'z' ? [length, height, 0.004] : [length, 0.004, height];
+  const recess: Vec3 = face === 'z' ? [length, height, 0.004] : [length, 0.004, height];
   const recessAt: Vec3 =
     face === 'z' ? [at[0], at[1], at[2] + sign * depth] : [at[0], at[1] + sign * depth, at[2]];
   a.box('trim', recess, recessAt);
@@ -273,9 +278,7 @@ const windowStrip = (
     const x = at[0] + (t - 0.5) * length * 0.86;
     if (rng() < 0.18) continue; // a few dark windows, so the row isn't mechanical
     const size: Vec3 =
-      face === 'z'
-        ? [length / count / 2.6, pane, 0.004]
-        : [length / count / 2.6, 0.004, pane];
+      face === 'z' ? [length / count / 2.6, pane, 0.004] : [length / count / 2.6, 0.004, pane];
     const pos: Vec3 =
       face === 'z'
         ? [x, at[1], at[2] + sign * (depth + 0.004)]
@@ -343,15 +346,15 @@ const collar = (a: Assembly, s: number, x0: number, x1: number, radius: number):
 
 /** [start, end, half-height]; `collar` entries are drums, `module` entries are plated. */
 const SPINE: { x0: number; x1: number; half: number; kind: 'module' | 'collar' }[] = [
-  { x0: 0.072, x1: 0.108, half: 0.030, kind: 'collar' },
+  { x0: 0.072, x1: 0.108, half: 0.03, kind: 'collar' },
   { x0: 0.108, x1: 0.205, half: 0.045, kind: 'module' },
   { x0: 0.205, x1: 0.292, half: 0.038, kind: 'collar' }, // passes through the ring
-  { x0: 0.292, x1: 0.330, half: 0.033, kind: 'collar' },
-  { x0: 0.330, x1: 0.442, half: 0.050, kind: 'module' },
+  { x0: 0.292, x1: 0.33, half: 0.033, kind: 'collar' },
+  { x0: 0.33, x1: 0.442, half: 0.05, kind: 'module' },
   { x0: 0.442, x1: 0.474, half: 0.034, kind: 'collar' },
   { x0: 0.474, x1: 0.578, half: 0.046, kind: 'module' },
   { x0: 0.578, x1: 0.608, half: 0.035, kind: 'collar' },
-  { x0: 0.608, x1: 0.700, half: 0.052, kind: 'module' },
+  { x0: 0.608, x1: 0.7, half: 0.052, kind: 'module' },
 ];
 
 const RING_INNER = 0.215;
@@ -368,13 +371,13 @@ const HUB_HALF = 0.071;
 const dockingCluster = (a: Assembly, rng: () => number, s: number): void => {
   // Neck and body.
   a.box('hullDark', [0.062, 0.086, 0.086], [s * 0.731, 0, 0]);
-  a.box('hull', [0.114, 0.120, 0.120], [s * 0.817, 0, 0]);
-  a.box('trim', [0.010, 0.128, 0.128], [s * 0.762, 0, 0]);
+  a.box('hull', [0.114, 0.12, 0.12], [s * 0.817, 0, 0]);
+  a.box('trim', [0.01, 0.128, 0.128], [s * 0.762, 0, 0]);
   for (const sign of [1, -1]) {
     windowStrip(a, rng, {
       at: [s * 0.817, 0, 0],
       length: 0.092,
-      height: 0.030,
+      height: 0.03,
       face: 'z',
       offset: sign * 0.062,
       count: 4,
@@ -382,20 +385,20 @@ const dockingCluster = (a: Assembly, rng: () => number, s: number): void => {
   }
 
   // Vertical spar the arms hang off.
-  a.box('hullDark', [0.048, 0.330, 0.052], [s * 0.850, 0, 0]);
+  a.box('hullDark', [0.048, 0.33, 0.052], [s * 0.85, 0, 0]);
 
   // Three arms, each ending in a two-pronged clamp.
   [-0.132, 0, 0.132].forEach((y, i) => {
     const reach = i === 1 ? 1.0 : 0.88; // the centre arm is the longest, as in the reference
-    const x0 = 0.850;
-    const x1 = 0.850 + 0.108 * reach;
+    const x0 = 0.85;
+    const x1 = 0.85 + 0.108 * reach;
 
-    a.box('hull', [(x1 - x0), 0.062, 0.062], [s * (x0 + x1) / 2, y, 0]);
-    a.box('hullDark', [(x1 - x0) * 0.9, 0.070, 0.030], [s * (x0 + x1) / 2, y, 0]);
+    a.box('hull', [x1 - x0, 0.062, 0.062], [(s * (x0 + x1)) / 2, y, 0]);
+    a.box('hullDark', [(x1 - x0) * 0.9, 0.07, 0.03], [(s * (x0 + x1)) / 2, y, 0]);
     windowStrip(a, rng, {
-      at: [s * (x0 + x1) / 2, y, 0],
+      at: [(s * (x0 + x1)) / 2, y, 0],
       length: (x1 - x0) * 0.7,
-      height: 0.020,
+      height: 0.02,
       face: 'z',
       offset: 0.033,
       count: 3,
@@ -403,18 +406,18 @@ const dockingCluster = (a: Assembly, rng: () => number, s: number): void => {
 
     // The clamp: two prongs opening outward, which is what makes it read as a dock.
     for (const z of [1, -1]) {
-      a.box('hullDark', [0.052, 0.034, 0.022], [s * (x1 + 0.020), y, z * 0.036]);
-      a.box('hull', [0.020, 0.042, 0.020], [s * (x1 + 0.044), y, z * 0.046]);
+      a.box('hullDark', [0.052, 0.034, 0.022], [s * (x1 + 0.02), y, z * 0.036]);
+      a.box('hull', [0.02, 0.042, 0.02], [s * (x1 + 0.044), y, z * 0.046]);
       a.beacon([s * (x1 + 0.056), y, z * 0.046], (i % 2) as 0 | 1, 0.008);
     }
     a.box('trim', [0.016, 0.048, 0.076], [s * (x1 + 0.006), y, 0]);
   });
 
   // Mast and navigation lamp at the very tip — the outermost thing on the silhouette.
-  a.box('hullDark', [0.030, 0.016, 0.016], [s * 0.985, 0, 0]);
+  a.box('hullDark', [0.03, 0.016, 0.016], [s * 0.985, 0, 0]);
   a.beacon([s * 1.005, 0, 0], 0, 0.013);
-  a.beacon([s * 0.850, 0.176, 0], 1, 0.010);
-  a.beacon([s * 0.850, -0.176, 0], 1, 0.010);
+  a.beacon([s * 0.85, 0.176, 0], 1, 0.01);
+  a.beacon([s * 0.85, -0.176, 0], 1, 0.01);
 };
 
 /**
@@ -427,9 +430,9 @@ const dockingCluster = (a: Assembly, rng: () => number, s: number): void => {
 const solarWing = (a: Assembly, sign: number): void => {
   // Segmented mast from the hub out to the panel, passing through the ring.
   for (let i = 0; i < 4; i++) {
-    const y0 = 0.070 + i * 0.058;
-    a.box('hull', [0.034, 0.050, 0.034], [0, sign * (y0 + 0.026), 0]);
-    a.box('trim', [0.042, 0.010, 0.042], [0, sign * (y0 + 0.055), 0]);
+    const y0 = 0.07 + i * 0.058;
+    a.box('hull', [0.034, 0.05, 0.034], [0, sign * (y0 + 0.026), 0]);
+    a.box('trim', [0.042, 0.01, 0.042], [0, sign * (y0 + 0.055), 0]);
   }
 
   const centre = sign * 0.468;
@@ -441,12 +444,12 @@ const solarWing = (a: Assembly, sign: number): void => {
 
   // Backing plate: without it the gaps between cells show open space, and the panel
   // renders as an empty wire rectangle instead of a solar array.
-  a.box('hullDark', [halfWide * 2, halfLen * 2, 0.010], [0, centre, 0]);
+  a.box('hullDark', [halfWide * 2, halfLen * 2, 0.01], [0, centre, 0]);
   // Frame: border rails plus the central spar the two cell columns sit either side of.
-  a.box('hull', [0.010, halfLen * 2, 0.016], [0, centre, 0]);
+  a.box('hull', [0.01, halfLen * 2, 0.016], [0, centre, 0]);
   for (const end of [-1, 1]) {
-    a.box('hull', [halfWide * 2, 0.010, 0.016], [0, centre + end * halfLen, 0]);
-    a.box('hull', [0.010, halfLen * 2, 0.016], [end * halfWide, centre, 0]);
+    a.box('hull', [halfWide * 2, 0.01, 0.016], [0, centre + end * halfLen, 0]);
+    a.box('hull', [0.01, halfLen * 2, 0.016], [end * halfWide, centre, 0]);
   }
 
   for (let col = 0; col < 2; col++) {
@@ -470,7 +473,13 @@ const solarWing = (a: Assembly, sign: number): void => {
 const hub = (a: Assembly, rng: () => number): void => {
   // An octagonal prism rather than a cube: the reference hub is visibly chamfered, and
   // a real chamfer is one primitive here where a boolean cut would be a mesh library.
-  a.add('hull', unit.oct, [HUB_HALF * 1.08, HUB_HALF * 2, HUB_HALF * 1.08], [0, 0, 0], [0, 0, Math.PI / 2]);
+  a.add(
+    'hull',
+    unit.oct,
+    [HUB_HALF * 1.08, HUB_HALF * 2, HUB_HALF * 1.08],
+    [0, 0, 0],
+    [0, 0, Math.PI / 2],
+  );
   // Collar bands at both ends, and a raised belt around the middle.
   for (const end of [-1, 1]) {
     a.add(
@@ -481,8 +490,20 @@ const hub = (a: Assembly, rng: () => number): void => {
       [0, 0, Math.PI / 2],
     );
   }
-  a.add('hullDark', unit.oct, [HUB_HALF * 1.16, HUB_HALF * 0.9, HUB_HALF * 1.16], [0, 0, 0], [0, 0, Math.PI / 2]);
-  a.add('trim', unit.oct, [HUB_HALF * 1.18, HUB_HALF * 0.16, HUB_HALF * 1.18], [0, 0, 0], [0, 0, Math.PI / 2]);
+  a.add(
+    'hullDark',
+    unit.oct,
+    [HUB_HALF * 1.16, HUB_HALF * 0.9, HUB_HALF * 1.16],
+    [0, 0, 0],
+    [0, 0, Math.PI / 2],
+  );
+  a.add(
+    'trim',
+    unit.oct,
+    [HUB_HALF * 1.18, HUB_HALF * 0.16, HUB_HALF * 1.18],
+    [0, 0, 0],
+    [0, 0, Math.PI / 2],
+  );
 
   // The lit command panel the reference puts dead centre, on all four broad faces.
   // Offsets clear the raised belt: the octagon's flat face sits at cos(pi/8) x radius,
@@ -490,7 +511,10 @@ const hub = (a: Assembly, rng: () => number): void => {
   const face = HUB_HALF * 1.1;
   for (const sign of [1, -1]) {
     for (const axis of ['z', 'y'] as const) {
-      const plate: Vec3 = axis === 'z' ? [HUB_HALF * 1.2, HUB_HALF * 1.2, 0.006] : [HUB_HALF * 1.2, 0.006, HUB_HALF * 1.2];
+      const plate: Vec3 =
+        axis === 'z'
+          ? [HUB_HALF * 1.2, HUB_HALF * 1.2, 0.006]
+          : [HUB_HALF * 1.2, 0.006, HUB_HALF * 1.2];
       const plateAt: Vec3 = axis === 'z' ? [0, 0, sign * face] : [0, sign * face, 0];
       a.box('trim', plate, plateAt);
 
@@ -533,7 +557,7 @@ export const createStarbase = (): Starbase => {
       else collar(hullParts, s, seg.x0, seg.x1, seg.half);
     }
     // Spine running lights along the top and bottom.
-    for (const x of [0.24, 0.40, 0.55]) {
+    for (const x of [0.24, 0.4, 0.55]) {
       hullParts.beacon([s * x, 0.056, 0], 0, 0.007);
       hullParts.beacon([s * x, -0.056, 0], 1, 0.007);
     }
@@ -615,7 +639,7 @@ export const createStarbase = (): Starbase => {
     for (const radius of [RING_INNER + 0.006, RING_OUTER - 0.006]) {
       hullParts.box(
         'hullDark',
-        [0.030, 0.098, RING_DEPTH * 1.3],
+        [0.03, 0.098, RING_DEPTH * 1.3],
         [Math.cos(angle) * radius, Math.sin(angle) * radius, 0],
         [0, 0, angle],
       );
@@ -649,7 +673,7 @@ export const createStarbase = (): Starbase => {
   let clock = 0;
 
   // Runtime hierarchy, so callers can find the parts rather than guessing at children.
-  root.userData['sculptRuntime'] = {
+  root.userData.sculptRuntime = {
     parts: { hull: baked.root, rimLamps: baked.chase },
     sockets: { dockPort: { x: 0.86, y: 0, z: 0 }, dockStarboard: { x: -0.86, y: 0, z: 0 } },
   };

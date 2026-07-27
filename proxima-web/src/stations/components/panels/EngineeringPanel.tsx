@@ -2,15 +2,14 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { WELD_GREEN_MAX, WELD_GREEN_MIN, WELD_SWEEP_PERIOD } from '@/sim/data';
-import { useGameStore } from '@/store/game';
-import { pct } from '@/stations/lib/utils';
 import type { DamageSystem, ShipSystem } from '@/sim/types';
-
-import { EngineeringDrydock } from './EngineeringDrydock';
+import { pct } from '@/stations/lib/utils';
+import { useGameStore } from '@/store/game';
+import { LiveSlider } from '../LiveSlider';
 import type { StationPanelProps } from '../StationPanelProps';
+import { EngineeringDrydock } from './EngineeringDrydock';
 
 const POWER_SYSTEMS = [
   { key: 'engines', label: 'ENGINES' },
@@ -68,7 +67,9 @@ export function EngineeringPanel({ send }: StationPanelProps) {
 
     sweep.className = SWEEP_CLASS;
     void sweep.offsetWidth;
-    sweep.className = credited ? `${SWEEP_CLASS} ${SWEEP_HIT_CLASS}` : `${SWEEP_CLASS} ${SWEEP_MISS_CLASS}`;
+    sweep.className = credited
+      ? `${SWEEP_CLASS} ${SWEEP_HIT_CLASS}`
+      : `${SWEEP_CLASS} ${SWEEP_MISS_CLASS}`;
 
     flashTimeoutRef.current = window.setTimeout(() => {
       if (sweepRef.current !== null) {
@@ -137,25 +138,30 @@ export function EngineeringPanel({ send }: StationPanelProps) {
           </span>
         </div>
         <div className="mb-3 h-2 overflow-hidden rounded-full bg-[#10203a]">
-          <div className="h-full bg-[#7dd3fc] transition-none" style={{ width: `${reactorLoadPct}%` }} />
+          <div
+            className="h-full bg-[#7dd3fc] transition-none"
+            style={{ width: `${reactorLoadPct}%` }}
+          />
         </div>
         <div className="space-y-3">
           {POWER_SYSTEMS.map((system) => (
             <div key={system.key} className="space-y-1.5">
               <div className="flex items-center justify-between text-[11px] tracking-[0.14em] text-[#9ab6da]">
                 <span>{system.label}</span>
-                <b className={cn('font-semibold text-[#dbe7ff]', player.power[system.key] <= 0.01 && 'text-rose-300')}>
+                <b
+                  className={cn(
+                    'font-semibold text-[#dbe7ff]',
+                    player.power[system.key] <= 0.01 && 'text-rose-300',
+                  )}
+                >
                   {player.power[system.key].toFixed(1)}
                 </b>
               </div>
-                <Slider
-                  value={[player.power[system.key]]}
-                  onValueChange={(next) => {
-                    const value = Array.isArray(next) ? next[0] : next;
-                    if (value === undefined) return;
-                    send({ c: 'power', system: system.key, v: value });
-                  }}
-                  min={0}
+              <LiveSlider
+                label={`${system.label} POWER`}
+                value={player.power[system.key]}
+                onChange={(v) => send({ c: 'power', system: system.key, v })}
+                min={0}
                 max={2}
                 step={0.1}
               />
@@ -164,7 +170,13 @@ export function EngineeringPanel({ send }: StationPanelProps) {
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           {PRESETS.map((preset) => (
-            <Button key={preset.label} type="button" size="sm" variant="outline" onClick={() => applyPreset(preset.power)}>
+            <Button
+              key={preset.label}
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => applyPreset(preset.power)}
+            >
               {preset.label}
             </Button>
           ))}
@@ -194,7 +206,10 @@ export function EngineeringPanel({ send }: StationPanelProps) {
                   width: `${(WELD_GREEN_MAX - WELD_GREEN_MIN) * 100}%`,
                 }}
               />
-              <div ref={markerRef} className="absolute top-1/2 h-6 w-[2px] -translate-x-1/2 -translate-y-1/2 bg-[#f8fafc]" />
+              <div
+                ref={markerRef}
+                className="absolute top-1/2 h-6 w-[2px] -translate-x-1/2 -translate-y-1/2 bg-[#f8fafc]"
+              />
             </div>
             <p className="mt-2 text-xs leading-5 text-[#9ab6da]">{weldHint}</p>
           </div>

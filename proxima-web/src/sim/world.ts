@@ -23,14 +23,17 @@ import {
   RAM_SPEED_MAX,
   RAM_SPEED_MIN,
   REVERSE_THROTTLE_MIN,
+  rankFromXp,
   SCAN_DURATION,
   SECTOR_SPAN,
-  SPAWN_GRACE,
   SHIELD_BLEED_RATE,
   SHIELD_CHARGE_RATE,
   SHIELD_RADIUS_BONUS,
   SHIPS,
+  SKIRMISH_MAX_FLEET,
+  SPAWN_GRACE,
   STRAFE_ACCELERATION,
+  shipDef,
   TORPEDO_ARC_DEG,
   TORPEDO_BLAST_RADIUS,
   TORPEDO_DAMAGE,
@@ -42,26 +45,39 @@ import {
   TRIGGER_RADIUS,
   TURRET_INTERVAL,
   TURRET_RANGE,
+  upgradeCost,
+  upgradeDef,
+  upgradeRankReq,
+  WARP_CHARGE_RATE,
+  WARP_DISTANCE,
   WAVE_BONUS_CREDITS,
   WAVE_BONUS_XP,
   WAVE_INTERVAL,
-  SKIRMISH_MAX_FLEET,
-  WARP_CHARGE_RATE,
-  WARP_DISTANCE,
-  WELDS_PER_SYSTEM_REPAIR,
   WELD_GREEN_MAX,
   WELD_GREEN_MIN,
   WELD_HULL_REPAIR,
   WELD_MIN_INTERVAL,
-  rankFromXp,
-  shipDef,
-  upgradeCost,
-  upgradeDef,
-  upgradeRankReq,
+  WELDS_PER_SYSTEM_REPAIR,
 } from './data';
+import {
+  addScaled,
+  bearingTo,
+  clamp,
+  DEG,
+  dist,
+  forward,
+  interpConstantTo,
+  makeRng,
+  vec,
+} from './math';
+import {
+  acceptContract,
+  describeContract,
+  gravityPullAt,
+  stepContracts,
+  stepEvents,
+} from './sector';
 import { effectiveStats } from './stats';
-import { acceptContract, describeContract, gravityPullAt, stepContracts, stepEvents } from './sector';
-import { DEG, addScaled, bearingTo, clamp, dist, forward, interpConstantTo, makeRng, vec } from './math';
 import type {
   Command,
   DamageSystem,
@@ -78,7 +94,7 @@ import type {
   Verdict,
   World,
 } from './types';
-import { OK, no } from './types';
+import { no, OK } from './types';
 
 /**
  * Reactor allocation scales what a system delivers, linearly and honestly: nominal
@@ -378,7 +394,11 @@ const tryDock = (world: World): Verdict => {
   p.damaged = { engine: false, weapons: false, sensors: false };
   p.repairWelds = 0;
   world.events.push({ t: 'dock', station: base.name });
-  pushComms(world, 'STARBASE', 'Docking clamps engaged. Hull repaired, tubes reloaded. Drydock is open, Captain.');
+  pushComms(
+    world,
+    'STARBASE',
+    'Docking clamps engaged. Hull repaired, tubes reloaded. Drydock is open, Captain.',
+  );
   return OK;
 };
 
@@ -686,7 +706,10 @@ const tickShield = (world: World, dt: number): void => {
   if (p.hull <= 0 || p.docked) return;
 
   if (world.alert === 'red') {
-    p.shield = Math.min(p.maxShield, p.shield + SHIELD_CHARGE_RATE * powerScale(p.power.shields) * dt);
+    p.shield = Math.min(
+      p.maxShield,
+      p.shield + SHIELD_CHARGE_RATE * powerScale(p.power.shields) * dt,
+    );
   } else {
     p.shield = Math.max(0, p.shield - SHIELD_BLEED_RATE * dt);
   }
@@ -746,10 +769,17 @@ const stepDirector = (world: World, dt: number): void => {
   if (!world.encounterLive) {
     // Arriving hails the crew and waits for ACCEPT rather than ambushing them — the
     // bridge gets to choose its moment.
-    if (!world.objectiveOffered && dist(world.player.pos, landmark.pos) <= TRIGGER_RADIUS + landmark.radius) {
+    if (
+      !world.objectiveOffered &&
+      dist(world.player.pos, landmark.pos) <= TRIGGER_RADIUS + landmark.radius
+    ) {
       world.objectiveOffered = true;
       pushComms(world, mission.briefSender, mission.briefText);
-      pushComms(world, 'CMDR VOSS', 'Standing by for your order, Captain — ACCEPT when the bridge is ready.');
+      pushComms(
+        world,
+        'CMDR VOSS',
+        'Standing by for your order, Captain — ACCEPT when the bridge is ready.',
+      );
     }
     return;
   }
@@ -818,7 +848,7 @@ const stepFlagship = (world: World): void => {
   if (world.flagshipId === null) return;
 
   const flagship = world.enemies.find((e) => e.id === world.flagshipId);
-  if (!flagship || !flagship.invulnerable) return;
+  if (!flagship?.invulnerable) return;
 
   const escortsAlive = world.enemies.some((e) => world.escortIds.includes(e.id) && e.alive);
   if (escortsAlive) return;
@@ -954,7 +984,8 @@ const stepCollisions = (world: World): void => {
     // A drifting nudge should not cost the same as a full-speed impact.
     const speedFactor =
       RAM_SPEED_MIN +
-      (RAM_SPEED_MAX - RAM_SPEED_MIN) * clamp(Math.abs(p.speed) / Math.max(1, stats.maxSpeed), 0, 1);
+      (RAM_SPEED_MAX - RAM_SPEED_MIN) *
+        clamp(Math.abs(p.speed) / Math.max(1, stats.maxSpeed), 0, 1);
 
     applyDamage(p, RAM_DAMAGE * speedFactor, false, p.power.shields, world.events);
     applyDamage(e, RAM_DAMAGE * speedFactor, false, 0, world.events);
@@ -1010,7 +1041,11 @@ const stepSkirmish = (world: World, dt: number): void => {
       kind: 'enemy',
       id,
       enemyType: type,
-      pos: vec(world.player.pos.x + Math.cos(angle) * 9000, 0, world.player.pos.z + Math.sin(angle) * 9000),
+      pos: vec(
+        world.player.pos.x + Math.cos(angle) * 9000,
+        0,
+        world.player.pos.z + Math.sin(angle) * 9000,
+      ),
       heading: angle + Math.PI,
       hull: def.maxHull * scale.hull,
       maxHull: def.maxHull * scale.hull,
@@ -1074,7 +1109,11 @@ const resolveEncounter = (world: World): void => {
     pushComms(world, 'CMDR VOSS', 'The Veil is secure. Well flown, Captain.');
   } else {
     const next = CAMPAIGN[world.missionIndex]!;
-    pushComms(world, 'CMDR VOSS', `Sector cleared. Next objective: ${next.landmarkName}. Lay in a course.`);
+    pushComms(
+      world,
+      'CMDR VOSS',
+      `Sector cleared. Next objective: ${next.landmarkName}. Lay in a course.`,
+    );
   }
 };
 

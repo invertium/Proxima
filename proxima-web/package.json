@@ -17,7 +17,8 @@
     "e2e": "bun test/e2e.mjs",
     "lint": "biome check src",
     "lint:fix": "biome check --write src",
-    "verify": "bun run typecheck && bun test && bun run build && bun run e2e"
+    "budget": "bun test/budget.mjs",
+    "verify": "bun run typecheck && bun run lint && bun run test && bun run build && bun run e2e && bun run budget"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.5",
     "@gltf-transform/cli": "^4.1.0",
+    "@happy-dom/global-registrator": "^20.11.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

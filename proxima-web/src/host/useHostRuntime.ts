@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-
 import type { MutableRefObject } from 'react';
-
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { gameStore, useGameStore } from '@/store/game';
 import { sessionPin } from '../net/transport';
 import { SectorView } from '../render/scene';
-import { PIXEL_RATIO_CAP, saveSettings } from '../settings';
-import { gameStore, useGameStore } from '@/store/game';
-
-import type { SaveGame } from '../sim/save';
 import type { Settings } from '../settings';
+import { PIXEL_RATIO_CAP, saveSettings } from '../settings';
+import type { SaveGame } from '../sim/save';
 import type { Snapshot } from '../sim/types';
 import type { MenuProps, MenuScreen, NewGameChoice } from './components/Menu';
 
@@ -60,7 +57,10 @@ export function useHostRuntime(): HostRuntime {
   outcomeShownRef.current = outcomeShown;
 
   const updatePause = useCallback((): void => {
-    send({ m: 'pause', paused: menuOpenRef.current || (document.hidden && crewCountRef.current === 0) });
+    send({
+      m: 'pause',
+      paused: menuOpenRef.current || (document.hidden && crewCountRef.current === 0),
+    });
   }, []);
 
   const startGame = useCallback(
@@ -199,6 +199,10 @@ export function useHostRuntime(): HostRuntime {
     };
   }, [updatePause]);
 
+  // `menuOpen` is not "unnecessary" here, whatever the linter thinks: updatePause reads
+  // menuOpenRef.current and is memoised with an empty dep list, so it never changes
+  // identity. Drop `menuOpen` as suggested and opening the menu stops pausing the sim.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: menuOpen is the only trigger
   useEffect(() => {
     updatePause();
   }, [menuOpen, updatePause]);

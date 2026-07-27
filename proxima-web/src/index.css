@@ -1,6 +1,20 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/*
+ * Base UI marks orientation as `data-orientation="horizontal|vertical"`, but the shadcn
+ * components it ships with are written against bare `data-horizontal:` / `data-vertical:`
+ * variants. Tailwind reads those as `[data-horizontal]` / `[data-vertical]` — attributes
+ * that never exist — so every one of those utilities silently dropped out.
+ *
+ * That is not cosmetic. `data-horizontal:w-full` is what gives Slider.Root its width; without
+ * it the root collapsed to 0px, and every lever in the crew console — the throttle and all
+ * three reactor sliders — rendered as an invisible, undraggable control. Mapping the variants
+ * here fixes them all at once and leaves src/components/ui/* regenerable.
+ */
+@custom-variant data-horizontal (&[data-orientation='horizontal']);
+@custom-variant data-vertical (&[data-orientation='vertical']);
+
 @theme inline {
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);

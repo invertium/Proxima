@@ -12,15 +12,15 @@ import {
   AdditiveBlending,
   BackSide,
   CanvasTexture,
-  Sprite,
-  SpriteMaterial,
   Color,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   RepeatWrapping,
-  SRGBColorSpace,
   SphereGeometry,
+  Sprite,
+  SpriteMaterial,
+  SRGBColorSpace,
 } from 'three';
 import { makeRng } from '../../sim/math';
 import type { LandmarkKind } from '../../sim/types';
@@ -164,7 +164,10 @@ const starTexture = (seed: number, tint: number): CanvasTexture => {
       // Tighten the range so the surface is mostly bright with darker lanes, rather
       // than half-and-half blobs.
       const cell = Math.min(1, Math.max(0, (g - 0.42) * 3));
-      scratch.copy(cool).lerp(base, Math.min(1, cell * 2)).lerp(hot, Math.max(0, cell - 0.5) * 1.6);
+      scratch
+        .copy(cool)
+        .lerp(base, Math.min(1, cell * 2))
+        .lerp(hot, Math.max(0, cell - 0.5) * 1.6);
 
       const i = (y * TEXTURE_W + x) * 4;
       image.data[i] = scratch.r * 255;
@@ -224,7 +227,7 @@ export const createBody = (opts: {
   const material = isStar
     ? new MeshBasicMaterial({ map: starTexture(opts.seed, opts.color) })
     : (() => {
-        const map = surfaceTexture(opts.seed, opts.palette ?? PLANET_PALETTES['rocky']!);
+        const map = surfaceTexture(opts.seed, opts.palette ?? PLANET_PALETTES.rocky!);
         return new MeshStandardMaterial({
           map,
           // A planet is a navigation landmark here, not a lighting study: with a single
